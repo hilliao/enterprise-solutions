@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="fill_parent"
+    android:layout_height="fill_parent"
+    android:orientation="vertical" >
+
+    <TextView
+        android:id="@+id/orderPrice"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Your total is $" />
+
+    <Button
+        android:id="@+id/submitOrder"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="right"
+        android:onClick="submitOrder"
+        android:text="Place Order" />
+
+    <TextView
+        android:id="@+id/postSubmitUrl"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:textColor="#D60AFF"
+        android:text="@string/invoking" />
+
+    <TextView
+        android:id="@+id/jsonView"
+        android:layout_width="fill_parent"
+        android:layout_height="wrap_content"
+        android:scrollbars="vertical"
+        android:text="JSON data"
+        android:textColor="#66DDFF"
+        android:textIsSelectable="true" />
+
+</LinearLayout>

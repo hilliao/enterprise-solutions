@@ -1,0 +1,68 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="fill_parent"
+    android:layout_height="wrap_content"
+    android:scrollbars="vertical" >
+
+    <LinearLayout
+        android:layout_width="fill_parent"
+        android:layout_height="fill_parent"
+        android:orientation="vertical" >
+
+        <TextView
+            android:id="@+id/userLabel"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="user GUID" />
+
+        <EditText
+            android:id="@+id/user_guid"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="top"
+            android:hint="@string/user_guid"
+            android:text="@string/user0" />
+
+        <TextView
+            android:id="@+id/storeLabel"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="store number" />
+
+        <EditText
+            android:id="@+id/store_number"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center_vertical"
+            android:ems="10"
+            android:hint="@string/store_number"
+            android:inputType="numberSigned"
+            android:text="@string/store0" />
+
+        <EditText
+            android:id="@+id/postcontent"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center_vertical"
+            android:inputType="textMultiLine"
+            android:lines="10"
+            android:scrollbars="vertical"
+            android:text="@string/postcontent0" />
+
+        <Button
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="bottom"
+            android:onClick="checkPrice"
+            android:text="@string/button_submit" />
+
+        <TextView
+            android:id="@+id/posturl"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textColor="#D60AFF"
+            android:text="@string/invoking" />
+    </LinearLayout>
+
+</ScrollView>
