@@ -6,21 +6,12 @@ import com.google.api.server.spi.response.NotFoundException;
 import com.google.appengine.api.datastore.DatastoreService;
 import com.google.appengine.api.datastore.DatastoreServiceFactory;
 import com.google.appengine.api.users.User;
-
-import java.util.ArrayList;
-
-import javax.inject.Named;
-
-import com.google.appengine.api.datastore.DatastoreServiceFactory;
-import com.google.appengine.api.datastore.DatastoreService;
-import com.google.appengine.api.datastore.Query.Filter;
-import com.google.appengine.api.datastore.Query.FilterPredicate;
-import com.google.appengine.api.datastore.Query.FilterOperator;
-import com.google.appengine.api.datastore.Query.CompositeFilter;
-import com.google.appengine.api.datastore.Query.CompositeFilterOperator;
 import com.google.appengine.api.datastore.Query;
 import com.google.appengine.api.datastore.PreparedQuery;
 import com.google.appengine.api.datastore.Entity;
+
+import java.util.ArrayList;
+import javax.inject.Named;
 
 /**
  * Defines v1 of a helloworld API, which provides simple "greeting" methods.
@@ -33,22 +24,6 @@ import com.google.appengine.api.datastore.Entity;
     audiences = {Constants.ANDROID_AUDIENCE}
 )
 public class Greetings {
-
-  //public static ArrayList<HelloGreeting> greetings = new ArrayList<HelloGreeting>();
-
-  static {
-//	  DatastoreService datastore = DatastoreServiceFactory.getDatastoreService();
-//	  Query q = new Query("greetings");
-//	  PreparedQuery pq = datastore.prepare(q);
-//	  for (Entity result : pq.asIterable()) {
-//		  String greeting = (String) result.getProperty("greeting");
-//		  greetings.add(new HelloGreeting(greeting));
-//	  }
-//    greetings.add(new HelloGreeting("hello world!"));
-//    greetings.add(new HelloGreeting("goodbye world!"));
-//    greetings.add(new HelloGreeting("next time world!"));
-//    greetings.add(new HelloGreeting("this is not the world!"));
-  }
 
   public HelloGreeting getGreeting(@Named("id") Integer id) throws NotFoundException {
     try {

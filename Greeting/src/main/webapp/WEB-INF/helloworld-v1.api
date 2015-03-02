@@ -24,57 +24,15 @@
     "maxAge" : 0
   },
   "methods" : {
-    "helloworld.greetings.listGreeting" : {
-      "path" : "hellogreeting",
-      "httpMethod" : "get",
+    "helloworld.greetings.authed" : {
+      "path" : "hellogreeting/authed",
+      "httpMethod" : "POST",
       "authLevel" : "NONE",
       "scopes" : [ "https://www.googleapis.com/auth/userinfo.email" ],
       "audiences" : [ "776318621121-u7r4fpkhhpig2jei6hs6ng0jcqtfgdji.apps.googleusercontent.com" ],
       "clientIds" : [ "776318621121-u7r4fpkhhpig2jei6hs6ng0jcqtfgdji.apps.googleusercontent.com", "replace this with your Android client ID", "replace this with your iOS client ID", "292824132082.apps.googleusercontent.com" ],
-      "rosyMethod" : "com.example.helloendpoints.Greetings.listGreeting",
+      "rosyMethod" : "com.example.helloendpoints.Greetings.authedGreeting",
       "request" : {
-        "body" : "empty"
-      },
-      "response" : {
-        "body" : "autoTemplate(backendResponse)"
-      }
-    },
-    "helloworld.greetings.addNew" : {
-      "path" : "addGreeting/{newGreeting}",
-      "httpMethod" : "post",
-      "authLevel" : "NONE",
-      "scopes" : [ "https://www.googleapis.com/auth/userinfo.email" ],
-      "audiences" : [ "776318621121-u7r4fpkhhpig2jei6hs6ng0jcqtfgdji.apps.googleusercontent.com" ],
-      "clientIds" : [ "776318621121-u7r4fpkhhpig2jei6hs6ng0jcqtfgdji.apps.googleusercontent.com", "replace this with your Android client ID", "replace this with your iOS client ID", "292824132082.apps.googleusercontent.com" ],
-      "rosyMethod" : "com.example.helloendpoints.Greetings.addGreeting",
-      "request" : {
-        "parameters" : {
-          "newGreeting" : {
-            "type" : "string",
-            "required" : true
-          }
-        },
-        "body" : "empty"
-      },
-      "response" : {
-        "body" : "autoTemplate(backendResponse)"
-      }
-    },
-    "helloworld.greetings.getGreeting" : {
-      "path" : "hellogreeting/{id}",
-      "httpMethod" : "GET",
-      "authLevel" : "NONE",
-      "scopes" : [ "https://www.googleapis.com/auth/userinfo.email" ],
-      "audiences" : [ "776318621121-u7r4fpkhhpig2jei6hs6ng0jcqtfgdji.apps.googleusercontent.com" ],
-      "clientIds" : [ "776318621121-u7r4fpkhhpig2jei6hs6ng0jcqtfgdji.apps.googleusercontent.com", "replace this with your Android client ID", "replace this with your iOS client ID", "292824132082.apps.googleusercontent.com" ],
-      "rosyMethod" : "com.example.helloendpoints.Greetings.getGreeting",
-      "request" : {
-        "parameters" : {
-          "id" : {
-            "type" : "int32",
-            "required" : true
-          }
-        },
         "body" : "empty"
       },
       "response" : {
@@ -103,15 +61,57 @@
         "body" : "autoTemplate(backendResponse)"
       }
     },
-    "helloworld.greetings.authed" : {
-      "path" : "hellogreeting/authed",
-      "httpMethod" : "POST",
+    "helloworld.greetings.listGreeting" : {
+      "path" : "hellogreeting",
+      "httpMethod" : "get",
       "authLevel" : "NONE",
       "scopes" : [ "https://www.googleapis.com/auth/userinfo.email" ],
       "audiences" : [ "776318621121-u7r4fpkhhpig2jei6hs6ng0jcqtfgdji.apps.googleusercontent.com" ],
       "clientIds" : [ "776318621121-u7r4fpkhhpig2jei6hs6ng0jcqtfgdji.apps.googleusercontent.com", "replace this with your Android client ID", "replace this with your iOS client ID", "292824132082.apps.googleusercontent.com" ],
-      "rosyMethod" : "com.example.helloendpoints.Greetings.authedGreeting",
+      "rosyMethod" : "com.example.helloendpoints.Greetings.listGreeting",
       "request" : {
+        "body" : "empty"
+      },
+      "response" : {
+        "body" : "autoTemplate(backendResponse)"
+      }
+    },
+    "helloworld.greetings.getGreeting" : {
+      "path" : "hellogreeting/{id}",
+      "httpMethod" : "GET",
+      "authLevel" : "NONE",
+      "scopes" : [ "https://www.googleapis.com/auth/userinfo.email" ],
+      "audiences" : [ "776318621121-u7r4fpkhhpig2jei6hs6ng0jcqtfgdji.apps.googleusercontent.com" ],
+      "clientIds" : [ "776318621121-u7r4fpkhhpig2jei6hs6ng0jcqtfgdji.apps.googleusercontent.com", "replace this with your Android client ID", "replace this with your iOS client ID", "292824132082.apps.googleusercontent.com" ],
+      "rosyMethod" : "com.example.helloendpoints.Greetings.getGreeting",
+      "request" : {
+        "parameters" : {
+          "id" : {
+            "type" : "int32",
+            "required" : true
+          }
+        },
+        "body" : "empty"
+      },
+      "response" : {
+        "body" : "autoTemplate(backendResponse)"
+      }
+    },
+    "helloworld.greetings.addNew" : {
+      "path" : "addGreeting/{newGreeting}",
+      "httpMethod" : "post",
+      "authLevel" : "NONE",
+      "scopes" : [ "https://www.googleapis.com/auth/userinfo.email" ],
+      "audiences" : [ "776318621121-u7r4fpkhhpig2jei6hs6ng0jcqtfgdji.apps.googleusercontent.com" ],
+      "clientIds" : [ "776318621121-u7r4fpkhhpig2jei6hs6ng0jcqtfgdji.apps.googleusercontent.com", "replace this with your Android client ID", "replace this with your iOS client ID", "292824132082.apps.googleusercontent.com" ],
+      "rosyMethod" : "com.example.helloendpoints.Greetings.addGreeting",
+      "request" : {
+        "parameters" : {
+          "newGreeting" : {
+            "type" : "string",
+            "required" : true
+          }
+        },
         "body" : "empty"
       },
       "response" : {
@@ -155,10 +155,10 @@
           "namespace" : {
             "type" : "string"
           },
-          "kind" : {
+          "appId" : {
             "type" : "string"
           },
-          "appId" : {
+          "kind" : {
             "type" : "string"
           },
           "propertiesFrom" : {
@@ -203,17 +203,7 @@
       }
     },
     "methods" : {
-      "com.example.helloendpoints.Greetings.listGreeting" : {
-        "response" : {
-          "$ref" : "HelloGreetingCollection"
-        }
-      },
-      "com.example.helloendpoints.Greetings.addGreeting" : {
-        "response" : {
-          "$ref" : "Entity"
-        }
-      },
-      "com.example.helloendpoints.Greetings.getGreeting" : {
+      "com.example.helloendpoints.Greetings.authedGreeting" : {
         "response" : {
           "$ref" : "HelloGreeting"
         }
@@ -226,9 +216,19 @@
           "$ref" : "HelloGreeting"
         }
       },
-      "com.example.helloendpoints.Greetings.authedGreeting" : {
+      "com.example.helloendpoints.Greetings.listGreeting" : {
+        "response" : {
+          "$ref" : "HelloGreetingCollection"
+        }
+      },
+      "com.example.helloendpoints.Greetings.getGreeting" : {
         "response" : {
           "$ref" : "HelloGreeting"
+        }
+      },
+      "com.example.helloendpoints.Greetings.addGreeting" : {
+        "response" : {
+          "$ref" : "Entity"
         }
       }
     }
