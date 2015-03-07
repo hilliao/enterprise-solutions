@@ -12,6 +12,7 @@ import com.google.appengine.api.datastore.Entity;
 
 import java.util.ArrayList;
 import javax.inject.Named;
+//import java.lang.Runnable;
 
 /**
  * Defines v1 of a helloworld API, which provides simple "greeting" methods.
@@ -26,6 +27,15 @@ import javax.inject.Named;
 public class Greetings {
 
   public HelloGreeting getGreeting(@Named("id") Integer id) throws NotFoundException {
+	  java.lang.Thread testThread = new Thread(() -> {
+		  try{
+			  java.lang.Thread.sleep(234);
+		  }
+		  catch(InterruptedException e){
+			  //need to log exception
+		  }
+    });
+	testThread.start();
     try {
       return this.listGreeting().get(id);
     } catch (IndexOutOfBoundsException e) {
@@ -44,6 +54,7 @@ public class Greetings {
 		  String greeting = (String) result.getProperty("greeting");
 		  list.add(new HelloGreeting(greeting));
 	  }
+	  list.sort((g1, g2) -> g1.getMessage().compareTo(g2.getMessage()));
 	  return list;
   }
   
