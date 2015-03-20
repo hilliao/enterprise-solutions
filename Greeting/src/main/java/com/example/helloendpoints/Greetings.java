@@ -2,6 +2,7 @@ package com.example.helloendpoints;
 
 import com.google.api.server.spi.config.Api;
 import com.google.api.server.spi.config.ApiMethod;
+import com.google.api.server.spi.config.ApiMethod.HttpMethod;
 import com.google.api.server.spi.response.NotFoundException;
 import com.google.appengine.api.datastore.DatastoreService;
 import com.google.appengine.api.datastore.DatastoreServiceFactory;
@@ -11,6 +12,7 @@ import com.google.appengine.api.datastore.PreparedQuery;
 import com.google.appengine.api.datastore.Entity;
 
 import java.util.ArrayList;
+
 import javax.inject.Named;
 //import java.lang.Runnable;
 
@@ -43,7 +45,7 @@ public class Greetings {
     }
   }
   
-  @ApiMethod(httpMethod = "get")
+  @ApiMethod(httpMethod = HttpMethod.GET)
   public ArrayList<HelloGreeting> listGreeting() {
 	  ArrayList<HelloGreeting> list = new ArrayList<HelloGreeting>();
 	  
@@ -58,7 +60,7 @@ public class Greetings {
 	  return list;
   }
   
-  @ApiMethod(name = "greetings.addNew", httpMethod = "post")
+  @ApiMethod(name = "greetings.addNew", httpMethod = HttpMethod.POST)
   public Entity addGreeting(@Named("newGreeting") String newGreeting) {
 	  DatastoreService datastore = DatastoreServiceFactory.getDatastoreService();
 	  Entity greeting = new Entity(Constants.DATASTORE_KIND_GREETINGS);
@@ -68,7 +70,7 @@ public class Greetings {
 	  return greeting;
   }
 
-  @ApiMethod(name = "greetings.multiply", httpMethod = "post")
+  @ApiMethod(name = "greetings.multiply", httpMethod = HttpMethod.POST)
   public HelloGreeting insertGreeting(@Named("times") Integer times, HelloGreeting greeting) {
     HelloGreeting response = new HelloGreeting();
     StringBuilder responseBuilder = new StringBuilder();

@@ -14,3 +14,34 @@ public class Constants {
   public static final String DATASTORE_KIND_GREETINGS = "greetings";
   public static final String DATASTORE_KIND_PEOPLE = "people";
 }
+
+
+interface IShape<T>
+{
+	T GetArea();
+}
+
+class Rectangle implements IShape<Number>
+{
+	public Number GetArea() {
+		Double d = new Double(1.03);
+		return d;
+	}
+}
+
+class Square extends Rectangle implements IShape<Number> {
+	public Float GetArea() {
+		Float f = new Float(1);
+		return f;
+	}
+}
+
+class Test {
+	void Try() {
+		Square s = new Square();
+		Rectangle r = new Rectangle();
+		r = s; // assignment achieved
+		
+		IShape<? extends Number> s0 = r;
+	}
+}

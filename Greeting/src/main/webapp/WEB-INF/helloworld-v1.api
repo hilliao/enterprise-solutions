@@ -1,0 +1,236 @@
+{
+  "extends" : "thirdParty.api",
+  "abstract" : false,
+  "root" : "https://project-hil-0.appspot.com/_ah/api",
+  "name" : "helloworld",
+  "version" : "v1",
+  "defaultVersion" : false,
+  "adapter" : {
+    "bns" : "https://project-hil-0.appspot.com/_ah/spi",
+    "deadline" : 65.0,
+    "type" : "lily"
+  },
+  "auth" : {
+    "allowCookieAuth" : false
+  },
+  "frontendLimits" : {
+    "unregisteredUserQps" : -1,
+    "unregisteredQps" : -1,
+    "unregisteredDaily" : -1,
+    "rules" : [ ]
+  },
+  "cacheControl" : {
+    "type" : "no-cache",
+    "maxAge" : 0
+  },
+  "methods" : {
+    "helloworld.greetings.getGreeting" : {
+      "path" : "hellogreeting/{id}",
+      "httpMethod" : "GET",
+      "authLevel" : "NONE",
+      "scopes" : [ "https://www.googleapis.com/auth/userinfo.email" ],
+      "audiences" : [ "776318621121-u7r4fpkhhpig2jei6hs6ng0jcqtfgdji.apps.googleusercontent.com" ],
+      "clientIds" : [ "776318621121-u7r4fpkhhpig2jei6hs6ng0jcqtfgdji.apps.googleusercontent.com", "replace this with your Android client ID", "replace this with your iOS client ID", "292824132082.apps.googleusercontent.com" ],
+      "rosyMethod" : "com.example.helloendpoints.Greetings.getGreeting",
+      "request" : {
+        "parameters" : {
+          "id" : {
+            "type" : "int32",
+            "required" : true
+          }
+        },
+        "body" : "empty"
+      },
+      "response" : {
+        "body" : "autoTemplate(backendResponse)"
+      }
+    },
+    "helloworld.greetings.listGreeting" : {
+      "path" : "hellogreeting",
+      "httpMethod" : "GET",
+      "authLevel" : "NONE",
+      "scopes" : [ "https://www.googleapis.com/auth/userinfo.email" ],
+      "audiences" : [ "776318621121-u7r4fpkhhpig2jei6hs6ng0jcqtfgdji.apps.googleusercontent.com" ],
+      "clientIds" : [ "776318621121-u7r4fpkhhpig2jei6hs6ng0jcqtfgdji.apps.googleusercontent.com", "replace this with your Android client ID", "replace this with your iOS client ID", "292824132082.apps.googleusercontent.com" ],
+      "rosyMethod" : "com.example.helloendpoints.Greetings.listGreeting",
+      "request" : {
+        "body" : "empty"
+      },
+      "response" : {
+        "body" : "autoTemplate(backendResponse)"
+      }
+    },
+    "helloworld.greetings.addNew" : {
+      "path" : "addGreeting/{newGreeting}",
+      "httpMethod" : "POST",
+      "authLevel" : "NONE",
+      "scopes" : [ "https://www.googleapis.com/auth/userinfo.email" ],
+      "audiences" : [ "776318621121-u7r4fpkhhpig2jei6hs6ng0jcqtfgdji.apps.googleusercontent.com" ],
+      "clientIds" : [ "776318621121-u7r4fpkhhpig2jei6hs6ng0jcqtfgdji.apps.googleusercontent.com", "replace this with your Android client ID", "replace this with your iOS client ID", "292824132082.apps.googleusercontent.com" ],
+      "rosyMethod" : "com.example.helloendpoints.Greetings.addGreeting",
+      "request" : {
+        "parameters" : {
+          "newGreeting" : {
+            "type" : "string",
+            "required" : true
+          }
+        },
+        "body" : "empty"
+      },
+      "response" : {
+        "body" : "autoTemplate(backendResponse)"
+      }
+    },
+    "helloworld.greetings.multiply" : {
+      "path" : "hellogreeting/{times}",
+      "httpMethod" : "POST",
+      "authLevel" : "NONE",
+      "scopes" : [ "https://www.googleapis.com/auth/userinfo.email" ],
+      "audiences" : [ "776318621121-u7r4fpkhhpig2jei6hs6ng0jcqtfgdji.apps.googleusercontent.com" ],
+      "clientIds" : [ "776318621121-u7r4fpkhhpig2jei6hs6ng0jcqtfgdji.apps.googleusercontent.com", "replace this with your Android client ID", "replace this with your iOS client ID", "292824132082.apps.googleusercontent.com" ],
+      "rosyMethod" : "com.example.helloendpoints.Greetings.insertGreeting",
+      "request" : {
+        "parameters" : {
+          "times" : {
+            "type" : "int32",
+            "required" : true
+          }
+        },
+        "body" : "autoTemplate(backendRequest)",
+        "bodyName" : "resource"
+      },
+      "response" : {
+        "body" : "autoTemplate(backendResponse)"
+      }
+    },
+    "helloworld.greetings.authed" : {
+      "path" : "hellogreeting/authed",
+      "httpMethod" : "POST",
+      "authLevel" : "NONE",
+      "scopes" : [ "https://www.googleapis.com/auth/userinfo.email" ],
+      "audiences" : [ "776318621121-u7r4fpkhhpig2jei6hs6ng0jcqtfgdji.apps.googleusercontent.com" ],
+      "clientIds" : [ "776318621121-u7r4fpkhhpig2jei6hs6ng0jcqtfgdji.apps.googleusercontent.com", "replace this with your Android client ID", "replace this with your iOS client ID", "292824132082.apps.googleusercontent.com" ],
+      "rosyMethod" : "com.example.helloendpoints.Greetings.authedGreeting",
+      "request" : {
+        "body" : "empty"
+      },
+      "response" : {
+        "body" : "autoTemplate(backendResponse)"
+      }
+    }
+  },
+  "descriptor" : {
+    "schemas" : {
+      "HelloGreeting" : {
+        "id" : "HelloGreeting",
+        "type" : "object",
+        "properties" : {
+          "message" : {
+            "type" : "string"
+          }
+        }
+      },
+      "HelloGreetingCollection" : {
+        "id" : "HelloGreetingCollection",
+        "type" : "object",
+        "properties" : {
+          "items" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "HelloGreeting"
+            }
+          }
+        }
+      },
+      "Entity" : {
+        "id" : "Entity",
+        "type" : "object",
+        "properties" : {
+          "key" : {
+            "$ref" : "Key"
+          },
+          "parent" : {
+            "$ref" : "Key"
+          },
+          "namespace" : {
+            "type" : "string"
+          },
+          "kind" : {
+            "type" : "string"
+          },
+          "appId" : {
+            "type" : "string"
+          },
+          "propertiesFrom" : {
+            "$ref" : "Entity"
+          },
+          "properties" : {
+            "$ref" : "JsonMap"
+          }
+        }
+      },
+      "Key" : {
+        "id" : "Key",
+        "type" : "object",
+        "properties" : {
+          "kind" : {
+            "type" : "string"
+          },
+          "appId" : {
+            "type" : "string"
+          },
+          "id" : {
+            "type" : "string",
+            "format" : "int64"
+          },
+          "name" : {
+            "type" : "string"
+          },
+          "parent" : {
+            "$ref" : "Key"
+          },
+          "namespace" : {
+            "type" : "string"
+          },
+          "complete" : {
+            "type" : "boolean"
+          }
+        }
+      },
+      "JsonMap" : {
+        "id" : "JsonMap",
+        "type" : "object"
+      }
+    },
+    "methods" : {
+      "com.example.helloendpoints.Greetings.getGreeting" : {
+        "response" : {
+          "$ref" : "HelloGreeting"
+        }
+      },
+      "com.example.helloendpoints.Greetings.listGreeting" : {
+        "response" : {
+          "$ref" : "HelloGreetingCollection"
+        }
+      },
+      "com.example.helloendpoints.Greetings.addGreeting" : {
+        "response" : {
+          "$ref" : "Entity"
+        }
+      },
+      "com.example.helloendpoints.Greetings.insertGreeting" : {
+        "request" : {
+          "$ref" : "HelloGreeting"
+        },
+        "response" : {
+          "$ref" : "HelloGreeting"
+        }
+      },
+      "com.example.helloendpoints.Greetings.authedGreeting" : {
+        "response" : {
+          "$ref" : "HelloGreeting"
+        }
+      }
+    }
+  }
+}
