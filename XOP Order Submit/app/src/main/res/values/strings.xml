@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
 
-    <string name="app_name">Starbucks Express Order</string>
+    <string name="app_name">Mobile Order and Pay</string>
     <string name="action_settings">Settings</string>
     <string name="user_guid">User as Guid</string>
     <string name="store_number">Store as integer</string>
