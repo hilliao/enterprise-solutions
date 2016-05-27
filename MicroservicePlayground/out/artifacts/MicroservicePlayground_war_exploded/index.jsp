@@ -8,9 +8,9 @@
 <%@ page contentType="text/html;charset=UTF-8" language="java" %>
 <html>
   <head>
-    <title>$Title$</title>
+    <title>App engine instance running</title>
   </head>
   <body>
-  $END$
+  <a href="_ah/api/explorer">API explorer</a>
   </body>
 </html>
