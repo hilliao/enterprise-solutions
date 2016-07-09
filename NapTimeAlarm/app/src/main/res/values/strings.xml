@@ -1,0 +1,8 @@
+<resources>
+    <string name="app_name">Nap Time Alarm</string>
+    <string name="action_settings">Stop ringtone</string>
+    <string name="alarmNotSetText">Alarm not set</string>
+    <string name="alarmSetText">Alarm is set</string>
+    <string name="alarmSetAt">Alarm set to sound at</string>
+    <string name="intro_text">Switching on the alarm will silence the phone and set the alarm to sound at given minutes + seconds</string>
+</resources>
