@@ -1,86 +1,114 @@
 <?xml version="1.0" encoding="utf-8"?>
 <RelativeLayout
     xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns:tools="http://schemas.android.com/tools"
     xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
+    android:paddingBottom="@dimen/activity_vertical_margin"
     android:paddingLeft="@dimen/activity_horizontal_margin"
     android:paddingRight="@dimen/activity_horizontal_margin"
     android:paddingTop="@dimen/activity_vertical_margin"
-    android:paddingBottom="@dimen/activity_vertical_margin"
     app:layout_behavior="@string/appbar_scrolling_view_behavior"
-    tools:showIn="@layout/activity_main"
-    tools:context="com.dlinkddns.hil.naptimealarm.MainActivity">
+    tools:context="com.dlinkddns.hil.naptimealarm.MainActivity"
+    tools:showIn="@layout/activity_main">
 
     <TextView
+        android:id="@+id/introText"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:textAppearance="?android:attr/textAppearanceLarge"
         android:text="@string/intro_text"
-        android:id="@+id/introText" />
+        android:textAppearance="?android:attr/textAppearanceLarge" />
 
     <EditText
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:inputType="numberSigned"
-        android:ems="10"
         android:id="@+id/minuteCountdown"
-        android:text="0"
-        android:layout_below="@+id/introText"
-        android:layout_alignParentLeft="true"
-        android:layout_alignParentStart="true"
-        android:layout_alignRight="@+id/textViewSec"
-        android:layout_alignEnd="@+id/textViewSec" />
-
-    <EditText
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:inputType="numberSigned"
-        android:ems="10"
-        android:id="@+id/secondCountdown"
-        android:text="1"
-        android:layout_below="@+id/textViewMin"
         android:layout_alignParentLeft="true"
         android:layout_alignParentStart="true"
-        android:layout_alignRight="@+id/textViewMin"
-        android:layout_alignEnd="@+id/textViewMin" />
+        android:layout_below="@+id/introText"
+        android:layout_toStartOf="@+id/textViewSec"
+        android:ems="10"
+        android:inputType="numberSigned"
+        android:text="0" />
+
+    <EditText
+        android:id="@+id/secondCountdown"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_alignEnd="@+id/introText"
+        android:layout_below="@+id/introText"
+        android:ems="10"
+        android:inputType="numberSigned"
+        android:text="1" />
 
     <TextView
+        android:id="@+id/textViewMin"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:textAppearance="?android:attr/textAppearanceMedium"
-        android:text="Minutes"
-        android:id="@+id/textViewMin"
-        android:layout_below="@+id/minuteCountdown"
+        android:layout_alignEnd="@+id/minuteCountdown"
         android:layout_alignParentLeft="true"
         android:layout_alignParentStart="true"
         android:layout_alignRight="@+id/minuteCountdown"
-        android:layout_alignEnd="@+id/minuteCountdown" />
+        android:layout_below="@+id/minuteCountdown"
+        android:text="Minutes"
+        android:textAppearance="?android:attr/textAppearanceMedium" />
 
     <TextView
+        android:id="@+id/textViewSec"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:textAppearance="?android:attr/textAppearanceMedium"
+        android:layout_alignStart="@+id/secondCountdown"
+        android:layout_alignTop="@+id/textViewMin"
         android:text="Seconds"
-        android:id="@+id/textViewSec"
-        android:layout_below="@+id/secondCountdown"
-        android:layout_alignParentLeft="true"
-        android:layout_alignParentStart="true" />
+        android:textAppearance="?android:attr/textAppearanceMedium" />
 
     <Switch
+        android:id="@+id/switchAlarm"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:textOff="Alarm not set"
-        android:textOn="@string/alarmSetText"
-        android:text="@string/alarmNotSetText"
-        android:id="@+id/switchAlarm"
-        android:checked="false"
-        android:textAppearance="?android:attr/textAppearanceLarge"
-        android:layout_below="@+id/textViewSec"
+        android:layout_alignEnd="@+id/introText"
         android:layout_alignParentLeft="true"
         android:layout_alignParentStart="true"
         android:layout_alignRight="@+id/introText"
-        android:layout_alignEnd="@+id/introText" />
+        android:layout_below="@+id/textViewSec"
+        android:checked="false"
+        android:text="@string/alarmNotSetText"
+        android:textAppearance="?android:attr/textAppearanceLarge"
+        android:textOff="Alarm not set"
+        android:textOn="@string/alarmSetText" />
+
+    <com.google.android.gms.common.SignInButton
+        android:id="@+id/sign_in_button"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_alignParentStart="true"
+        android:layout_below="@+id/switchAlarm"
+        android:visibility="visible"
+        tools:visibility="visible" />
+
+    <Button
+        android:id="@+id/sign_out_button"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_alignParentStart="true"
+        android:layout_below="@+id/sign_in_button"
+        android:text="@string/sign_out" />
+
+    <TextView
+        android:id="@+id/textViewGoogleUser"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_alignParentEnd="true"
+        android:layout_below="@+id/switchAlarm"
+        android:text="GoogleUserInfo" />
+
+    <TextView
+        android:id="@+id/textViewFirebaseUser"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_alignParentEnd="true"
+        android:layout_below="@+id/textViewGoogleUser"
+        android:text="FirebaseUserInfo" />
 
 </RelativeLayout>
