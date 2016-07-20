@@ -3,7 +3,7 @@
     <string name="action_settings">Stop ringtone</string>
     <string name="alarmNotSetText">Alarm not set</string>
     <string name="alarmSetText">Alarm is set</string>
-    <string name="alarmSetAt">Alarm set to sound at</string>
+    <string name="alarmSetAt">Alarm set at %s</string>
     <string name="sign_out">Sign out</string>
     <string name="loading">Authenticating…</string>
     <string name="google_status_fmt">Google User: %s</string>

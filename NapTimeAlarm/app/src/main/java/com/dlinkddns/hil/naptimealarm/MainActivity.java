@@ -1,15 +1,15 @@
 package com.dlinkddns.hil.naptimealarm;
 
+import android.app.AlarmManager;
+import android.app.PendingIntent;
 import android.app.ProgressDialog;
 import android.content.Context;
 import android.content.Intent;
 import android.graphics.Color;
 import android.media.AudioManager;
-import android.media.Ringtone;
 import android.media.RingtoneManager;
 import android.net.Uri;
 import android.os.Bundle;
-import android.os.Handler;
 import android.support.annotation.NonNull;
 import android.support.v7.app.AppCompatActivity;
 import android.support.v7.widget.Toolbar;
@@ -51,52 +51,20 @@ public class MainActivity extends AppCompatActivity {
     private static final int RC_SIGN_IN = 9001;
     private static final String TAG = "GoogleActivity";
     private static AudioManager audioManager;
-    private static Runnable playRingtone;
-    private static Handler ringtoneHandler;
-    private static Ringtone ringtone;
+    private static AlarmManager alarmManager;
     private static DatabaseReference database;
 
     static {
         notification = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM);
     }
 
-    private int alarmCountdownMinute;
-    private int alarmCountdownSecond;
     private int previousAlarmMode;
     private GoogleApiClient googleApiClient;
     private FirebaseAuth firebaseAuth;
     private ProgressDialog progressDialog;
     private FirebaseAuth.AuthStateListener authListener;
     private String firebaseUid;
-
-    protected Runnable getPlayRingtongRunnable() {
-        if (ringtone == null) {
-            ringtone = RingtoneManager.getRingtone(getApplicationContext(), notification);
-        }
-
-        if (playRingtone == null) {
-            playRingtone = new Runnable() {
-                @Override
-                public void run() {
-                    // restore the audio ringer mode to normal so alarm can be heard
-                    audioManager.setRingerMode(AudioManager.RINGER_MODE_NORMAL);
-                    ringtone.stop();
-                    // start playing alarm to wake the user
-                    ringtone.play();
-                }
-            };
-        }
-
-        return playRingtone;
-    }
-
-    protected Handler getRingtoneHandler() {
-        if (ringtoneHandler == null) {
-            ringtoneHandler = new Handler();
-        }
-
-        return ringtoneHandler;
-    }
+    private PendingIntent playRingtoneIntent;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -104,10 +72,8 @@ public class MainActivity extends AppCompatActivity {
         setContentView(R.layout.activity_main);
         Toolbar toolbar = (Toolbar) findViewById(R.id.toolbar);
         setSupportActionBar(toolbar);
-        if (audioManager == null) {
-            audioManager = (AudioManager) getSystemService(Context.AUDIO_SERVICE);
-        }
 
+        // register UI component's listeners
         final Switch alarmSwitch = (Switch) findViewById(R.id.switchAlarm);
         alarmSwitch.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
             @Override
@@ -116,22 +82,24 @@ public class MainActivity extends AppCompatActivity {
             }
         });
 
+        // support Google sign-in for Firebase authentication
         GoogleSignInOptions gso = new GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
                 .requestIdToken(getString(R.string.default_web_client_id))
                 .requestEmail()
                 .build();
         googleApiClient = new GoogleApiClient.Builder(this)
-                .enableAutoManage(this /* FragmentActivity */, new GoogleApiClient.OnConnectionFailedListener() {
+                .enableAutoManage(this, new GoogleApiClient.OnConnectionFailedListener() {
                     @Override
                     public void onConnectionFailed(@NonNull ConnectionResult connectionResult) {
-                        // An unresolvable error has occurred and Google APIs (including Sign-In) will not
-                        // be available.
+                        // An unresolvable error has occurred; Google APIs (including Sign-In) not available.
                         Log.d(TAG, "onConnectionFailed:" + connectionResult);
                         Toast.makeText(MainActivity.this, "Google Play Services sign in error.", Toast.LENGTH_SHORT).show();
                     }
                 })
                 .addApi(Auth.GOOGLE_SIGN_IN_API, gso)
                 .build();
+
+        // register Firebase authentication change event
         firebaseAuth = FirebaseAuth.getInstance();
         authListener = new FirebaseAuth.AuthStateListener() {
             @Override
@@ -149,6 +117,7 @@ public class MainActivity extends AppCompatActivity {
                 updateUI(user);
             }
         };
+
         // sign in and out button
         findViewById(R.id.sign_in_button).setOnClickListener(
                 new View.OnClickListener() {
@@ -167,7 +136,8 @@ public class MainActivity extends AppCompatActivity {
                     }
                 }
         );
-        // default database reference for this app
+
+        // default Firebase database reference for this app
         database = FirebaseDatabase.getInstance().getReference().child(getString(R.string.app_name));
     }
 
@@ -175,8 +145,16 @@ public class MainActivity extends AppCompatActivity {
     public void onStart() {
         super.onStart();
         firebaseAuth.addAuthStateListener(authListener);
-        // will restore the previous alarm mode when the switch if off
-        previousAlarmMode = audioManager.getRingerMode();
+
+        if (audioManager == null) {
+            audioManager = (AudioManager) getSystemService(Context.AUDIO_SERVICE);
+        }
+        if (alarmManager == null) {
+            alarmManager = (AlarmManager) getSystemService(Context.ALARM_SERVICE);
+        }
+
+        Intent intent = new Intent(this, PlayRingtoneReceiver.class);
+        playRingtoneIntent = PendingIntent.getBroadcast(this, 0, intent, 0);
     }
 
     public void onActivityResult(int requestCode, int resultCode, Intent data) {
@@ -191,9 +169,7 @@ public class MainActivity extends AppCompatActivity {
                 firebaseAuthWithGoogle(account);
             } else {
                 // Google Sign In failed, update UI appropriately
-                // [START_EXCLUDE]
                 updateUI(null);
-                // [END_EXCLUDE]
             }
         }
     }
@@ -201,10 +177,10 @@ public class MainActivity extends AppCompatActivity {
     private void firebaseAuthWithGoogle(GoogleSignInAccount acct) {
         Log.d(TAG, "firebaseAuthWithGoogle:" + acct.getId());
         showProgressDialog();
-
         AuthCredential credential = GoogleAuthProvider.getCredential(acct.getIdToken(), null);
-        firebaseAuth.signInWithCredential(credential)
-                .addOnCompleteListener(this, new OnCompleteListener<AuthResult>() {
+
+        firebaseAuth.signInWithCredential(credential).addOnCompleteListener(this,
+                new OnCompleteListener<AuthResult>() {
                     @Override
                     public void onComplete(@NonNull Task<AuthResult> task) {
                         Log.d(TAG, "signInWithCredential:onComplete:" + task.isSuccessful());
@@ -260,50 +236,78 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void alarmSwitchLogic(boolean isChecked, Switch alarmSwitch) {
+        int alarmCountdownMinutes;
+        int alarmCountdownSeconds;
+
+        if (!alarmSwitch.isPressed()) {
+            return;
+        }
+
         if (isChecked == true) {
             // get the user input of minute countdown
             EditText minuteCountdownText = (EditText) findViewById(R.id.minuteCountdown);
-            try {
-                alarmCountdownMinute = Integer.parseInt(minuteCountdownText.getText().toString());
-            } catch (NumberFormatException ex) {
-                alarmSwitch.setChecked(false);
-                return;
+            String intMinutes = minuteCountdownText.getText().toString();
+
+            if (intMinutes.isEmpty()) {
+                alarmCountdownMinutes = 0;
+            } else {
+                try {
+                    alarmCountdownMinutes = Integer.parseInt(intMinutes);
+                } catch (NumberFormatException ex) {
+                    alarmSwitch.setChecked(false);
+                    return;
+                }
             }
+
             // get the user input of second countdown
             EditText secondCountdownText = (EditText) findViewById(R.id.secondCountdown);
-            try {
-                alarmCountdownSecond = Integer.parseInt(secondCountdownText.getText().toString());
-            } catch (NumberFormatException ex) {
-                alarmSwitch.setChecked(false);
-                return;
+            String intSeconds = secondCountdownText.getText().toString();
+
+            if (intSeconds.isEmpty()) {
+                alarmCountdownSeconds = 0;
+            } else {
+                try {
+                    alarmCountdownSeconds = Integer.parseInt(intSeconds);
+                } catch (NumberFormatException ex) {
+                    alarmSwitch.setChecked(false);
+                    return;
+                }
             }
+
             // add time to set when the alarm will sound
             Calendar timeSet = Calendar.getInstance();
-            timeSet.add(Calendar.MINUTE, alarmCountdownMinute);
-            timeSet.add(Calendar.SECOND, alarmCountdownSecond);
+            timeSet.add(Calendar.MINUTE, alarmCountdownMinutes);
+            timeSet.add(Calendar.SECOND, alarmCountdownSeconds);
             String timeStr = timeSet.get(Calendar.HOUR_OF_DAY) + ":" +
                     timeSet.get(Calendar.MINUTE) + ":" + timeSet.get(Calendar.SECOND);
+
+            // will restore the previous alarm mode when the switch if off
+            previousAlarmMode = audioManager.getRingerMode();
             audioManager.setRingerMode(AudioManager.RINGER_MODE_SILENT);
+
             // show the time alarm will sound
-            alarmSwitch.setText(getResources().getString(R.string.alarmSetAt) + " " + timeStr);
+            alarmSwitch.setText(String.format(getResources().getString(R.string.alarmSetAt), timeStr));
             alarmSwitch.setTextColor(Color.RED);
-            // schedule the alarm
-            getRingtoneHandler().postDelayed(getPlayRingtongRunnable(),
-                    alarmCountdownMinute * 60 * 1000 + alarmCountdownSecond * 1000);
+
+            // schedule the alarm; set up the alarm sounding event
+            AlarmManager.AlarmClockInfo alarmClockInfo = new AlarmManager.AlarmClockInfo(
+                    timeSet.getTimeInMillis(), playRingtoneIntent);
+            alarmManager.setAlarmClock(alarmClockInfo, playRingtoneIntent);
+
             // persist the alarm intervals
             if (this.firebaseUid != null) {
                 DatabaseReference uidRef = database.child(this.firebaseUid);
                 uidRef.push().getKey();
-                TimeInterval timeInterval = new TimeInterval(0, alarmCountdownMinute, alarmCountdownSecond);
+                TimeInterval timeInterval = new TimeInterval(0, alarmCountdownMinutes, alarmCountdownSeconds);
                 uidRef.setValue(timeInterval);
             }
         } else {
             // cancel future alarm sounding runnable scheduled
-            getRingtoneHandler().removeCallbacks(getPlayRingtongRunnable());
+            alarmManager.cancel(playRingtoneIntent);
             audioManager.setRingerMode(previousAlarmMode);
             alarmSwitch.setTextColor(Color.GRAY);
             alarmSwitch.setText(alarmSwitch.getTextOff());
-            ringtone.stop();
+            PlayRingtoneReceiver.getRingtone(this).stop();
         }
     }
 
@@ -316,23 +320,19 @@ public class MainActivity extends AppCompatActivity {
 
     @Override
     public boolean onOptionsItemSelected(MenuItem item) {
-        // Handle action bar item clicks here. The action bar will
-        // automatically handle clicks on the Home/Up button, so long
-        // as you specify a parent activity in AndroidManifest.xml.
+        // Handle action bar item clicks here.
         int id = item.getItemId();
 
-        //noinspection SimplifiableIfStatement
-        if (id == R.id.action_settings) {
-            if (ringtone != null) {
-                ringtone.stop();
-            }
+        // noinspection SimplifiableIfStatement
+        if (id == R.id.action_stop_ringtone) {
+            PlayRingtoneReceiver.getRingtone(this).stop();
             return true;
         }
 
         return super.onOptionsItemSelected(item);
     }
 
-    public void showProgressDialog() {
+    private void showProgressDialog() {
         if (progressDialog == null) {
             progressDialog = new ProgressDialog(this);
             progressDialog.setMessage(getString(R.string.loading));
@@ -342,7 +342,7 @@ public class MainActivity extends AppCompatActivity {
         progressDialog.show();
     }
 
-    public void hideProgressDialog() {
+    private void hideProgressDialog() {
         if (progressDialog != null && progressDialog.isShowing()) {
             progressDialog.hide();
         }
@@ -360,5 +360,17 @@ public class MainActivity extends AppCompatActivity {
                         updateUI(null);
                     }
                 });
+    }
+
+    @Override
+    protected void onSaveInstanceState(Bundle SavedInstanceState) {
+        super.onSaveInstanceState(SavedInstanceState);
+        SavedInstanceState.putInt("previousAlarmMode", previousAlarmMode);
+    }
+
+    @Override
+    protected void onRestoreInstanceState(Bundle savedInstanceState) {
+        super.onRestoreInstanceState(savedInstanceState);
+        previousAlarmMode = savedInstanceState.getInt("previousAlarmMode");
     }
 }
