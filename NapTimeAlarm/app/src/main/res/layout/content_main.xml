@@ -21,14 +21,22 @@
         android:textAppearance="?android:attr/textAppearanceLarge" />
 
     <EditText
+        android:id="@+id/hourCountdown"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_alignParentStart="true"
+        android:layout_below="@+id/introText"
+        android:ems="3"
+        android:inputType="numberSigned"
+        android:text="0" />
+
+    <EditText
         android:id="@+id/minuteCountdown"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_alignParentLeft="true"
-        android:layout_alignParentStart="true"
-        android:layout_below="@+id/introText"
-        android:layout_toStartOf="@+id/textViewSec"
-        android:ems="10"
+        android:layout_alignTop="@+id/hourCountdown"
+        android:layout_toEndOf="@+id/hourCountdown"
+        android:ems="3"
         android:inputType="numberSigned"
         android:text="0" />
 
@@ -36,9 +44,9 @@
         android:id="@+id/secondCountdown"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_alignEnd="@+id/introText"
-        android:layout_below="@+id/introText"
-        android:ems="10"
+        android:layout_alignTop="@+id/minuteCountdown"
+        android:layout_toEndOf="@+id/minuteCountdown"
+        android:ems="3"
         android:inputType="numberSigned"
         android:text="1" />
 
@@ -46,10 +54,7 @@
         android:id="@+id/textViewMin"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_alignEnd="@+id/minuteCountdown"
-        android:layout_alignParentLeft="true"
-        android:layout_alignParentStart="true"
-        android:layout_alignRight="@+id/minuteCountdown"
+        android:layout_alignStart="@+id/minuteCountdown"
         android:layout_below="@+id/minuteCountdown"
         android:text="Minutes"
         android:textAppearance="?android:attr/textAppearanceMedium" />
@@ -61,6 +66,16 @@
         android:layout_alignStart="@+id/secondCountdown"
         android:layout_alignTop="@+id/textViewMin"
         android:text="Seconds"
+        android:textAppearance="?android:attr/textAppearanceMedium" />
+
+    <TextView
+        android:id="@+id/ViewHour"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_above="@+id/switchAlarm"
+        android:layout_alignParentStart="true"
+        android:layout_below="@+id/minuteCountdown"
+        android:text="Hours"
         android:textAppearance="?android:attr/textAppearanceMedium" />
 
     <Switch
@@ -110,5 +125,4 @@
         android:layout_alignParentEnd="true"
         android:layout_below="@+id/textViewGoogleUser"
         android:text="FirebaseUserInfo" />
-
 </RelativeLayout>

@@ -10,5 +10,8 @@
     <string name="firebase_status_fmt">Firebase User: %s</string>
     <string name="Google_signed_out">Google Signed Out</string>
     <string name="firebase_signed_out">No Firebase User ID</string>
-    <string name="intro_text">Switching on the alarm will silence the phone and set the alarm to sound at given minutes + seconds</string>
+    <string name="intro_text">Switching on the alarm will silence the phone and set the alarm to fire at given minutes + seconds</string>
+    <string name="uri">http://hil.dlinkddns.com/naptimealarm</string>
+    <!-- format per https://developer.android.com/training/app-indexing/enabling-app-indexing.html -->
+    <string name="appUri">android-app://com.dlinkddns.hil.naptimealarm/http/hil.dlinkddns.com/naptimealarm</string>
 </resources>
