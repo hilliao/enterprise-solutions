@@ -38,7 +38,7 @@ for html_file_name in html_file_names:
 
     # add facebook SDK scripts
     indexOfBody = htmlContent.index(line2add)
-    jsFile = open("facebook.js", 'r')
+    jsFile = open("script.html", 'r')
     jsContent = jsFile.read()
     jsFile.close()
     htmlContent[indexOfBody] += jsContent + "\n"
@@ -47,7 +47,7 @@ for html_file_name in html_file_names:
     if html_file_name.find("index.htm") != -1:
         indexOfSuccessStories = htmlContent.index(
             '<h2 class="wsite-content-title" style="text-align:center;"><font size="6">SUCCESS STORIES</font></h2>\n')
-        jsFile = open('fbbutton.html', 'r')
+        jsFile = open('sharebutton.html', 'r')
         jsContent = jsFile.read()
         jsFile.close()
         htmlContent[indexOfSuccessStories] += jsContent
