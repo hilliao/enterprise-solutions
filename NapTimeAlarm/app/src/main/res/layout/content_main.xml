@@ -88,10 +88,10 @@
         android:layout_alignRight="@+id/introText"
         android:layout_below="@+id/textViewSec"
         android:checked="false"
-        android:text="@string/alarmNotSetText"
+        android:text="@string/alarm_not_set_text"
         android:textAppearance="?android:attr/textAppearanceLarge"
         android:textOff="Alarm not set"
-        android:textOn="@string/alarmSetText" />
+        android:textOn="@string/alarm_set_text" />
 
     <com.google.android.gms.common.SignInButton
         android:id="@+id/sign_in_button"

@@ -1,15 +1,23 @@
 apply plugin: 'com.android.application'
 
 android {
-    compileSdkVersion 23
-    buildToolsVersion "23.0.3"
+    compileSdkVersion 24
+    buildToolsVersion "24.0.1"
 
     defaultConfig {
         applicationId "com.dlinkddns.hil.naptimealarm"
         minSdkVersion 21
         targetSdkVersion 23
-        versionCode 6
-        versionName "0.3.1"
+        versionCode 7
+        versionName "0.3.2"
+// https://developer.android.com/guide/platform/j8-jack.html
+//        jackOptions {
+//            enabled true
+//        }
+    }
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_1_8
+        targetCompatibility JavaVersion.VERSION_1_8
     }
     buildTypes {
         release {
@@ -22,15 +30,17 @@ android {
 dependencies {
     compile fileTree(dir: 'libs', include: ['*.jar'])
     testCompile 'junit:junit:4.12'
-    compile 'com.android.support:appcompat-v7:23.4.0'
-    compile 'com.android.support:design:23.4.0'
-    compile 'com.google.firebase:firebase-core:9.2.1'
+    compile 'com.android.support:appcompat-v7:24.2.0'
+    compile 'com.android.support:design:24.2.0'
+    compile 'com.google.firebase:firebase-core:9.4.0'
     // Firebase Authentication
-    compile 'com.google.firebase:firebase-auth:9.2.1'
+    compile 'com.google.firebase:firebase-auth:9.4.0'
     // Google Sign In SDK (only required for Google Sign In)
-    compile 'com.google.android.gms:play-services-auth:9.2.1'
-    compile 'com.google.firebase:firebase-database:9.2.1'
-    compile 'com.google.android.gms:play-services-appindexing:9.2.1'
+    compile 'com.google.android.gms:play-services-auth:9.4.0'
+    compile 'com.google.firebase:firebase-database:9.4.0'
+    compile 'com.google.android.gms:play-services-appindexing:9.4.0'
 }
 
 apply plugin: 'com.google.gms.google-services'
+apply plugin: 'com.android.application' //or apply plugin: 'java'
+apply plugin: 'me.tatarka.retrolambda'

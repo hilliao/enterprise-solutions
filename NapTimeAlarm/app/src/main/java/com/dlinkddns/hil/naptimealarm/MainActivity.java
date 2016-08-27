@@ -5,7 +5,6 @@ import android.app.PendingIntent;
 import android.app.ProgressDialog;
 import android.content.Context;
 import android.content.Intent;
-import android.content.res.ColorStateList;
 import android.graphics.Color;
 import android.media.AudioManager;
 import android.net.Uri;
@@ -32,9 +31,7 @@ import com.google.android.gms.auth.api.signin.GoogleSignInResult;
 import com.google.android.gms.common.ConnectionResult;
 import com.google.android.gms.common.api.GoogleApiClient;
 import com.google.android.gms.common.api.PendingResult;
-import com.google.android.gms.common.api.ResultCallback;
 import com.google.android.gms.common.api.Status;
-import com.google.android.gms.tasks.OnCompleteListener;
 import com.google.android.gms.tasks.Task;
 import com.google.firebase.auth.AuthCredential;
 import com.google.firebase.auth.AuthResult;
@@ -51,6 +48,9 @@ import java.text.SimpleDateFormat;
 import java.util.Calendar;
 
 public class MainActivity extends AppCompatActivity {
+    public static final String ALARM_SWITCH_COLOR = "alarmSwitchColor";
+    public static final String ALARM_SWITCH_TEXT = "alarmSwitchText";
+    public static final String PREVIOUS_ALARM_MODE = "previousAlarmMode";
     private static final int RC_SIGN_IN = 9001;
     private static final String GoogleFirebase = "GoogleActivity";
     private static AudioManager audioManager;
@@ -102,7 +102,7 @@ public class MainActivity extends AppCompatActivity {
                     public void onConnectionFailed(@NonNull ConnectionResult connectionResult) {
                         // An unresolvable error has occurred; Google APIs (including Sign-In) not available.
                         Log.d(GoogleFirebase, "onConnectionFailed:" + connectionResult);
-                        Toast.makeText(MainActivity.this, "Google Play Services sign in error.", Toast.LENGTH_SHORT).show();
+                        Toast.makeText(MainActivity.this, R.string.Google_signin_error, Toast.LENGTH_SHORT).show();
                     }
                 })
                 .addApi(Auth.GOOGLE_SIGN_IN_API, gso)
@@ -110,39 +110,30 @@ public class MainActivity extends AppCompatActivity {
 
         // register Firebase authentication change event
         firebaseAuth = FirebaseAuth.getInstance();
-        authListener = new FirebaseAuth.AuthStateListener() {
-            @Override
-            public void onAuthStateChanged(@NonNull FirebaseAuth firebaseAuth) {
-                FirebaseUser user = firebaseAuth.getCurrentUser();
-                if (user != null) {
-                    // User is signed in
-                    Log.d(GoogleFirebase, "onAuthStateChanged:signed_in:" + user.getUid());
-                    MainActivity.this.firebaseUid = user.getUid();
-                } else {
-                    // User is signed out
-                    Log.d(GoogleFirebase, "onAuthStateChanged:signed_out");
-                    MainActivity.this.firebaseUid = null;
-                }
-                updateUI(user);
+        authListener = (FirebaseAuth firebaseAuth) -> {
+            FirebaseUser user = firebaseAuth.getCurrentUser();
+            if (user != null) {
+                // User is signed in
+                Log.d(GoogleFirebase, "onAuthStateChanged:signed_in:" + user.getUid());
+                MainActivity.this.firebaseUid = user.getUid();
+            } else {
+                // User is signed out
+                Log.d(GoogleFirebase, "onAuthStateChanged:signed_out");
+                MainActivity.this.firebaseUid = null;
             }
+            updateUI(user);
         };
 
         // sign in and out button
         findViewById(R.id.sign_in_button).setOnClickListener(
-                new View.OnClickListener() {
-                    @Override
-                    public void onClick(View v) {
-                        Intent signInIntent = Auth.GoogleSignInApi.getSignInIntent(googleAuthApiClient);
-                        startActivityForResult(signInIntent, RC_SIGN_IN);
-                    }
+                (View v) -> {
+                    Intent signInIntent = Auth.GoogleSignInApi.getSignInIntent(googleAuthApiClient);
+                    startActivityForResult(signInIntent, RC_SIGN_IN);
                 }
         );
         findViewById(R.id.sign_out_button).setOnClickListener(
-                new View.OnClickListener() {
-                    @Override
-                    public void onClick(View v) {
-                        MainActivity.this.signOut();
-                    }
+                (View v) -> {
+                    MainActivity.this.signOut();
                 }
         );
 
@@ -151,13 +142,13 @@ public class MainActivity extends AppCompatActivity {
 
         /*
          * Test launching the app from deep-link by adb
-         * PS C:\Users\Hil\Documents> adb shell am start -a android.intent.action.VIEW  -d "http://hil.dlinkddns.com/naptimealarm" com.dlinkddns.hil.naptimealarm
+         * adb shell am start -a android.intent.action.VIEW  -d "http://hil.dlinkddns.com/naptimealarm" com.dlinkddns.hil.naptimealarm
          * */
         viewAppAction = Action.newAction(
                 Action.TYPE_VIEW,
-                "Nap Time Alarm",
+                getString(R.string.app_name),
                 Uri.parse(getString(R.string.uri)),
-                Uri.parse(getString(R.string.appUri))
+                Uri.parse(getString(R.string.app_uri))
         );
     }
 
@@ -215,21 +206,18 @@ public class MainActivity extends AppCompatActivity {
         AuthCredential credential = GoogleAuthProvider.getCredential(acct.getIdToken(), null);
 
         firebaseAuth.signInWithCredential(credential).addOnCompleteListener(this,
-                new OnCompleteListener<AuthResult>() {
-                    @Override
-                    public void onComplete(@NonNull Task<AuthResult> task) {
-                        Log.d(GoogleFirebase, "signInWithCredential:onComplete:" + task.isSuccessful());
+                (Task<AuthResult> task) -> {
+                    Log.d(GoogleFirebase, "signInWithCredential:onComplete:" + task.isSuccessful());
 
-                        // If sign in fails, display a message to the user. If sign in succeeds
-                        // the auth state listener will be notified and logic to handle the
-                        // signed in user can be handled in the listener.
-                        if (!task.isSuccessful()) {
-                            Log.w(GoogleFirebase, "signInWithCredential", task.getException());
-                            Toast.makeText(MainActivity.this, "Authentication failed.",
-                                    Toast.LENGTH_SHORT).show();
-                        }
-                        hideProgressDialog();
+                    // If sign in fails, display a message to the user. If sign in succeeds
+                    // the auth state listener will be notified and logic to handle the
+                    // signed in user can be handled in the listener.
+                    if (!task.isSuccessful()) {
+                        Log.w(GoogleFirebase, "signInWithCredential", task.getException());
+                        Toast.makeText(MainActivity.this, "Authentication failed.",
+                                Toast.LENGTH_SHORT).show();
                     }
+                    hideProgressDialog();
                 });
     }
 
@@ -272,18 +260,19 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void alarmSwitchLogic(boolean isChecked, Switch alarmSwitch) {
-        int alarmCountdownMinutes;
-        int alarmCountdownSeconds;
-        int alarmCountdownHours;
+        int alarmCountdownMinutes = -1;
+        int alarmCountdownSeconds = -1;
+        int alarmCountdownHours = -1;
 
         if (!alarmSwitch.isPressed()) {
             return;
         }
 
-        if (isChecked == true) {
+        if (isChecked) {
             // get the user input of minute countdown
             EditText minuteCountdownText = (EditText) findViewById(R.id.minuteCountdown);
             String strMinutes = minuteCountdownText.getText().toString();
+            boolean timeInputError = false;
 
             if (strMinutes.isEmpty()) {
                 alarmCountdownMinutes = 0;
@@ -291,8 +280,7 @@ public class MainActivity extends AppCompatActivity {
                 try {
                     alarmCountdownMinutes = Integer.parseInt(strMinutes);
                 } catch (NumberFormatException ex) {
-                    alarmSwitch.setChecked(false);
-                    return;
+                    timeInputError = true;
                 }
             }
 
@@ -306,8 +294,7 @@ public class MainActivity extends AppCompatActivity {
                 try {
                     alarmCountdownSeconds = Integer.parseInt(strSeconds);
                 } catch (NumberFormatException ex) {
-                    alarmSwitch.setChecked(false);
-                    return;
+                    timeInputError = true;
                 }
             }
 
@@ -321,9 +308,14 @@ public class MainActivity extends AppCompatActivity {
                 try {
                     alarmCountdownHours = Integer.parseInt(strHours);
                 } catch (NumberFormatException ex) {
-                    alarmSwitch.setChecked(false);
-                    return;
+                    timeInputError = true;
                 }
+            }
+
+            if (alarmCountdownSeconds < 0 || alarmCountdownMinutes < 0 || alarmCountdownHours < 0 || timeInputError) {
+                alarmSwitch.setChecked(false);
+                Toast.makeText(MainActivity.this, R.string.time_input_error, Toast.LENGTH_SHORT).show();
+                return;
             }
 
             // calculate the time to fire the alarm
@@ -338,7 +330,7 @@ public class MainActivity extends AppCompatActivity {
 
             // show the time alarm will fire
             SimpleDateFormat dateFormatter = new SimpleDateFormat("MM/dd HH:mm:ss");
-            alarmSwitch.setText(String.format(getResources().getString(R.string.alarmSetAt),
+            alarmSwitch.setText(String.format(getResources().getString(R.string.alarm_set_at),
                     dateFormatter.format(alarmFireAt.getTime())));
             alarmSwitch.setTextColor(Color.RED);
 
@@ -405,27 +397,24 @@ public class MainActivity extends AppCompatActivity {
         firebaseAuth.signOut();
         // Google sign out
         Auth.GoogleSignInApi.signOut(googleAuthApiClient).setResultCallback(
-                new ResultCallback<Status>() {
-                    @Override
-                    public void onResult(@NonNull Status status) {
-                        updateUI(null);
-                    }
+                (Status status) -> {
+                    updateUI(null);
                 });
     }
 
     @Override
     protected void onSaveInstanceState(Bundle savedInstanceState) {
         super.onSaveInstanceState(savedInstanceState);
-        savedInstanceState.putInt("previousAlarmMode", previousAlarmMode);
-        savedInstanceState.putCharSequence("alarmSwitchText", alarmSwitch.getText());
-        savedInstanceState.putParcelable("alarmSwitchColor", alarmSwitch.getTextColors());
+        savedInstanceState.putInt(PREVIOUS_ALARM_MODE, previousAlarmMode);
+        savedInstanceState.putCharSequence(ALARM_SWITCH_TEXT, alarmSwitch.getText());
+        savedInstanceState.putParcelable(ALARM_SWITCH_COLOR, alarmSwitch.getTextColors());
     }
 
     @Override
     protected void onRestoreInstanceState(Bundle savedInstanceState) {
         super.onRestoreInstanceState(savedInstanceState);
-        previousAlarmMode = savedInstanceState.getInt("previousAlarmMode");
-        alarmSwitch.setText(savedInstanceState.getCharSequence("alarmSwitchText"));
-        alarmSwitch.setTextColor((ColorStateList) savedInstanceState.getParcelable("alarmSwitchColor"));
+        previousAlarmMode = savedInstanceState.getInt(PREVIOUS_ALARM_MODE);
+        alarmSwitch.setText(savedInstanceState.getCharSequence(ALARM_SWITCH_TEXT));
+        alarmSwitch.setTextColor(savedInstanceState.getParcelable(ALARM_SWITCH_COLOR));
     }
 }

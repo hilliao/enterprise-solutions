@@ -1,9 +1,9 @@
 <resources>
     <string name="app_name">Nap Time Alarm</string>
     <string name="action_settings">Stop ringtone</string>
-    <string name="alarmNotSetText">Alarm not set</string>
-    <string name="alarmSetText">Alarm is set</string>
-    <string name="alarmSetAt">Alarm set at %s</string>
+    <string name="alarm_not_set_text">Alarm not set</string>
+    <string name="alarm_set_text">Alarm is set</string>
+    <string name="alarm_set_at">Alarm set at %s</string>
     <string name="sign_out">Sign out</string>
     <string name="loading">Authenticating…</string>
     <string name="google_status_fmt">Google User: %s</string>
@@ -13,5 +13,7 @@
     <string name="intro_text">Switching on the alarm will silence the phone and set the alarm to fire at given minutes + seconds</string>
     <string name="uri">http://hil.dlinkddns.com/naptimealarm</string>
     <!-- format per https://developer.android.com/training/app-indexing/enabling-app-indexing.html -->
-    <string name="appUri">android-app://com.dlinkddns.hil.naptimealarm/http/hil.dlinkddns.com/naptimealarm</string>
+    <string name="app_uri">android-app://com.dlinkddns.hil.naptimealarm/http/hil.dlinkddns.com/naptimealarm</string>
+    <string name="time_input_error">one of the time inputs not acceptable</string>
+    <string name="Google_signin_error">Google Play Services sign in error</string>
 </resources>
