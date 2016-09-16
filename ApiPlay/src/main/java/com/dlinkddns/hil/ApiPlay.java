@@ -17,7 +17,7 @@ import javax.jdo.PersistenceManager;
 import java.util.Random;
 
 @Api(
-        name = "ApiPlay", version = "1.1",
+        name = "apiplay", version = "v1",
         scopes = Constant.API_EMAIL_SCOPE,
         clientIds = {Constants.WEB_CLIENT_ID, Constant.API_EXPLORER_CLIENT_ID}
 )
