@@ -10,11 +10,12 @@ import java.util.concurrent.Callable;
 public class Example {
 
     @RequestMapping("/")
+    @CrossOrigin
     String home() {
         Callable<Integer> task = () -> {
             return Integer.valueOf(1);
         };
-        return "Hello World!";
+        return "Hello World! from springboot";
     }
 
     public static void main(String[] args) throws Exception {
