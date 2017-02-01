@@ -36,12 +36,11 @@ export default class Layout extends React.Component {
     }
 
     render() {
-        //const name = "Hil";
         return (
             <div>
                 <Header changeTitle={this.changeTitle.bind(this)} title={this.state.title}/>
                 <h1> {this.name} {this.getVal()}  </h1>
-                <h2> -> {this.state.msg} {console.log(this.state.msg)} </h2>
+                <h2> -> {"From Springboot: " + this.state.msg} {console.log(this.state.msg)} </h2>
                 <Footer />
             </div>
         );
