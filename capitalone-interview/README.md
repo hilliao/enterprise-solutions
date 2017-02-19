@@ -1,3 +1,67 @@
+/usr/bin/python3.5 /home/hil/github/PlayTest/capitalone-interview/main.py
+2014-10 -> spent: $1578.44, income: $3429.79
+2014-11 -> spent: $4625.67, income: $3949.51
+2014-12 -> spent: $4785.78, income: $3954.32
+2015-01 -> spent: $3811.42, income: $3925.98
+2015-02 -> spent: $4217.99, income: $3936.64
+2015-03 -> spent: $3460.17, income: $3942.73
+2015-04 -> spent: $2985.45, income: $3943.68
+2015-05 -> spent: $2692.67, income: $3416.4
+2015-06 -> spent: $3758.45, income: $3918.23
+2015-07 -> spent: $3921.05, income: $3917.18
+2015-08 -> spent: $2809.03, income: $3384.88
+2015-09 -> spent: $3055.51, income: $3922.72
+2015-10 -> spent: $3301.84, income: $1717.43
+2015-11 -> spent: $3154.04, income: $3977.78
+2015-12 -> spent: $3208.54, income: $1725.57
+2016-01 -> spent: $2827.81, income: $2242.89
+2016-02 -> spent: $3118.91, income: $3451.38
+2016-03 -> spent: $4216.55, income: $3386.61
+2016-04 -> spent: $3912.18, income: $3917.4
+2016-05 -> spent: $3543.46, income: $3991.18
+2016-06 -> spent: $3276.24, income: $3927.78
+2016-07 -> spent: $3262.42, income: $3928.23
+2016-08 -> spent: $3072.53, income: $3922.33
+2016-09 -> spent: $3720.2, income: $2229.63
+2016-10 -> spent: $3273.58, income: $2209.91
+2016-11 -> spent: $4831.32, income: $3441.83
+2016-12 -> spent: $3106.19, income: $3966.25
+2017-01 -> spent: $4119.53, income: $3486.48
+2017-02 -> spent: $2935.51, income: $0.0
+average -> spent: $3276.24, income: $3917.4
+
+
+/usr/bin/python3.5 /home/hil/github/PlayTest/capitalone-interview/main.py --ignore-donuts
+2014-10 -> spent: $1494.16, income: $3429.79
+2014-11 -> spent: $4591.11, income: $3949.51
+2014-12 -> spent: $4690.32, income: $3954.32
+2015-01 -> spent: $3756.73, income: $3925.98
+2015-02 -> spent: $4159.2, income: $3936.64
+2015-03 -> spent: $3392.36, income: $3942.73
+2015-04 -> spent: $2939.79, income: $3943.68
+2015-05 -> spent: $2670.56, income: $3416.4
+2015-06 -> spent: $3724.28, income: $3918.23
+2015-07 -> spent: $3898.14, income: $3917.18
+2015-08 -> spent: $2787.39, income: $3384.88
+2015-09 -> spent: $3036.03, income: $3922.72
+2015-10 -> spent: $3301.84, income: $1717.43
+2015-11 -> spent: $3135.03, income: $3977.78
+2015-12 -> spent: $3185.28, income: $1725.57
+2016-01 -> spent: $2746.04, income: $2242.89
+2016-02 -> spent: $3082.69, income: $3451.38
+2016-03 -> spent: $4207.85, income: $3386.61
+2016-04 -> spent: $3904.39, income: $3917.4
+2016-05 -> spent: $3505.4, income: $3991.18
+2016-06 -> spent: $3222.02, income: $3927.78
+2016-07 -> spent: $3202.71, income: $3928.23
+2016-08 -> spent: $3015.28, income: $3922.33
+2016-09 -> spent: $3677.15, income: $2229.63
+2016-10 -> spent: $3240.28, income: $2209.91
+2016-11 -> spent: $4798.46, income: $3441.83
+2016-12 -> spent: $3078.46, income: $3966.25
+2017-01 -> spent: $4027.46, income: $3486.48
+2017-02 -> spent: $2928.72, income: $0.0
+average -> spent: $3240.28, income: $3917.4
 
 
 

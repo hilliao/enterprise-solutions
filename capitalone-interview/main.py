@@ -1,12 +1,10 @@
 import urllib3
 import json
+import sys
 
 const_avg = 'average'
-
 const_months = 'months'
-
 const_income = 'income'
-
 const_spent = 'spent'
 
 
@@ -42,12 +40,12 @@ def get_transactions_by_month(json_transactions):
     month_income = {}
     for m in by_month:
         month_spent[m] = [int(t['amount']) for t in trans if t['transaction-time'].startswith(m)
-                          and t['is-pending'] == False
+                          and not t['is-pending']
                           and int(t['amount']) < 0
                           ]
 
         month_income[m] = [int(t['amount']) for t in trans if t['transaction-time'].startswith(m)
-                           and t['is-pending'] == False
+                           and not t['is-pending']
                            and int(t['amount']) > 0
                            ]
 
@@ -66,9 +64,22 @@ def get_average_month(transactions):
     return average_amount
 
 
+def remove_donuts(json_transactions):
+    trans = json_transactions['transactions']
+    deleted = [t for t in trans if t['merchant'] != 'Krispy Kreme Donuts'
+               and t['merchant'] != 'DUNKIN #336784'
+               ]
+    json_transactions['transactions'] = deleted
+    return json_transactions
+
+
 def main():
     url = 'https://2016.api.levelmoney.com/api/v2/core/get-all-transactions'
     all_trans = get_all_transactions_from_url(url)
+
+    if len(sys.argv) == 2 and sys.argv[1] == '--ignore-donuts':
+        all_trans = remove_donuts(all_trans)
+
     monthly_trans = get_transactions_by_month(all_trans)
     monthly_trans[const_spent][const_avg] = get_average_month(monthly_trans[const_spent])
     monthly_trans[const_income][const_avg] = get_average_month(monthly_trans[const_income])
