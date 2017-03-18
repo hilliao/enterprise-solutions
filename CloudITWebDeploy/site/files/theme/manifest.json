@@ -1,0 +1,33 @@
+ {
+	"responsive": true,
+	"glyph-icons": true,
+	"enableEditorJS": true,
+	"plugins": [
+		{
+			"name": "navpane",
+			"condense": 992,
+			"defaults": {
+				"forced": true
+			}
+		}
+	],
+	"description": "With a sporty, high impact vibe Superset is ready to carry your website into the future. Collapsable menus, bold typography and full width images give your site the  strength and cross-functional appeal you've always wanted.",
+	"features": [
+		"responsive",
+		"css-buttons",
+		"social-icons",
+		"full-width-header",
+		"navigation-collapsible",
+		"color-palettes"
+	],
+	"header-conversions": {
+        "user-id": "80949722",
+        "site-id": "673582915785840325",
+        "page-types": {
+            "tall-header": "234822353868520478",
+            "short-header": "201356687935136019",
+            "landing": "195952550355308139",
+            "title" : "272623768991722073"
+        }
+    }
+}
