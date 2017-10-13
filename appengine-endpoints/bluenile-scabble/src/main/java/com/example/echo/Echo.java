@@ -18,23 +18,10 @@ package com.example.echo;
 
 import com.google.api.server.spi.auth.EspAuthenticator;
 import com.google.api.server.spi.auth.common.User;
-import com.google.api.server.spi.config.AnnotationBoolean;
-import com.google.api.server.spi.config.Api;
-import com.google.api.server.spi.config.ApiIssuer;
-import com.google.api.server.spi.config.ApiIssuerAudience;
-import com.google.api.server.spi.config.ApiMethod;
-import com.google.api.server.spi.config.ApiNamespace;
-import com.google.api.server.spi.config.Named;
-import com.google.api.server.spi.config.Nullable;
+import com.google.api.server.spi.config.*;
 import com.google.api.server.spi.response.UnauthorizedException;
-import com.google.appengine.api.utils.SystemProperty;
-import com.google.appengine.tools.cloudstorage.*;
-import org.apache.commons.io.IOUtils;
 
-import java.io.IOException;
-import java.nio.channels.Channels;
 import java.util.Arrays;
-import java.util.List;
 import java.util.stream.Stream;
 
 /**
@@ -65,42 +52,6 @@ import java.util.stream.Stream;
 // [END echo_api_annotation]
 
 public class Echo {
-    /**
-     * Used below to determine the size of chucks to read in. Should be > 1kb and < 10MB
-     */
-    private static final int BUFFER_SIZE = 2 * 1024 * 1024;
-
-    /**
-     * This is where backoff parameters are configured. Here it is aggressively retrying with
-     * backoff, up to 10 times but taking no more that 15 seconds total to do so.
-     */
-    private final GcsService gcsService = GcsServiceFactory.createGcsService(new RetryParams.Builder()
-            .initialRetryDelayMillis(10)
-            .retryMaxAttempts(10)
-            .totalRetryPeriodMillis(15000)
-            .build());
-
-    @ApiMethod(
-            httpMethod = ApiMethod.HttpMethod.GET,
-            name = "scrabble_solver_service", path = "bluenile/word/{letters}")
-    public WordScore bluenileScrabble(@Named("letters") String letters) throws IOException {
-        String words;
-        // get the dictionary's words
-        if (SystemProperty.environment.value() == SystemProperty.Environment.Value.Production) {
-            GcsFilename fileName = new GcsFilename("careful-sphinx-161801.appspot.com", "wordsEn.txt");
-            GcsInputChannel readChannel = gcsService.openPrefetchingReadChannel(fileName, 0, BUFFER_SIZE);
-            words = IOUtils.toString(Channels.newInputStream(readChannel), "UTF-8");
-        } else {
-            words = "at\nthe\nhas\nas";
-            WordManager wordManager = new WordManager(words);
-            wordManager.isValid("fdklsjfghgg");
-        }
-
-        WordScore result = new WordScore();
-        result.words = Arrays.asList(letters, String.valueOf(words.length()));
-        return result;
-    }
-
     /**
      * Echoes the received message back. If n is a non-negative integer, the message is copied that
      * many times in the returned message.

@@ -3,27 +3,14 @@
 This sample demonstrates how to use Google Cloud Endpoints Frameworks using
 Java on App Engine Standard.
 
-## Build with Maven
+## Build with Maven and IntelliJ
+0. The latest build, debug, and deployment instructions are at https://cloud.google.com/endpoints/docs/frameworks/java/get-started-frameworks-java
+0. Download the latest IntelliJ IDEA and install the latest plugin of Google Cloud Tools by following instructions at https://cloud.google.com/tools/intellij/docs/
+0. Make sure Java 8 is configured in IntelliJ IDEA and installed on the development environment. Verify with java -version
+0. Make sure the latest Google cloud SDK is installed. The older SDK did not support Java 8 in Google App Engine.
+0. Debugging in IntelliJ may require running  mvn clean package first to avoid failure to start app engine local development server.
 
-### Adding the project ID to the sample API code
-
-You must add the project ID obtained when you created your project to the
-sample's `pom.xml` before you can deploy the code.
-
-To add the project ID:
-
-0. Edit the file `pom.xml`.
-
-0. For `<endpoints.project.id>`, replace the value `YOUR_PROJECT_ID` with
-your project ID.
-
-0. Edit the file `src/main/java/com/example/echo/Echo.java`.
-
-0. Replace the value `YOUR-PROJECT-ID` with your project ID.
-
-0. Save your changes.
-
-### Building the sample project
+### Building the whole project
 
 To build the project:
 
@@ -61,16 +48,22 @@ to the API.
 To send a request to the API, from a command line, invoke the following `cURL`
 command:
 
-     curl -X GET -H "Content-Type: application/json"  \
-     "http://localhost:8080/_ah/api/echo/v1/bluenile/word/hellow_michelle"
+     curl -X GET \
+      http://localhost:8080/_ah/api/scrabble/v1/bluenile/words/HAT-
+    curl -X GET \
+      https://careful-sphinx-161801.appspot.com/_ah/api/scrabble/v1/bluenile/words/HAT-
 
 You will get a 200 response with the following data:
 
     {
-      "words": [
-         "hellow_michelle",
-         "13"
-       ]
+        "words": [
+            "a",
+            "ah",
+            "at",
+            "ha",
+            "hat",
+            "th"
+        ]
     }
 
 ### Sending a request to the sample API
@@ -93,89 +86,66 @@ You will get a 200 response with the following data:
      "message": "echo"
     }
 
-## Build with gradle
 
-### Adding the project ID to the sample API code
+## Scrabble Solver Service
 
-0. Edit the file `build.gradle`.
+### Summary
 
-0. For `def projectId = 'YOUR_PROJECT_ID'`, replace the value `YOUR_PROJECT_ID`
-with your project ID.
+Implement an HTTP REST service that returns Scrabble words for a given set of letters.
 
-0. Edit the file `src/main/java/com/example/echo/Echo.java
+### Data source
 
-0. Replace the value `YOUR-PROJECT-ID` with your project ID.
+Use the list of words here: http://www-01.sil.org/linguistics/wordlists/english/wordlist/wordsEn.txt
 
-0. Save your changes.
+### API Specification
 
-### Building the sample project
+The REST web service runs on port 8080 and responds to a URL of the pattern http://localhost:8080/words/<letters>, where <letters> is a string of arbitrary
+letters. There are two cases that need to be covered:
 
-To build the project on unix-based systems:
+    1. The dictionary contains words that can be spelled with the given letters.
 
-    ./gradlew build
+      A JSON list of strings is returned, where each entry is a word. They are sorted by Scrabble score, from highest to lowest scoring. For example:
 
-Windows users: Use `gradlew.bat` instead of `./gradlew`
+      Request URL:       http://localhost:8080/words/hat
+      Expected response: ["hat","ah","ha","th","at","a"]
 
-<details>
- <summary>more details</summary>
- The project contains the standard java and war plugins and in addition to that it contains the following plugins:
- https://github.com/GoogleCloudPlatform/endpoints-framework-gradle-plugin for the endpoint related tasks and
- https://github.com/GoogleCloudPlatform/app-gradle-plugin for the appengine standard related tasks.
+      The letters are like Scrabble tiles. Order is unimportant:
 
- Check the links for details about the available Plugin Goals and Parameters.
-</details>
+      Request URL:       http://localhost:8080/words/aht
+      Expected response: ["hat","ah","ha","th","at","a"]
 
-### Generating the openapi.json file
+      The letters are not case-sensitive, so this returns the same results:
 
-To generate the required configuration file `openapi.json`:
+      Request URL:       http://localhost:8080/words/HAT
+      Expected response: ["hat","ah","ha","th","at","a"]
 
-    ./gradlew endpointsOpenApiDocs
+      Request URL:       http://localhost:8080/words/Hat
+      Expected response: ["hat","ah","ha","th","at","a"]
 
-This results in a file in build/endpointsOpenApiDocs/openapi.json
+    2. No dictionary words can be spelled with the given letters.
 
-### Deploying the sample API to App Engine
+      An empty JSON list is returned.  For example:
 
-To deploy the sample API:
+      Request URL:       http://localhost:8080/words/zzz
+      Expected response: []
 
-0. Invoke the `gcloud` command to deploy the API configuration file:
+The Scrabble score is calculated by adding up the point values of every letter in the word.
+The point values are:
 
-         gcloud service-management deploy build/endpointsOpenApiDocs/openapi.json
+    Points | Letters
+    -------+-----------------------------
+       1   | A, E, I, L, N, O, R, S, T, U
+       2   | D, G
+       3   | B, C, M, P
+       4   | F, H, V, W, Y
+       5   | K
+       8   | J, X
+      10   | Q, Z
 
-0. Deploy the API implementation code by invoking:
+For example, the following words have these scores:
 
-         ./gradlew appengineDeploy
+hat:  6
+code: 7
+antidisestablishmenatarianism: 39
 
-    The first time you upload a sample app, you may be prompted to authorize the
-    deployment. Follow the prompts: when you are presented with a browser window
-    containing a code, copy it to the terminal window.
-
-    <details>
-    <summary>ERROR: (gcloud.app.deploy) The current Google Cloud project [...] does not contain an App Engine application.</summary>
-    If you create a fresh cloud project that doesn't contain a appengine application you may receive this Error:
-
-    ERROR: (gcloud.app.deploy) The current Google Cloud project [...] does not contain an App Engine application. Use `gcloud app create` to initialize an App Engine application within the project.
-
-    In that case just execute `gcloud app create`, you will be asked to select a region and the app will be created. Then run gradle appengineDeploy again.
-    </details>
-
-0. Wait for the upload to finish.
-
-### Sending a request to the sample API
-
-After you deploy the API and its configuration file, you can send requests
-to the API.
-
-To send a request to the API, from a command line, invoke the following `cURL`
-command:
-
-     curl \
-         -H "Content-Type: application/json" \
-         -X POST \
-         -d '{"message":"echo"}' \
-         https://$PROJECT_ID.appspot.com/_ah/api/echo/v1/echo
-
-You will get a 200 response with the following data:
-
-    {
-     "message": "echo"
-    }
+(From https://en.wikipedia.org/wiki/Scrabble_letter_distributions)
