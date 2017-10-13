@@ -18,8 +18,8 @@
     <packaging>war</packaging>
     <version>1.0-SNAPSHOT</version>
 
-    <groupId>com.example.echo</groupId>
-    <artifactId>echo-j8</artifactId>
+    <groupId>com.techsightteam.gae</groupId>
+    <artifactId>scrabble</artifactId>
 
     <parent>
         <artifactId>appengine-java8-samples</artifactId>

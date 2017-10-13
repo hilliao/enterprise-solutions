@@ -8,7 +8,13 @@ Java on App Engine Standard.
 0. Download the latest IntelliJ IDEA and install the latest plugin of Google Cloud Tools by following instructions at https://cloud.google.com/tools/intellij/docs/
 0. Make sure Java 8 is configured in IntelliJ IDEA and installed on the development environment. Verify with java -version
 0. Make sure the latest Google cloud SDK is installed. The older SDK did not support Java 8 in Google App Engine.
-0. Debugging in IntelliJ may require running  mvn clean package first to avoid failure to start app engine local development server.
+0. Debugging in IntelliJ by using Google app engine standard local server may result in the following error:
+    
+         Oct 13, 2017 3:49:27 PM com.google.appengine.tools.development.InstanceHelper sendStartRequest    
+         WARNING: Start request to /_ah/start on server 0.default failed (HTTP status code=503). Retrying...
+
+    The solution is to run mvn clean package and add environment variable ENDPOINTS_SERVICE_NAME to Run/Debug Configurations -> Startup/Connection ->
+ Environment variables. The `Value` is [YOUR_PROJECT_ID].appspot.com. Check the Intellij_run_configuration_environment_variables.png file in the project.
 
 ### Building the whole project
 
@@ -56,14 +62,7 @@ command:
 You will get a 200 response with the following data:
 
     {
-        "words": [
-            "a",
-            "ah",
-            "at",
-            "ha",
-            "hat",
-            "th"
-        ]
+        "words": ["hat","ah","ha","th","at","a"]
     }
 
 ### Sending a request to the sample API
