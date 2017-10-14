@@ -17,20 +17,19 @@
 package com.techsightteam.gae;
 
 import com.google.api.server.spi.config.*;
+import com.google.api.server.spi.response.InternalServerErrorException;
 import com.google.appengine.api.memcache.MemcacheService;
 import com.google.appengine.api.memcache.MemcacheServiceFactory;
 import com.google.appengine.api.utils.SystemProperty;
 import com.google.appengine.tools.cloudstorage.*;
 import org.apache.commons.io.IOUtils;
 
-import java.io.*;
+import java.io.IOException;
 import java.nio.channels.Channels;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.List;
 import java.util.logging.Logger;
-import java.util.zip.GZIPInputStream;
-import java.util.zip.GZIPOutputStream;
 
 /**
  * scrabble game simulation
@@ -83,11 +82,31 @@ public class Scrabble {
             name = "scrabble_solver_service", path = "bluenile/words/{letters}")
     public WordScore bluenileScrabble(
             @Named("letters") String letters,
-            @Named("withscores") @Nullable Boolean withScores) throws IOException, ClassNotFoundException {
+            @Named("withscores") @Nullable Boolean withScores) throws InternalServerErrorException {
         String dictWords;
         letters = letters.toLowerCase();
 
-        // check if dictionary is cached
+        try {
+            dictWords = getDictWords();
+        } catch (IOException | ClassNotFoundException ex) {
+            String error = "Failed to get dictionary words";
+            log.severe(error + ": " + ex.toString());
+            throw new InternalServerErrorException(error, ex.toString(), ex);
+        }
+
+        WordManager wordManager = new WordManager(dictWords);
+        List<String> words = wordManager.getWordsFrom(letters);
+        WordScore wordScore = new WordScore(words);
+
+        if (withScores == null || !withScores) {
+            wordScore.scores = null;
+        }
+
+        return wordScore;
+    }
+
+    private String getDictWords() throws IOException, ClassNotFoundException {
+        String dictWords;// check if dictionary is cached
         MemcacheService syncCache = MemcacheServiceFactory.getMemcacheService();
         MemcacheService.IdentifiableValue dictCache = syncCache.getIdentifiable(cacheKeyDict);
 
@@ -103,7 +122,7 @@ public class Scrabble {
             }
 
             // need to compress the dictionary to avoid 1MB limit
-            byte[] bytes = compressString(dictWords);
+            byte[] bytes = CompressString.compressString(dictWords);
             boolean isAddedToCache = syncCache.put(cacheKeyDict, bytes, null, MemcacheService.SetPolicy.ADD_ONLY_IF_NOT_PRESENT);
             if (isAddedToCache) {
                 log.info("Dictionary words added to Memcache");
@@ -111,39 +130,12 @@ public class Scrabble {
         } else {
             // decompress from cache to String
             byte[] bytes = (byte[]) dictCache.getValue();
-            dictWords = decompressString(bytes);
+            dictWords = CompressString.decompressString(bytes);
         }
-
-        WordManager wordManager = new WordManager(dictWords);
-        List<String> words = wordManager.getWordsFrom(letters);
-        WordScore wordScore = new WordScore(words);
-
-        if (withScores == null || !withScores) {
-            wordScore.scores = null;
-        }
-        return wordScore;
-    }
-
-    public static String decompressString(byte[] bytes) throws IOException, ClassNotFoundException {
-        String dictWords;
-        ByteArrayInputStream bais = new ByteArrayInputStream(bytes);
-        GZIPInputStream gzipIn = new GZIPInputStream(bais);
-        ObjectInputStream objectIn = new ObjectInputStream(gzipIn);
-        dictWords = (String) objectIn.readObject();
-        objectIn.close();
         return dictWords;
     }
 
-    public static byte[] compressString(String dictWords) throws IOException {
-        ByteArrayOutputStream baos = new ByteArrayOutputStream();
-        GZIPOutputStream gzipOut = new GZIPOutputStream(baos);
-        ObjectOutputStream objectOut = new ObjectOutputStream(gzipOut);
-        objectOut.writeObject(dictWords);
-        objectOut.close();
-        return baos.toByteArray();
-    }
-
-    @ApiMethod(httpMethod = ApiMethod.HttpMethod.GET, name = "test_echo", path = "echo/{pathparam}")
+    @ApiMethod(httpMethod = ApiMethod.HttpMethod.GET, name = "echotest", path = "echo/{pathparam}")
     public EchoBack echo(@Named("pathparam") String pathParam, @Named("queryparam") @Nullable String queryParam) {
         EchoBack echoResult = new EchoBack();
         echoResult.pathParam = pathParam;

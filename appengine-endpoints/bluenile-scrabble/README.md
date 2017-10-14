@@ -16,7 +16,7 @@ Java on App Engine Standard.
     The solution is to run mvn clean package and add environment variable ENDPOINTS_SERVICE_NAME to Run/Debug Configurations -> Startup/Connection ->
  Environment variables. The `Value` is [YOUR_PROJECT_ID].appspot.com. Check the Intellij_run_configuration_environment_variables.png file in the project.
  
-0. The dictionary file needs to exist at /tmp/ but you can download a sample from
+0. Debugging locally, the dictionary file needs to exist at /tmp/ but you can download a sample from
     https://storage.googleapis.com/careful-sphinx-161801.appspot.com/wordsEn.txt
 
 ### Building the whole project
@@ -68,7 +68,7 @@ You will get a 200 response with the following data:
         "words": ["hat","ah","ha","th","at","a"]
     }
     
-To add the points of each word to the response, add query param withscores=true
+To see points of each word to the response, add query param withscores=true
      
      curl -X GET \
       https://careful-sphinx-161801.appspot.com/_ah/api/scrabble/v1/bluenile/words/HAtgTTT-?withscores=true
