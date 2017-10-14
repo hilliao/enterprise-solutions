@@ -35,6 +35,6 @@
 
   <modules>
     <!-- App Engine Standard -->
-    <module>bluenile-scabble</module>
+    <module>bluenile-scrabble</module>
   </modules>
 </project>

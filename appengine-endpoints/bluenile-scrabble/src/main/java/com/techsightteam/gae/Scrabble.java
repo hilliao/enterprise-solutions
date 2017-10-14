@@ -17,15 +17,20 @@
 package com.techsightteam.gae;
 
 import com.google.api.server.spi.config.*;
+import com.google.appengine.api.memcache.MemcacheService;
+import com.google.appengine.api.memcache.MemcacheServiceFactory;
 import com.google.appengine.api.utils.SystemProperty;
 import com.google.appengine.tools.cloudstorage.*;
 import org.apache.commons.io.IOUtils;
 
-import java.io.IOException;
+import java.io.*;
 import java.nio.channels.Channels;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.List;
+import java.util.logging.Logger;
+import java.util.zip.GZIPInputStream;
+import java.util.zip.GZIPOutputStream;
 
 /**
  * scrabble game simulation
@@ -55,6 +60,9 @@ public class Scrabble {
      * Used below to determine the size of chucks to read in. Should be > 1kb and < 10MB
      */
     private static final int BUFFER_SIZE = 2 * 1024 * 1024;
+    public static final String DICT_FILE = "wordsEn.txt";
+    public static final String DICT_PATH = "/tmp/wordsEn.txt";
+    public static final String DICT_ENCODING = "UTF-8";
 
     /**
      * This is where backoff parameters are configured. Here it is aggressively retrying with
@@ -66,23 +74,44 @@ public class Scrabble {
             .totalRetryPeriodMillis(15000)
             .build());
 
+    private static final Logger log = Logger.getLogger(Scrabble.class.getName());
+
+    public static String cacheKeyDict = "dict";
+
     @ApiMethod(
             httpMethod = ApiMethod.HttpMethod.GET,
             name = "scrabble_solver_service", path = "bluenile/words/{letters}")
     public WordScore bluenileScrabble(
             @Named("letters") String letters,
-            @Named("withscores") @Nullable Boolean withScores) throws IOException {
+            @Named("withscores") @Nullable Boolean withScores) throws IOException, ClassNotFoundException {
         String dictWords;
         letters = letters.toLowerCase();
 
-        // get the dictionary's words
-        if (SystemProperty.environment.value() == SystemProperty.Environment.Value.Production) {
-            // bucketName = "careful-sphinx-161801.appspot.com"
-            GcsFilename fileName = new GcsFilename(SystemProperty.applicationId.get() + ".appspot.com", "wordsEn.txt");
-            GcsInputChannel readChannel = gcsService.openPrefetchingReadChannel(fileName, 0, BUFFER_SIZE);
-            dictWords = IOUtils.toString(Channels.newInputStream(readChannel), "UTF-8");
+        // check if dictionary is cached
+        MemcacheService syncCache = MemcacheServiceFactory.getMemcacheService();
+        MemcacheService.IdentifiableValue dictCache = syncCache.getIdentifiable(cacheKeyDict);
+
+        if (dictCache == null) {
+            // get the dictionary's words
+            if (SystemProperty.environment.value() == SystemProperty.Environment.Value.Production) {
+                // bucketName = "careful-sphinx-161801.appspot.com"
+                GcsFilename fileName = new GcsFilename(SystemProperty.applicationId.get() + ".appspot.com", DICT_FILE);
+                GcsInputChannel readChannel = gcsService.openPrefetchingReadChannel(fileName, 0, BUFFER_SIZE);
+                dictWords = IOUtils.toString(Channels.newInputStream(readChannel), DICT_ENCODING);
+            } else { // running on local development server
+                dictWords = new String(Files.readAllBytes(Paths.get(DICT_PATH)));
+            }
+
+            // need to compress the dictionary to avoid 1MB limit
+            byte[] bytes = compressString(dictWords);
+            boolean isAddedToCache = syncCache.put(cacheKeyDict, bytes, null, MemcacheService.SetPolicy.ADD_ONLY_IF_NOT_PRESENT);
+            if (isAddedToCache) {
+                log.info("Dictionary words added to Memcache");
+            }
         } else {
-            dictWords = new String(Files.readAllBytes(Paths.get("/tmp/wordsEn.txt")));
+            // decompress from cache to String
+            byte[] bytes = (byte[]) dictCache.getValue();
+            dictWords = decompressString(bytes);
         }
 
         WordManager wordManager = new WordManager(dictWords);
@@ -93,6 +122,25 @@ public class Scrabble {
             wordScore.scores = null;
         }
         return wordScore;
+    }
+
+    public static String decompressString(byte[] bytes) throws IOException, ClassNotFoundException {
+        String dictWords;
+        ByteArrayInputStream bais = new ByteArrayInputStream(bytes);
+        GZIPInputStream gzipIn = new GZIPInputStream(bais);
+        ObjectInputStream objectIn = new ObjectInputStream(gzipIn);
+        dictWords = (String) objectIn.readObject();
+        objectIn.close();
+        return dictWords;
+    }
+
+    public static byte[] compressString(String dictWords) throws IOException {
+        ByteArrayOutputStream baos = new ByteArrayOutputStream();
+        GZIPOutputStream gzipOut = new GZIPOutputStream(baos);
+        ObjectOutputStream objectOut = new ObjectOutputStream(gzipOut);
+        objectOut.writeObject(dictWords);
+        objectOut.close();
+        return baos.toByteArray();
     }
 
     @ApiMethod(httpMethod = ApiMethod.HttpMethod.GET, name = "test_echo", path = "echo/{pathparam}")

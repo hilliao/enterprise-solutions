@@ -40,62 +40,6 @@
     </properties>
 
     <modules>
-        <!-- App Engine Standard -->
-        <module>appengine</module>
-        <module>appengine-java8</module>
-        <module>flexible</module>
-        <module>compute</module>
-
-        <module>bigquery/cloud-client</module>
-        <module>bigquery/rest</module>
-
-        <module>datastore</module>
-        <module>datastore/cloud-client</module>
-
-        <module>dlp</module>
-
-        <module>errorreporting</module>
-
-        <module>firestore</module>
-
-        <module>iap</module>
-
-        <module>kms</module>
-
-        <module>language/analysis</module>
-        <module>language/cloud-client</module>
-
-<!-- APIary based sample - broken for testing
-        <module>logging</module>
- -->
-        <module>logging/cloud-client</module>
-
-        <module>monitoring/cloud-client</module>
-
-        <module>pubsub/cloud-client</module>
-
-        <module>spanner/cloud-client</module>
-
-        <module>speech/cloud-client</module>
-
-        <module>storage/cloud-client</module>
-        <module>storage/json-api</module>
-        <module>storage/storage-transfer</module>
-        <module>storage/xml-api/cmdline-sample</module>
-        <module>storage/xml-api/serviceaccount-appengine-sample</module>
-
-        <module>taskqueue/deferred</module>
-
-        <module>translate</module>
-        <module>translate/cloud-client</module>
-
-        <module>unittests</module>
-        <module>video/cloud-client</module>
-        <module>vision/cloud-client</module>
-        <module>vision/face-detection</module>
-        <module>vision/label</module>
-        <module>vision/landmark-detection</module>
-        <module>vision/text</module>
     </modules>
 
     <dependencyManagement>
