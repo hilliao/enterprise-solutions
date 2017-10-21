@@ -1,3 +1,4 @@
+#!/usr/bin/python3
 from flask import Flask, json
 from flask import request
 from flask import jsonify
@@ -16,7 +17,7 @@ mock API to return a file at the localhost's path as Json
     query_strings = request.args.to_dict()
     key = 'f'
     if key not in query_strings:
-        abort(404)
+        abort(400)
     fname = query_strings[key]
     if not os.path.isfile(fname):
         abort(404)

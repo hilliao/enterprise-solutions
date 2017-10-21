@@ -10,7 +10,7 @@ Linux, Mac OS computer with Python > 3.5 can easily run and deploy the Mock API 
 Latest Flask is recommended; pipenv is recommended to install Flask.
 
 ```
-sudo -H pip install pipenv
+sudo -H pip3 install pipenv
 ```
 You may debug with JetBrains Pycharm which should install all the dependencies.
 
