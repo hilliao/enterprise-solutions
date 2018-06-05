@@ -1,6 +1,10 @@
 # Python3 wrapper for running DBeam project at https://github.com/hilliao/dbeam. The wrapper's purpose is to
 # 1. get the database password from HashiCorp Vault, pass it to DBeam or form the SQL Query
 # 2. use environment variables and defined variables to form SQL query
+# --define-from-env=HOME --define a=b  --connectionUrl=jdbc:mysql://localhost:3306/dbeamtest --username=hil \
+# --password=password --sqlFile=/Users/hil/tmp/pet.sql --output=/Users/hil/Documents/dbeampytest-mysql \
+# --define-from-env=LANG --define c=d --define LDATE=20180530 --define foo=bar --define-from-vault=cbs_pii_db \
+# --project=mock --zone=mock
 
 import argparse
 import subprocess
@@ -48,11 +52,12 @@ def parse():
     # DBeam parameters
     parser.add_argument('--project', help='Google Cloud Platform project for the Cloud Dataflow Runner')
     parser.add_argument('--zone', help='Google Cloud Platform zone for the Cloud Dataflow Runner')
-    parser.add_argument('--output', help='output Google Cloud Storage path')
-    parser.add_argument('--sqlFile', help='SQL template file location')
-    parser.add_argument('--connectionUrl', help='database connection string')
-    parser.add_argument('--username', help='username in database credentials')
-    parser.add_argument('--password', help='password in database credentials')
+    parser.add_argument('--output', required=True, help='output Google Cloud Storage path')
+    parser.add_argument('--sqlFile', required=True, help='SQL template file location')
+    parser.add_argument('--connectionUrl', required=True, help='database connection string')
+    parser.add_argument('--username', required=False, help='username in database credentials')
+    parser.add_argument('--password', metavar="VAULT_PATH",
+                        help='HashiCorp Vault path to query the database password, e,g, secret/foo')
 
     # parameters to generate SQL query for --sqlFile, database password for --password
     parser.add_argument('--define', type=kv_var, default=list(), action='append',
@@ -65,7 +70,7 @@ def parse():
 
 
 def dict_key(s):
-    # todo really would be vault_client.get(s)
+    # todo implement with client.read('secret/foo') per https://github.com/ianunruh/hvac
     return s, mock_vault_dict[s]
 
 
@@ -92,7 +97,7 @@ def main():
 
 
 def dbeam(connectionUrl, username, password, sql_file, output, project=None, zone=None):
-    dbeam_path_list = ["/Users/hil/cbsi/dbeam", "/var/lib/dbeam"]
+    dbeam_path_list = ["/Users/hil/cbsi/dbeam", "/usr/lib/dbeam"]
     dbeam_path = [p for p in dbeam_path_list if os.path.isdir(p)]
     if len(dbeam_path) == 0:
         raise FileNotFoundError("Failed to locate DBeam's directory in " + str(dbeam_path_list))
