@@ -32,9 +32,10 @@
 
     <EditText
         android:id="@+id/minuteCountdown"
-        android:layout_width="wrap_content"
+        android:layout_width="92dp"
         android:layout_height="wrap_content"
         android:layout_alignTop="@+id/hourCountdown"
+        android:layout_marginTop="0dp"
         android:layout_toEndOf="@+id/hourCountdown"
         android:ems="3"
         android:inputType="numberSigned"
@@ -45,6 +46,7 @@
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_alignTop="@+id/minuteCountdown"
+        android:layout_marginTop="0dp"
         android:layout_toEndOf="@+id/minuteCountdown"
         android:ems="3"
         android:inputType="numberSigned"
@@ -52,10 +54,11 @@
 
     <TextView
         android:id="@+id/textViewMin"
-        android:layout_width="wrap_content"
+        android:layout_width="91dp"
         android:layout_height="wrap_content"
-        android:layout_alignStart="@+id/minuteCountdown"
         android:layout_below="@+id/minuteCountdown"
+        android:layout_alignStart="@+id/minuteCountdown"
+        android:layout_marginTop="0dp"
         android:text="Minutes"
         android:textAppearance="?android:attr/textAppearanceMedium" />
 

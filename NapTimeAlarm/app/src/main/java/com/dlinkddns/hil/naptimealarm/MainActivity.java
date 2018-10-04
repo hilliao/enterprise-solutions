@@ -1,6 +1,7 @@
 package com.dlinkddns.hil.naptimealarm;
 
 import android.app.AlarmManager;
+import android.app.NotificationManager;
 import android.app.PendingIntent;
 import android.app.ProgressDialog;
 import android.content.Context;
@@ -8,6 +9,7 @@ import android.content.Intent;
 import android.graphics.Color;
 import android.media.AudioManager;
 import android.net.Uri;
+import android.os.Build;
 import android.os.Bundle;
 import android.support.annotation.NonNull;
 import android.support.v7.app.AppCompatActivity;
@@ -81,11 +83,24 @@ public class MainActivity extends AppCompatActivity {
         String url = urlIntent.getDataString();
         Log.i(GoogleFirebase, String.format("MainActivity started from deep-linking at %s", url));
 
+        // android.permission.ACCESS_NOTIFICATION_POLICY -> request user's permission to Do Not Disturb access
+        NotificationManager notificationManager =
+                (NotificationManager) getApplicationContext().getSystemService(Context.NOTIFICATION_SERVICE);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M
+                && !notificationManager.isNotificationPolicyAccessGranted()) {
+            Intent intent = new Intent(android.provider.Settings.ACTION_NOTIFICATION_POLICY_ACCESS_SETTINGS);
+            startActivity(intent);
+        }
+
         // register UI component's listeners
         alarmSwitch = (Switch) findViewById(R.id.switchAlarm);
         alarmSwitch.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
             @Override
             public void onCheckedChanged(CompoundButton buttonView, boolean isChecked) {
+                // app crash if not have Do Not Disturb access: java.lang.SecurityException: Not allowed to change Do Not Disturb state
+                Toast.makeText(MainActivity.this, R.string.Warning_Do_Not_Disturb_access, Toast.LENGTH_SHORT).show();
+
+                // switch alarm timer on or off where timer-on turns on Do Not Disturb
                 alarmSwitchLogic(isChecked, alarmSwitch);
             }
         });
@@ -186,6 +201,7 @@ public class MainActivity extends AppCompatActivity {
     public void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
 
+        // add SHA1 fingerprint to Firebase project settings: https://developers.google.com/drive/android/auth
         // Result returned from launching the Intent from GoogleSignInApi.getSignInIntent(...);
         if (requestCode == RC_SIGN_IN) {
             GoogleSignInResult result = Auth.GoogleSignInApi.getSignInResultFromIntent(data);
@@ -194,6 +210,8 @@ public class MainActivity extends AppCompatActivity {
                 GoogleSignInAccount account = result.getSignInAccount();
                 firebaseAuthWithGoogle(account);
             } else {
+                // verify Firebase project settings has the release and debug SHA1 fingerprint: https://developers.google.com/drive/android/auth
+                // re-add SHA1 fingerprint and retry sign-in
                 // Google Sign In failed, update UI appropriately
                 updateUI(null);
             }
@@ -326,6 +344,7 @@ public class MainActivity extends AppCompatActivity {
 
             // will restore the previous alarm mode when the switch if off
             previousAlarmMode = audioManager.getRingerMode();
+            // requires android.permission.ACCESS_NOTIFICATION_POLICY
             audioManager.setRingerMode(AudioManager.RINGER_MODE_SILENT);
 
             // show the time alarm will fire
