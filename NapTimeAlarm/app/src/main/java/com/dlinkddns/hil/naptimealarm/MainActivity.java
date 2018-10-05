@@ -8,31 +8,24 @@ import android.content.Context;
 import android.content.Intent;
 import android.graphics.Color;
 import android.media.AudioManager;
-import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
-import android.support.annotation.NonNull;
 import android.support.v7.app.AppCompatActivity;
 import android.support.v7.widget.Toolbar;
 import android.util.Log;
 import android.view.Menu;
 import android.view.MenuItem;
 import android.view.View;
-import android.widget.CompoundButton;
 import android.widget.EditText;
 import android.widget.Switch;
 import android.widget.TextView;
 import android.widget.Toast;
 
-import com.google.android.gms.appindexing.Action;
-import com.google.android.gms.appindexing.AppIndex;
 import com.google.android.gms.auth.api.Auth;
 import com.google.android.gms.auth.api.signin.GoogleSignInAccount;
 import com.google.android.gms.auth.api.signin.GoogleSignInOptions;
 import com.google.android.gms.auth.api.signin.GoogleSignInResult;
-import com.google.android.gms.common.ConnectionResult;
 import com.google.android.gms.common.api.GoogleApiClient;
-import com.google.android.gms.common.api.PendingResult;
 import com.google.android.gms.common.api.Status;
 import com.google.android.gms.tasks.Task;
 import com.google.firebase.auth.AuthCredential;
@@ -60,28 +53,21 @@ public class MainActivity extends AppCompatActivity {
     private static DatabaseReference database;
 
     private int previousAlarmMode;
+    private int previousDoNotDisturbMode;
     private GoogleApiClient googleAuthApiClient;
-    private GoogleApiClient googleIndexApiClient;
     private FirebaseAuth firebaseAuth;
     private ProgressDialog progressDialog;
     private FirebaseAuth.AuthStateListener authListener;
     private String firebaseUid;
     private PendingIntent playRingtoneIntent;
-    private Switch alarmSwitch;// format per https://developer.android.com/training/app-indexing/enabling-app-indexing.html
-    private Action viewAppAction;
+    private Switch alarmSwitch;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
-        Toolbar toolbar = (Toolbar) findViewById(R.id.toolbar);
+        Toolbar toolbar = findViewById(R.id.toolbar);
         setSupportActionBar(toolbar);
-
-        // Firebase app indexing https://firebase.google.com/docs/app-indexing/android/app
-        // Deep Links for App Content https://developer.android.com/training/app-indexing/deep-linking.html
-        Intent urlIntent = getIntent();
-        String url = urlIntent.getDataString();
-        Log.i(GoogleFirebase, String.format("MainActivity started from deep-linking at %s", url));
 
         // android.permission.ACCESS_NOTIFICATION_POLICY -> request user's permission to Do Not Disturb access
         NotificationManager notificationManager =
@@ -93,16 +79,13 @@ public class MainActivity extends AppCompatActivity {
         }
 
         // register UI component's listeners
-        alarmSwitch = (Switch) findViewById(R.id.switchAlarm);
-        alarmSwitch.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
-            @Override
-            public void onCheckedChanged(CompoundButton buttonView, boolean isChecked) {
-                // app crash if not have Do Not Disturb access: java.lang.SecurityException: Not allowed to change Do Not Disturb state
-                Toast.makeText(MainActivity.this, R.string.Warning_Do_Not_Disturb_access, Toast.LENGTH_SHORT).show();
+        alarmSwitch = findViewById(R.id.switchAlarm);
+        alarmSwitch.setOnCheckedChangeListener((buttonView, isChecked) -> {
+            // app crash if not have Do Not Disturb access: java.lang.SecurityException: Not allowed to change Do Not Disturb state
+            Toast.makeText(MainActivity.this, R.string.Warning_Do_Not_Disturb_access, Toast.LENGTH_SHORT).show();
 
-                // switch alarm timer on or off where timer-on turns on Do Not Disturb
-                alarmSwitchLogic(isChecked, alarmSwitch);
-            }
+            // switch alarm timer on or off where timer-on turns on Do Not Disturb
+            alarmSwitchLogic(isChecked, alarmSwitch);
         });
 
         // support Google sign-in for Firebase authentication
@@ -110,15 +93,11 @@ public class MainActivity extends AppCompatActivity {
                 .requestIdToken(getString(R.string.default_web_client_id))
                 .requestEmail()
                 .build();
-        googleIndexApiClient = new GoogleApiClient.Builder(this).addApi(AppIndex.API).build();
         googleAuthApiClient = new GoogleApiClient.Builder(this)
-                .enableAutoManage(this, new GoogleApiClient.OnConnectionFailedListener() {
-                    @Override
-                    public void onConnectionFailed(@NonNull ConnectionResult connectionResult) {
-                        // An unresolvable error has occurred; Google APIs (including Sign-In) not available.
-                        Log.d(GoogleFirebase, "onConnectionFailed:" + connectionResult);
-                        Toast.makeText(MainActivity.this, R.string.Google_signin_error, Toast.LENGTH_SHORT).show();
-                    }
+                .enableAutoManage(this, connectionResult -> {
+                    // An unresolvable error has occurred; Google APIs (including Sign-In) not available.
+                    Log.d(GoogleFirebase, "onConnectionFailed:" + connectionResult);
+                    Toast.makeText(MainActivity.this, R.string.Google_signin_error, Toast.LENGTH_SHORT).show();
                 })
                 .addApi(Auth.GOOGLE_SIGN_IN_API, gso)
                 .build();
@@ -147,24 +126,11 @@ public class MainActivity extends AppCompatActivity {
                 }
         );
         findViewById(R.id.sign_out_button).setOnClickListener(
-                (View v) -> {
-                    MainActivity.this.signOut();
-                }
+                (View v) -> MainActivity.this.signOut()
         );
 
         // default Firebase database reference for this app
         database = FirebaseDatabase.getInstance().getReference().child(getString(R.string.app_name));
-
-        /*
-         * Test launching the app from deep-link by adb
-         * adb shell am start -a android.intent.action.VIEW  -d "http://hil.dlinkddns.com/naptimealarm" com.dlinkddns.hil.naptimealarm
-         * */
-        viewAppAction = Action.newAction(
-                Action.TYPE_VIEW,
-                getString(R.string.app_name),
-                Uri.parse(getString(R.string.uri)),
-                Uri.parse(getString(R.string.app_uri))
-        );
     }
 
     @Override
@@ -181,21 +147,6 @@ public class MainActivity extends AppCompatActivity {
 
         Intent intent = new Intent(this, PlayRingtoneReceiver.class);
         playRingtoneIntent = PendingIntent.getBroadcast(this, 0, intent, 0);
-
-        googleIndexApiClient.connect();
-        PendingResult<Status> result = AppIndex.AppIndexApi.start(googleIndexApiClient, viewAppAction);
-        googleIndexApiClient.disconnect();
-    }
-
-    @Override
-    protected void onStop() {
-        StopAppIndexing();
-        super.onStop();
-    }
-
-    private void StopAppIndexing() {
-        AppIndex.AppIndexApi.end(googleIndexApiClient, viewAppAction);
-        googleIndexApiClient.disconnect();
     }
 
     public void onActivityResult(int requestCode, int resultCode, Intent data) {
@@ -240,8 +191,8 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void updateUI(FirebaseUser user) {
-        TextView googleEmail = (TextView) findViewById(R.id.textViewGoogleUser);
-        TextView firebaseUid = (TextView) findViewById(R.id.textViewFirebaseUser);
+        TextView googleEmail = findViewById(R.id.textViewGoogleUser);
+        TextView firebaseUid = findViewById(R.id.textViewFirebaseUser);
 
         hideProgressDialog();
         if (user != null) {
@@ -288,7 +239,7 @@ public class MainActivity extends AppCompatActivity {
 
         if (isChecked) {
             // get the user input of minute countdown
-            EditText minuteCountdownText = (EditText) findViewById(R.id.minuteCountdown);
+            EditText minuteCountdownText = findViewById(R.id.minuteCountdown);
             String strMinutes = minuteCountdownText.getText().toString();
             boolean timeInputError = false;
 
@@ -303,7 +254,7 @@ public class MainActivity extends AppCompatActivity {
             }
 
             // get the user input of second countdown
-            EditText secondCountdownText = (EditText) findViewById(R.id.secondCountdown);
+            EditText secondCountdownText = findViewById(R.id.secondCountdown);
             String strSeconds = secondCountdownText.getText().toString();
 
             if (strSeconds.isEmpty()) {
@@ -317,7 +268,7 @@ public class MainActivity extends AppCompatActivity {
             }
 
             // get the user input of hour countdown
-            EditText hourCountdownText = (EditText) findViewById(R.id.hourCountdown);
+            EditText hourCountdownText = findViewById(R.id.hourCountdown);
             String strHours = hourCountdownText.getText().toString();
 
             if (strHours.isEmpty()) {
@@ -342,10 +293,20 @@ public class MainActivity extends AppCompatActivity {
             alarmFireAt.add(Calendar.MINUTE, alarmCountdownMinutes);
             alarmFireAt.add(Calendar.SECOND, alarmCountdownSeconds);
 
-            // will restore the previous alarm mode when the switch if off
+            // will restore previous Do Not Disturb, alarm mode when switched off
             previousAlarmMode = audioManager.getRingerMode();
-            // requires android.permission.ACCESS_NOTIFICATION_POLICY
-            audioManager.setRingerMode(AudioManager.RINGER_MODE_SILENT);
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                NotificationManager notificationManager = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
+                previousDoNotDisturbMode = notificationManager.getCurrentInterruptionFilter();
+            }
+
+            // requires android.permission.ACCESS_NOTIFICATION_POLICY to silence everything
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                NotificationManager notificationManager = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
+                notificationManager.setInterruptionFilter(NotificationManager.INTERRUPTION_FILTER_NONE);
+            } else {
+                audioManager.setRingerMode(AudioManager.RINGER_MODE_SILENT);
+            }
 
             // show the time alarm will fire
             SimpleDateFormat dateFormatter = new SimpleDateFormat("MM/dd HH:mm:ss");
@@ -367,7 +328,14 @@ public class MainActivity extends AppCompatActivity {
         } else {
             // cancel future alarm scheduled
             alarmManager.cancel(playRingtoneIntent);
+
+            // restore the previous Do Not Disturb, alarm mode
             audioManager.setRingerMode(previousAlarmMode);
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                NotificationManager notificationManager = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
+                notificationManager.setInterruptionFilter(previousDoNotDisturbMode);
+            }
+
             alarmSwitch.setTextColor(Color.GRAY);
             alarmSwitch.setText(alarmSwitch.getTextOff());
             PlayRingtoneReceiver.getRingtone(this).stop();
@@ -416,9 +384,7 @@ public class MainActivity extends AppCompatActivity {
         firebaseAuth.signOut();
         // Google sign out
         Auth.GoogleSignInApi.signOut(googleAuthApiClient).setResultCallback(
-                (Status status) -> {
-                    updateUI(null);
-                });
+                (Status status) -> updateUI(null));
     }
 
     @Override
