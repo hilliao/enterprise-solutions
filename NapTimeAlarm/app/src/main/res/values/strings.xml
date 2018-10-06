@@ -1,17 +1,19 @@
 <resources>
     <string name="app_name">Nap Time Alarm</string>
-    <string name="action_settings">Stop ringtone</string>
-    <string name="alarm_not_set_text">Alarm not set</string>
+    <string name="menuitem_text">Git Source</string>
+    <string name="alarm_not_set_text">Alarm not set; sign in optional</string>
     <string name="alarm_set_text">Alarm is set</string>
-    <string name="alarm_set_at">Alarm set at %s! Switch off to stop ringtone</string>
+    <string name="alarm_set_at">Alarm set at %s</string>
     <string name="sign_out">Sign out</string>
     <string name="loading">Authenticating…</string>
     <string name="google_status_fmt">Google User: %s</string>
     <string name="firebase_status_fmt">Firebase User: %s</string>
     <string name="Google_signed_out">Signed Out from Google</string>
     <string name="firebase_signed_out">Unknown Firebase User ID</string>
-    <string name="intro_text">Switching on the alarm will silence the phone and set the alarm to fire at given minutes + seconds</string>
+    <string name="intro_text">Setting the alarm silences the phone; alarm is set at the interval specified below; screen on or off turns off alarm ringtone</string>
+    <string name="intro_text_alarm_on">Switching off the red toggle or screen on,off stops alarm ringtone</string>
     <string name="time_input_error">one of the time inputs not acceptable</string>
     <string name="Google_signin_error">Google Play Services sign in error</string>
     <string name="Warning_Do_Not_Disturb_access">App will crash if Do Not Disturb access not granted</string>
+    <string name="gitsource">https://github.com/hilliao/enterprise-solutions/tree/master/NapTimeAlarm</string>
 </resources>

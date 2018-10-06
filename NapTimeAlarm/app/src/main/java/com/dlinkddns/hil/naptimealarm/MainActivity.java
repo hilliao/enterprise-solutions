@@ -4,10 +4,14 @@ import android.app.AlarmManager;
 import android.app.NotificationManager;
 import android.app.PendingIntent;
 import android.app.ProgressDialog;
+import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
+import android.content.IntentFilter;
 import android.graphics.Color;
 import android.media.AudioManager;
+import android.media.Ringtone;
+import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 import android.support.v7.app.AppCompatActivity;
@@ -46,8 +50,10 @@ public class MainActivity extends AppCompatActivity {
     public static final String ALARM_SWITCH_COLOR = "alarmSwitchColor";
     public static final String ALARM_SWITCH_TEXT = "alarmSwitchText";
     public static final String PREVIOUS_ALARM_MODE = "previousAlarmMode";
+    public static final String PREVIOUS_DnD_MODE = "previousDoNotDisturbMode";
     private static final int RC_SIGN_IN = 9001;
     private static final String GoogleFirebase = "GoogleActivity";
+    public static final int UNASSIGNED = -1;
     private static AudioManager audioManager;
     private static AlarmManager alarmManager;
     private static DatabaseReference database;
@@ -61,6 +67,7 @@ public class MainActivity extends AppCompatActivity {
     private String firebaseUid;
     private PendingIntent playRingtoneIntent;
     private Switch alarmSwitch;
+    private BroadcastReceiver screenOnOffReceiver;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -87,6 +94,8 @@ public class MainActivity extends AppCompatActivity {
             // switch alarm timer on or off where timer-on turns on Do Not Disturb
             alarmSwitchLogic(isChecked, alarmSwitch);
         });
+        previousDoNotDisturbMode = UNASSIGNED;
+        previousAlarmMode = UNASSIGNED;
 
         // support Google sign-in for Firebase authentication
         GoogleSignInOptions gso = new GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
@@ -129,8 +138,34 @@ public class MainActivity extends AppCompatActivity {
                 (View v) -> MainActivity.this.signOut()
         );
 
-        // default Firebase database reference for this app
+        // default Firebase database client for this app
         database = FirebaseDatabase.getInstance().getReference().child(getString(R.string.app_name));
+
+        // stop ringtone at screen on off event
+        if (screenOnOffReceiver == null) {
+            final IntentFilter screenOnOffFilter = new IntentFilter();
+            screenOnOffFilter.addAction(Intent.ACTION_SCREEN_ON);
+            screenOnOffFilter.addAction(Intent.ACTION_SCREEN_OFF);
+
+            screenOnOffReceiver = new BroadcastReceiver() {
+                @Override
+                public void onReceive(Context context, Intent intent) {
+                    String strAction = intent.getAction();
+
+                    if (strAction.equals(Intent.ACTION_SCREEN_OFF) || strAction.equals(Intent.ACTION_SCREEN_ON)) {
+                        Ringtone ringtone = PlayRingtoneReceiver.getRingtone(MainActivity.this);
+                        if (ringtone.isPlaying()) {
+                            ringtone.stop();
+                        }
+                    }
+                }
+            };
+
+            registerReceiver(screenOnOffReceiver, screenOnOffFilter);
+        }
+
+        // adjust default focus
+        findViewById(R.id.minuteCountdown).requestFocus();
     }
 
     @Override
@@ -228,16 +263,16 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
-    private void alarmSwitchLogic(boolean isChecked, Switch alarmSwitch) {
-        int alarmCountdownMinutes = -1;
-        int alarmCountdownSeconds = -1;
-        int alarmCountdownHours = -1;
+    private void alarmSwitchLogic(boolean activated, Switch alarmSwitch) {
+        int alarmCountdownMinutes = UNASSIGNED;
+        int alarmCountdownSeconds = UNASSIGNED;
+        int alarmCountdownHours = UNASSIGNED;
 
         if (!alarmSwitch.isPressed()) {
             return;
         }
 
-        if (isChecked) {
+        if (activated) {
             // get the user input of minute countdown
             EditText minuteCountdownText = findViewById(R.id.minuteCountdown);
             String strMinutes = minuteCountdownText.getText().toString();
@@ -321,10 +356,15 @@ public class MainActivity extends AppCompatActivity {
 
             // persist the alarm intervals
             if (this.firebaseUid != null) {
-                DatabaseReference uidRef = database.child(this.firebaseUid);
+                DatabaseReference dbClient = database.child(this.firebaseUid);
                 TimeInterval timeInterval = new TimeInterval(alarmCountdownHours, alarmCountdownMinutes, alarmCountdownSeconds);
-                uidRef.setValue(timeInterval);
+                dbClient.setValue(timeInterval);
             }
+
+            // change intro text to show how to stop ringtone
+            TextView introText = findViewById(R.id.introText);
+            introText.setText(R.string.intro_text_alarm_on);
+            introText.setTextColor(Color.BLUE);
         } else {
             // cancel future alarm scheduled
             alarmManager.cancel(playRingtoneIntent);
@@ -339,6 +379,9 @@ public class MainActivity extends AppCompatActivity {
             alarmSwitch.setTextColor(Color.GRAY);
             alarmSwitch.setText(alarmSwitch.getTextOff());
             PlayRingtoneReceiver.getRingtone(this).stop();
+            TextView introText = findViewById(R.id.introText);
+            introText.setText(R.string.intro_text);
+            introText.setTextColor(Color.BLACK);
         }
     }
 
@@ -349,14 +392,13 @@ public class MainActivity extends AppCompatActivity {
         return true;
     }
 
+    // Handle action bar item clicks here
     @Override
     public boolean onOptionsItemSelected(MenuItem item) {
-        // Handle action bar item clicks here.
-        int id = item.getItemId();
-
-        // noinspection SimplifiableIfStatement
-        if (id == R.id.action_stop_ringtone) {
+        if (item.getItemId() == R.id.action_stop_ringtone) {
             PlayRingtoneReceiver.getRingtone(this).stop();
+            Uri uri = Uri.parse(getString(R.string.gitsource));
+            startActivity(new Intent(Intent.ACTION_VIEW, uri));
             return true;
         }
 
@@ -391,6 +433,7 @@ public class MainActivity extends AppCompatActivity {
     protected void onSaveInstanceState(Bundle savedInstanceState) {
         super.onSaveInstanceState(savedInstanceState);
         savedInstanceState.putInt(PREVIOUS_ALARM_MODE, previousAlarmMode);
+        savedInstanceState.putInt(PREVIOUS_DnD_MODE, previousDoNotDisturbMode);
         savedInstanceState.putCharSequence(ALARM_SWITCH_TEXT, alarmSwitch.getText());
         savedInstanceState.putParcelable(ALARM_SWITCH_COLOR, alarmSwitch.getTextColors());
     }
@@ -399,7 +442,30 @@ public class MainActivity extends AppCompatActivity {
     protected void onRestoreInstanceState(Bundle savedInstanceState) {
         super.onRestoreInstanceState(savedInstanceState);
         previousAlarmMode = savedInstanceState.getInt(PREVIOUS_ALARM_MODE);
+        previousDoNotDisturbMode = savedInstanceState.getInt(PREVIOUS_DnD_MODE);
         alarmSwitch.setText(savedInstanceState.getCharSequence(ALARM_SWITCH_TEXT));
         alarmSwitch.setTextColor(savedInstanceState.getParcelable(ALARM_SWITCH_COLOR));
+    }
+
+    @Override
+    protected void onDestroy() {
+        super.onDestroy();
+
+        if (isFinishing()) {
+            // cancel future alarm scheduled
+            alarmManager.cancel(playRingtoneIntent);
+            PlayRingtoneReceiver.getRingtone(this).stop();
+
+            // restore the previous Do Not Disturb, alarm mode if set
+            if (previousAlarmMode != UNASSIGNED) {
+                audioManager.setRingerMode(previousAlarmMode);
+            }
+            if (previousDoNotDisturbMode != UNASSIGNED && Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                NotificationManager notificationManager = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
+                notificationManager.setInterruptionFilter(previousDoNotDisturbMode);
+            }
+
+            unregisterReceiver(this.screenOnOffReceiver);
+        }
     }
 }
