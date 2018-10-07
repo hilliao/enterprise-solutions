@@ -76,7 +76,7 @@ public class MainActivity extends AppCompatActivity {
         Toolbar toolbar = findViewById(R.id.toolbar);
         setSupportActionBar(toolbar);
 
-        // android.permission.ACCESS_NOTIFICATION_POLICY -> request user's permission to Do Not Disturb access
+        // for SDK >= 23, android.permission.ACCESS_NOTIFICATION_POLICY -> request user's permission to Do Not Disturb access
         NotificationManager notificationManager =
                 (NotificationManager) getApplicationContext().getSystemService(Context.NOTIFICATION_SERVICE);
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M
@@ -89,10 +89,18 @@ public class MainActivity extends AppCompatActivity {
         alarmSwitch = findViewById(R.id.switchAlarm);
         alarmSwitch.setOnCheckedChangeListener((buttonView, isChecked) -> {
             // app crash if not have Do Not Disturb access: java.lang.SecurityException: Not allowed to change Do Not Disturb state
-            Toast.makeText(MainActivity.this, R.string.Warning_Do_Not_Disturb_access, Toast.LENGTH_SHORT).show();
-
-            // switch alarm timer on or off where timer-on turns on Do Not Disturb
-            alarmSwitchLogic(isChecked, alarmSwitch);
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                if (!notificationManager.isNotificationPolicyAccessGranted()) {
+                    alarmSwitch.setChecked(false);
+                    Intent intent = new Intent(android.provider.Settings.ACTION_NOTIFICATION_POLICY_ACCESS_SETTINGS);
+                    startActivity(intent);
+                } else {
+                    // switch alarm timer on or off where timer-on turns on Do Not Disturb
+                    alarmSwitchLogic(isChecked, alarmSwitch);
+                }
+            } else {
+                alarmSwitchLogic(isChecked, alarmSwitch);
+            }
         });
         previousDoNotDisturbMode = UNASSIGNED;
         previousAlarmMode = UNASSIGNED;
@@ -182,6 +190,23 @@ public class MainActivity extends AppCompatActivity {
 
         Intent intent = new Intent(this, PlayRingtoneReceiver.class);
         playRingtoneIntent = PendingIntent.getBroadcast(this, 0, intent, 0);
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+
+        // check if user has granted Do Not Disturb access
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            TextView DnDWarning = findViewById(R.id.DnDAccessWarning);
+            NotificationManager notificationManager =
+                    (NotificationManager) getApplicationContext().getSystemService(Context.NOTIFICATION_SERVICE);
+            if (!notificationManager.isNotificationPolicyAccessGranted()) {
+                DnDWarning.setVisibility(View.VISIBLE);
+            } else {
+                DnDWarning.setVisibility(View.INVISIBLE);
+            }
+        }
     }
 
     public void onActivityResult(int requestCode, int resultCode, Intent data) {

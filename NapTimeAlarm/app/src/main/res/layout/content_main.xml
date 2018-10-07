@@ -3,7 +3,7 @@
     xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
-    android:layout_height="match_parent"
+    android:layout_height="wrap_content"
     android:paddingLeft="@dimen/activity_horizontal_margin"
     android:paddingTop="@dimen/activity_vertical_margin"
     android:paddingRight="@dimen/activity_horizontal_margin"
@@ -12,119 +12,141 @@
     tools:context="com.dlinkddns.hil.naptimealarm.MainActivity"
     tools:showIn="@layout/activity_main">
 
-    <TextView
-        android:id="@+id/introText"
-        android:layout_width="wrap_content"
-        android:layout_height="110dp"
-        android:text="@string/intro_text"
-        android:textAppearance="?android:attr/textAppearanceLarge" />
+    <ScrollView
+        android:layout_width="fill_parent"
+        android:layout_height="fill_parent">
 
-    <EditText
-        android:id="@+id/hourCountdown"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_below="@+id/introText"
-        android:layout_alignParentStart="true"
-        android:ems="3"
-        android:inputType="numberSigned"
-        android:text="0" />
+        <RelativeLayout
+            android:id="@+id/contentLayout"
+            android:layout_width="fill_parent"
+            android:layout_height="wrap_content">
 
-    <EditText
-        android:id="@+id/minuteCountdown"
-        android:layout_width="92dp"
-        android:layout_height="wrap_content"
-        android:layout_alignTop="@+id/hourCountdown"
-        android:layout_marginTop="0dp"
-        android:layout_toEndOf="@+id/hourCountdown"
-        android:ems="3"
-        android:inputType="numberSigned"
-        android:text="0" />
+            <TextView
+                android:id="@+id/introText"
+                android:layout_width="wrap_content"
+                android:layout_height="110dp"
+                android:text="@string/intro_text"
+                android:textAppearance="?android:attr/textAppearanceLarge" />
 
-    <EditText
-        android:id="@+id/secondCountdown"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_alignTop="@+id/minuteCountdown"
-        android:layout_marginTop="0dp"
-        android:layout_toEndOf="@+id/minuteCountdown"
-        android:ems="3"
-        android:inputType="numberSigned"
-        android:text="1" />
+            <EditText
+                android:id="@+id/hourCountdown"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_below="@+id/introText"
+                android:layout_alignParentStart="true"
+                android:ems="3"
+                android:inputType="numberSigned"
+                android:text="0" />
 
-    <TextView
-        android:id="@+id/textViewMin"
-        android:layout_width="91dp"
-        android:layout_height="wrap_content"
-        android:layout_below="@+id/minuteCountdown"
-        android:layout_alignStart="@+id/minuteCountdown"
-        android:layout_marginTop="0dp"
-        android:text="Minutes"
-        android:textAppearance="?android:attr/textAppearanceMedium" />
+            <EditText
+                android:id="@+id/minuteCountdown"
+                android:layout_width="92dp"
+                android:layout_height="wrap_content"
+                android:layout_alignTop="@+id/hourCountdown"
+                android:layout_marginTop="0dp"
+                android:layout_toEndOf="@+id/hourCountdown"
+                android:ems="3"
+                android:inputType="numberSigned"
+                android:text="0" />
 
-    <TextView
-        android:id="@+id/textViewSec"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_alignStart="@+id/secondCountdown"
-        android:layout_alignTop="@+id/textViewMin"
-        android:text="Seconds"
-        android:textAppearance="?android:attr/textAppearanceMedium" />
+            <EditText
+                android:id="@+id/secondCountdown"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_alignTop="@+id/minuteCountdown"
+                android:layout_marginTop="0dp"
+                android:layout_toEndOf="@+id/minuteCountdown"
+                android:ems="3"
+                android:inputType="numberSigned"
+                android:text="1" />
 
-    <TextView
-        android:id="@+id/ViewHour"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_above="@+id/switchAlarm"
-        android:layout_below="@+id/minuteCountdown"
-        android:layout_alignParentStart="true"
-        android:text="Hours"
-        android:textAppearance="?android:attr/textAppearanceMedium" />
+            <TextView
+                android:id="@+id/textViewMin"
+                android:layout_width="91dp"
+                android:layout_height="wrap_content"
+                android:layout_below="@+id/minuteCountdown"
+                android:layout_alignStart="@+id/minuteCountdown"
+                android:layout_marginTop="0dp"
+                android:text="Minutes"
+                android:textAppearance="?android:attr/textAppearanceMedium" />
 
-    <Switch
-        android:id="@+id/switchAlarm"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_below="@+id/textViewSec"
-        android:layout_alignEnd="@+id/introText"
-        android:layout_alignParentStart="true"
-        android:checked="false"
-        android:text="@string/alarm_not_set_text"
-        android:textAppearance="?android:attr/textAppearanceLarge"
-        android:textOff="Alarm not set"
-        android:textOn="@string/alarm_set_text" />
+            <TextView
+                android:id="@+id/textViewSec"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_alignStart="@+id/secondCountdown"
+                android:layout_alignTop="@+id/textViewMin"
+                android:text="Seconds"
+                android:textAppearance="?android:attr/textAppearanceMedium" />
 
-    <com.google.android.gms.common.SignInButton
-        android:id="@+id/sign_in_button"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_below="@+id/switchAlarm"
-        android:layout_alignParentStart="true"
-        android:visibility="visible"
-        tools:visibility="visible" />
+            <TextView
+                android:id="@+id/ViewHour"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_above="@+id/switchAlarm"
+                android:layout_below="@+id/minuteCountdown"
+                android:layout_alignParentStart="true"
+                android:text="Hours"
+                android:textAppearance="?android:attr/textAppearanceMedium" />
 
-    <Button
-        android:id="@+id/sign_out_button"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_below="@+id/sign_in_button"
-        android:layout_alignParentStart="true"
-        android:text="@string/sign_out" />
+            <Switch
+                android:id="@+id/switchAlarm"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_below="@+id/textViewSec"
+                android:layout_alignEnd="@+id/introText"
+                android:layout_alignParentStart="true"
+                android:checked="false"
+                android:text="@string/alarm_not_set_text"
+                android:textAppearance="?android:attr/textAppearanceLarge"
+                android:textColor="#808080"
+                android:textOff="@string/alarm_not_set_text"
+                android:textOn="@string/alarm_set_text" />
 
-    <TextView
-        android:id="@+id/textViewGoogleUser"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_below="@+id/sign_out_button"
-        android:layout_alignParentEnd="true"
-        android:text="GoogleUserInfo"
-        android:textIsSelectable="true" />
+            <com.google.android.gms.common.SignInButton
+                android:id="@+id/sign_in_button"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_below="@+id/switchAlarm"
+                android:layout_alignParentStart="true"
+                android:visibility="visible"
+                tools:visibility="visible" />
 
-    <TextView
-        android:id="@+id/textViewFirebaseUser"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_below="@+id/textViewGoogleUser"
-        android:layout_alignParentEnd="true"
-        android:text="FirebaseUserInfo"
-        android:textIsSelectable="true" />
+            <Button
+                android:id="@+id/sign_out_button"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_below="@+id/sign_in_button"
+                android:layout_alignParentStart="true"
+                android:text="@string/sign_out" />
+
+            <TextView
+                android:id="@+id/textViewGoogleUser"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_below="@+id/sign_out_button"
+                android:layout_alignParentStart="true"
+                android:text="GoogleUserInfo"
+                android:textIsSelectable="true" />
+
+            <TextView
+                android:id="@+id/textViewFirebaseUser"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_below="@+id/textViewGoogleUser"
+                android:layout_alignParentStart="true"
+                android:text="FirebaseUserInfo"
+                android:textIsSelectable="true" />
+
+            <TextView
+                android:id="@+id/DnDAccessWarning"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_below="@+id/textViewFirebaseUser"
+                android:layout_alignStart="@+id/introText"
+                android:text="@string/Warning_Do_Not_Disturb_access"
+                android:textColor="#ff0000" />
+
+        </RelativeLayout>
+    </ScrollView>
 </RelativeLayout>
