@@ -1,6 +1,0 @@
-c:\users\hil\documents\visual studio 2012\Projects\LongestString\bin\Debug\LongestString.exe.config
-c:\users\hil\documents\visual studio 2012\Projects\LongestString\bin\Debug\LongestString.exe
-c:\users\hil\documents\visual studio 2012\Projects\LongestString\bin\Debug\LongestString.pdb
-c:\users\hil\documents\visual studio 2012\Projects\LongestString\obj\Debug\LongestString.csprojResolveAssemblyReference.cache
-c:\users\hil\documents\visual studio 2012\Projects\LongestString\obj\Debug\LongestString.exe
-c:\users\hil\documents\visual studio 2012\Projects\LongestString\obj\Debug\LongestString.pdb

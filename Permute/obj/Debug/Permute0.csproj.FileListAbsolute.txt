@@ -1,5 +1,0 @@
-C:\Users\hil\Documents\GitHub\Conceptual\Permute\bin\Debug\Permute0.exe.config
-C:\Users\hil\Documents\GitHub\Conceptual\Permute\bin\Debug\Permute0.exe
-C:\Users\hil\Documents\GitHub\Conceptual\Permute\bin\Debug\Permute0.pdb
-C:\Users\hil\Documents\GitHub\Conceptual\Permute\obj\Debug\Permute0.exe
-C:\Users\hil\Documents\GitHub\Conceptual\Permute\obj\Debug\Permute0.pdb
