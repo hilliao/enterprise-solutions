@@ -47,10 +47,6 @@ import java.text.SimpleDateFormat;
 import java.util.Calendar;
 
 public class MainActivity extends AppCompatActivity {
-    public static final String ALARM_SWITCH_COLOR = "alarmSwitchColor";
-    public static final String ALARM_SWITCH_TEXT = "alarmSwitchText";
-    public static final String PREVIOUS_ALARM_MODE = "previousAlarmMode";
-    public static final String PREVIOUS_DnD_MODE = "previousDoNotDisturbMode";
     private static final int RC_SIGN_IN = 9001;
     private static final String GoogleFirebase = "GoogleActivity";
     public static final int UNASSIGNED = -1;
@@ -58,8 +54,6 @@ public class MainActivity extends AppCompatActivity {
     private static AlarmManager alarmManager;
     private static DatabaseReference database;
 
-    private int previousAlarmMode;
-    private int previousDoNotDisturbMode;
     private GoogleApiClient googleAuthApiClient;
     private FirebaseAuth firebaseAuth;
     private ProgressDialog progressDialog;
@@ -102,8 +96,6 @@ public class MainActivity extends AppCompatActivity {
                 alarmSwitchLogic(isChecked, alarmSwitch);
             }
         });
-        previousDoNotDisturbMode = UNASSIGNED;
-        previousAlarmMode = UNASSIGNED;
 
         // support Google sign-in for Firebase authentication
         GoogleSignInOptions gso = new GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
@@ -288,7 +280,7 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
-    private void alarmSwitchLogic(boolean activated, Switch alarmSwitch) {
+    private void alarmSwitchLogic(boolean isActivated, Switch alarmSwitch) {
         int alarmCountdownMinutes = UNASSIGNED;
         int alarmCountdownSeconds = UNASSIGNED;
         int alarmCountdownHours = UNASSIGNED;
@@ -297,7 +289,7 @@ public class MainActivity extends AppCompatActivity {
             return;
         }
 
-        if (activated) {
+        if (isActivated) {
             // get the user input of minute countdown
             EditText minuteCountdownText = findViewById(R.id.minuteCountdown);
             String strMinutes = minuteCountdownText.getText().toString();
@@ -353,13 +345,6 @@ public class MainActivity extends AppCompatActivity {
             alarmFireAt.add(Calendar.MINUTE, alarmCountdownMinutes);
             alarmFireAt.add(Calendar.SECOND, alarmCountdownSeconds);
 
-            // will restore previous Do Not Disturb, alarm mode when switched off
-            previousAlarmMode = audioManager.getRingerMode();
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                NotificationManager notificationManager = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
-                previousDoNotDisturbMode = notificationManager.getCurrentInterruptionFilter();
-            }
-
             // requires android.permission.ACCESS_NOTIFICATION_POLICY to silence everything
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
                 NotificationManager notificationManager = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
@@ -394,13 +379,6 @@ public class MainActivity extends AppCompatActivity {
             // cancel future alarm scheduled
             alarmManager.cancel(playRingtoneIntent);
 
-            // restore the previous Do Not Disturb, alarm mode
-            audioManager.setRingerMode(previousAlarmMode);
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                NotificationManager notificationManager = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
-                notificationManager.setInterruptionFilter(previousDoNotDisturbMode);
-            }
-
             alarmSwitch.setTextColor(Color.GRAY);
             alarmSwitch.setText(alarmSwitch.getTextOff());
             PlayRingtoneReceiver.getRingtone(this).stop();
@@ -420,14 +398,23 @@ public class MainActivity extends AppCompatActivity {
     // Handle action bar item clicks here
     @Override
     public boolean onOptionsItemSelected(MenuItem item) {
-        if (item.getItemId() == R.id.action_stop_ringtone) {
-            PlayRingtoneReceiver.getRingtone(this).stop();
+        if (item.getItemId() == R.id.viewGitSource) {
             Uri uri = Uri.parse(getString(R.string.gitsource));
             startActivity(new Intent(Intent.ACTION_VIEW, uri));
             return true;
         }
 
         return super.onOptionsItemSelected(item);
+    }
+
+    @Override
+    protected void onPause() {
+        super.onPause();
+
+        Ringtone ringtone = PlayRingtoneReceiver.getRingtone(MainActivity.this);
+        if (ringtone.isPlaying()) {
+            ringtone.stop();
+        }
     }
 
     private void showProgressDialog() {
@@ -455,24 +442,6 @@ public class MainActivity extends AppCompatActivity {
     }
 
     @Override
-    protected void onSaveInstanceState(Bundle savedInstanceState) {
-        super.onSaveInstanceState(savedInstanceState);
-        savedInstanceState.putInt(PREVIOUS_ALARM_MODE, previousAlarmMode);
-        savedInstanceState.putInt(PREVIOUS_DnD_MODE, previousDoNotDisturbMode);
-        savedInstanceState.putCharSequence(ALARM_SWITCH_TEXT, alarmSwitch.getText());
-        savedInstanceState.putParcelable(ALARM_SWITCH_COLOR, alarmSwitch.getTextColors());
-    }
-
-    @Override
-    protected void onRestoreInstanceState(Bundle savedInstanceState) {
-        super.onRestoreInstanceState(savedInstanceState);
-        previousAlarmMode = savedInstanceState.getInt(PREVIOUS_ALARM_MODE);
-        previousDoNotDisturbMode = savedInstanceState.getInt(PREVIOUS_DnD_MODE);
-        alarmSwitch.setText(savedInstanceState.getCharSequence(ALARM_SWITCH_TEXT));
-        alarmSwitch.setTextColor(savedInstanceState.getParcelable(ALARM_SWITCH_COLOR));
-    }
-
-    @Override
     protected void onDestroy() {
         super.onDestroy();
 
@@ -480,15 +449,6 @@ public class MainActivity extends AppCompatActivity {
             // cancel future alarm scheduled
             alarmManager.cancel(playRingtoneIntent);
             PlayRingtoneReceiver.getRingtone(this).stop();
-
-            // restore the previous Do Not Disturb, alarm mode if set
-            if (previousAlarmMode != UNASSIGNED) {
-                audioManager.setRingerMode(previousAlarmMode);
-            }
-            if (previousDoNotDisturbMode != UNASSIGNED && Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                NotificationManager notificationManager = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
-                notificationManager.setInterruptionFilter(previousDoNotDisturbMode);
-            }
 
             unregisterReceiver(this.screenOnOffReceiver);
         }

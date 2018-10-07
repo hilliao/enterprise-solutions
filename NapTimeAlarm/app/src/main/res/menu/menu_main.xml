@@ -3,7 +3,7 @@
     xmlns:tools="http://schemas.android.com/tools"
     tools:context="com.dlinkddns.hil.naptimealarm.MainActivity" >
     <item
-        android:id="@+id/action_stop_ringtone"
+        android:id="@+id/viewGitSource"
         android:orderInCategory="100"
         android:title="@string/menuitem_text"
         app:showAsAction="ifRoom" />
