@@ -2,17 +2,9 @@ package com.dlinkddns.hil;
 
 import java.util.*;
 import java.util.stream.Collectors;
-import java.lang.Math; // headers MUST be above the first class
-import java.util.List;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.IntSummaryStatistics;
-import java.util.List;
-import java.util.Random;
-import java.util.stream.Collectors;
-import java.util.Map;
 
 public class Main {
+
     static <K, V extends Comparable<? super V>>
     SortedSet<Map.Entry<K, V>> entriesSortedByValues(Map<K, V> map) {
         SortedSet<Map.Entry<K, V>> sortedEntries = new TreeSet<Map.Entry<K, V>>(
@@ -95,8 +87,6 @@ public class Main {
             this.distance = distance;
         }
     }
-
-
 
     public static void main(String[] args) {
         int totalCrates = 5;

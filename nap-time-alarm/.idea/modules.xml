@@ -2,8 +2,8 @@
 <project version="4">
   <component name="ProjectModuleManager">
     <modules>
-      <module fileurl="file://$PROJECT_DIR$/NapTimeAlarm.iml" filepath="$PROJECT_DIR$/NapTimeAlarm.iml" />
       <module fileurl="file://$PROJECT_DIR$/app/app.iml" filepath="$PROJECT_DIR$/app/app.iml" />
+      <module fileurl="file://$PROJECT_DIR$/nap-time-alarm.iml" filepath="$PROJECT_DIR$/nap-time-alarm.iml" />
     </modules>
   </component>
 </project>
