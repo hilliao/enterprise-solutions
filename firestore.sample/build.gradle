@@ -1,0 +1,21 @@
+version '1.0-SNAPSHOT'
+
+apply plugin: 'java'
+
+apply plugin: 'application'
+mainClassName = 'com.dlinkddns.hli.main'
+
+sourceCompatibility = 1.8
+
+repositories {
+    mavenCentral()
+    mavenLocal()
+}
+
+dependencies {
+    // Firebase Java SDK
+    compile 'com.google.firebase:firebase-admin:6.5.0'
+
+    // Sundial Job Scheduler
+    compile 'org.knowm:sundial:2.1.1'
+}
