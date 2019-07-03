@@ -113,8 +113,8 @@ public class Scrabble {
         if (dictCache == null) {
             // get the dictionary's words
             if (SystemProperty.environment.value() == SystemProperty.Environment.Value.Production) {
-                // bucketName = "careful-sphinx-161801.appspot.com"
-                GcsFilename fileName = new GcsFilename(SystemProperty.applicationId.get() + ".appspot.com", DICT_FILE);
+                // bucketName = "staging.firestore-confidential-data.appspot.com"
+                GcsFilename fileName = new GcsFilename("staging." + SystemProperty.applicationId.get() + ".appspot.com", DICT_FILE);
                 GcsInputChannel readChannel = gcsService.openPrefetchingReadChannel(fileName, 0, BUFFER_SIZE);
                 dictWords = IOUtils.toString(Channels.newInputStream(readChannel), DICT_ENCODING);
             } else { // running on local development server
