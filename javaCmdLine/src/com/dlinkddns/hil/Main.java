@@ -88,7 +88,81 @@ public class Main {
         }
     }
 
+    public static class ListNode {
+        int val;
+        ListNode next;
+
+        ListNode(int x) {
+            val = x;
+        }
+    }
+
+    public static ListNode addTwoNumbers(ListNode l1, ListNode l2) {
+        List<Long> li1 = convertToList(l1);
+        List<Long> li2 = convertToList(l2);
+
+        Long sum = calc(li1) + calc(li2);
+        ListNode result = buildList(sum);
+        while (result != null) {
+            System.out.println(result.val);
+            result=result.next;
+        }
+
+        return result;
+    }
+
+    public static Long calc(List<Long> li) {
+        Long sum = li.get(0);
+        for (int i = 1; i < li.size(); ++i) {
+            sum += li.get(i) * (long) java.lang.Math.pow(10, i);
+        }
+
+        return sum;
+    }
+
+    public static List<Long> convertToList(ListNode l) {
+        List<Long> al = new ArrayList<Long>();
+        while (l != null) {
+            al.add((long)l.val);
+            l = l.next;
+        }
+
+        return al;
+    }
+
+    public static ListNode buildList(Long i) {
+        String num = String.valueOf(i);
+        StringBuilder input1 = new StringBuilder();
+        input1.append(num);
+        input1 = input1.reverse();
+        ListNode previous = new ListNode(-1);
+        ListNode head = previous;
+        for (Character ch : input1.toString().toCharArray()) {
+            previous.next = new ListNode(Character.getNumericValue(ch));
+            previous = previous.next;
+        }
+
+        previous.next = null;
+        return head.next;
+    }
+
     public static void main(String[] args) {
+        ListNode l1 = new ListNode(9);
+        ListNode l2 = new ListNode(1);
+        l2.next = new ListNode(9);
+        l2.next.next = new ListNode(9);
+        l2.next.next.next = new ListNode(9);
+        l2.next.next.next.next = new ListNode(9);
+        l2.next.next.next.next.next = new ListNode(9);
+        l2.next.next.next.next.next.next = new ListNode(9);
+        l2.next.next.next.next.next.next.next = new ListNode(9);
+        l2.next.next.next.next.next.next.next.next = new ListNode(9);
+        l2.next.next.next.next.next.next.next.next.next = new ListNode(9);
+
+        System.out.println(addTwoNumbers(l1, l2));
+        System.exit(1);
+
+
         int totalCrates = 5;
         List<List<Integer>> allLocations = null;
         int truckCapacity = 4;
@@ -96,8 +170,6 @@ public class Main {
                 (Double) getDistance(coords.get(0), coords.get(1)))).collect(Collectors.toList());
         distances.sort((d1, d2) -> d1.distance.compareTo(d2.distance));
         List<List<Integer>> pos = distances.stream().limit(truckCapacity).map(dist -> dist.position).collect(Collectors.toList());
-
-        System.exit(1);
 
 
         int[] arr1 = new int[]{3, 1, 2, 2, 4};
