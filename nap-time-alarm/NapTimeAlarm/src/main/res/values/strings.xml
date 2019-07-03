@@ -15,5 +15,5 @@
     <string name="time_input_error">one of the time inputs not acceptable</string>
     <string name="Google_signin_error">Google Play Services sign in error</string>
     <string name="Warning_Do_Not_Disturb_access">User must grant Do Not Disturb access! Toggle the switch to grant access.</string>
-    <string name="gitsource">https://github.com/hilliao/enterprise-solutions/tree/master/NapTimeAlarm</string>
+    <string name="gitsource">https://github.com/hilliao/enterprise-solutions/tree/master/nap-time-alarm</string>
 </resources>
