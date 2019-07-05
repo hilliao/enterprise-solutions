@@ -1,0 +1,5 @@
+CUSTOMERS_COLL = 'customers'
+ORDERS_COLL = 'orders'
+CUST_TOKEN = 'customer_token'
+ADMIN_TOKEN = 'admin_token'
+ADMIN_TOKEN_VALUE = 'secret_admin_token'

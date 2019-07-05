@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>test food store</title>
+    <script src="http://ajax.googleapis.com/ajax/libs/angularjs/1.4.8/angular.min.js"></script>
+
+    <script type="text/javascript">
+
+        var app = angular.module('putserviceApp', []);
+        app.config(['$httpProvider', function ($httpProvider) {
+            $httpProvider.defaults.headers.common['customer_token'] = "restaurant848544";
+        }])
+
+        app.controller('putserviceCtrl', function ($scope, $http) {
+            $scope.food_item = null;
+            $scope.count = null;
+            $scope.preferences = null;
+            $scope.putdata = function (food_item, count, preferences) {
+                var order_req_body = {
+                    food_item: food_item,
+                    count: count,
+                    preferences: preferences
+                };
+                $http.put('https://foodstore-mvu2owitla-uc.a.run.app/orders/o1', JSON.stringify(order_req_body)).then(
+                    function successCallback(response) {
+                        $scope.statusval = response.status;
+                        $scope.statustext = response.statusText;
+                        $scope.responsebody = response.data;
+                        if (response.data)
+                            $scope.msg = "Order put successfully!";
+                    }, function errorCallback(response) {
+                        $scope.msg = "Order failed with error";
+                        $scope.statusval = response.status;
+                        $scope.statustext = response.statusText;
+                        $scope.responsebody = response.data;
+                    });
+            };
+        });
+    </script>
+</head>
+<body>
+<div ng-app="putserviceApp" ng-controller="putserviceCtrl">
+    <div>
+        food_item : <input ng-model="food_item"/><br/><br/>
+        count : <input ng-model="count"/><br/><br/>
+        preferences : <input ng-model="preferences"/><br/><br/>
+        <input type="button" value="Send" ng-click="putdata(food_item, count, preferences)"/> <br/><br/>
+    </div>
+    <p>Output Message : {{msg}}</p>
+    <p>StatusCode: {{statusval}}</p>
+    <p>Status: {{statustext}}</p>
+    <p>Response body: {{responsebody}}</p>
+</div>
+</body>
+</html>

@@ -1,0 +1,219 @@
+{
+	"info": {
+		"_postman_id": "1b91a8c1-e218-432d-b89a-56f827933f5b",
+		"name": "foodstore",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"item": [
+		{
+			"name": "put orders",
+			"request": {
+				"method": "PUT",
+				"header": [
+					{
+						"key": "Content-Type",
+						"name": "Content-Type",
+						"type": "text",
+						"value": "application/json"
+					},
+					{
+						"key": "customer_token",
+						"type": "text",
+						"value": "TBQGwgdFF8kuyN4SJzD3"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"items\": [\n        {\n            \"food_item\": \"Puri\",\n            \"count\": 32,\n            \"preferences\": [\n                \"crispy\",\n                \"midium\"\n            ],\n            \"state\": \"not started\"\n        }\n    ],\n    \"total\": \"$85.1\"\n}"
+				},
+				"url": {
+					"raw": "{{url}}/orders/EHH5gffzL6sNux5JYzjo",
+					"host": [
+						"{{url}}"
+					],
+					"path": [
+						"orders",
+						"EHH5gffzL6sNux5JYzjo"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "get orders",
+			"request": {
+				"method": "GET",
+				"header": [
+					{
+						"key": "Content-Type",
+						"name": "Content-Type",
+						"value": "application/json",
+						"type": "text"
+					},
+					{
+						"key": "customer_token",
+						"value": "TBQGwgdFF8kuyN4SJzD3",
+						"type": "text"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": ""
+				},
+				"url": {
+					"raw": "{{url}}/orders/EHH5gffzL6sNux5JYzjo",
+					"host": [
+						"{{url}}"
+					],
+					"path": [
+						"orders",
+						"EHH5gffzL6sNux5JYzjo"
+					],
+					"query": [
+						{
+							"key": "",
+							"value": "",
+							"disabled": true
+						}
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "delete orders",
+			"request": {
+				"method": "DELETE",
+				"header": [
+					{
+						"key": "customer_token",
+						"value": "restaurant848544",
+						"type": "text"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": ""
+				},
+				"url": {
+					"raw": "{{url}}/orders/o2",
+					"host": [
+						"{{url}}"
+					],
+					"path": [
+						"orders",
+						"o2"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "post orders",
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "customer_token",
+						"value": "TBQGwgdFF8kuyN4SJzD3",
+						"type": "text"
+					},
+					{
+						"key": "Content-Type",
+						"name": "Content-Type",
+						"value": "application/json",
+						"type": "text"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n\t\"order\": \"Puri\",\n\t\"count\": 32,\n\t\"preferences\": [\"crispy\", \"midium\"],\n\t\"state\": \"not started\"\n}"
+				},
+				"url": {
+					"raw": "{{url}}/orders",
+					"host": [
+						"{{url}}"
+					],
+					"path": [
+						"orders"
+					],
+					"query": [
+						{
+							"key": "",
+							"value": "secret",
+							"disabled": true
+						}
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "put customer",
+			"request": {
+				"method": "PUT",
+				"header": [
+					{
+						"key": "admin_token",
+						"value": "secret_admin_token",
+						"type": "text"
+					},
+					{
+						"key": "Content-Type",
+						"name": "Content-Type",
+						"value": "application/json",
+						"type": "text"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n\t\"name\": \"resturant 92305\",\n\t\"point_of_contact\":\"Sundar Pachai\",\n\t\"url\": \"http://example.com\"\n}"
+				},
+				"url": {
+					"raw": "{{url}}/customers/restaurant848544",
+					"host": [
+						"{{url}}"
+					],
+					"path": [
+						"customers",
+						"restaurant848544"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "post customers",
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "admin_token",
+						"value": "secret_admin_token",
+						"type": "text"
+					},
+					{
+						"key": "Content-Type",
+						"name": "Content-Type",
+						"value": "application/json",
+						"type": "text"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n\t\"name\": \"resturant 7685148\",\n\t\"point_of_contact\":\"Harshad Sonani\",\n\t\"url\": \"http://example.com\"\n}"
+				},
+				"url": {
+					"raw": "{{url}}/customers",
+					"host": [
+						"{{url}}"
+					],
+					"path": [
+						"customers"
+					]
+				}
+			},
+			"response": []
+		}
+	]
+}
