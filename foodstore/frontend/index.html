@@ -3,20 +3,24 @@
 <head>
     <meta charset="UTF-8">
     <title>test food store</title>
-    <script src="http://ajax.googleapis.com/ajax/libs/angularjs/1.4.8/angular.min.js"></script>
-
+    <link rel="stylesheet" href="https://ajax.googleapis.com/ajax/libs/angular_material/1.1.8/angular-material.min.css">
+    <script src="https://ajax.googleapis.com/ajax/libs/angularjs/1.6.9/angular.js"></script>
+    <script src="https://ajax.googleapis.com/ajax/libs/angularjs/1.6.9/angular-animate.min.js"></script>
+    <script src="https://ajax.googleapis.com/ajax/libs/angularjs/1.6.9/angular-aria.min.js"></script>
+    <script src="https://ajax.googleapis.com/ajax/libs/angular_material/1.1.8/angular-material.min.js"></script>
+    <script src="https://s3-us-west-2.amazonaws.com/s.cdpn.io/t-114/assets-cache.js"></script>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,400,500,700,400italic">
     <script type="text/javascript">
-
-        var app = angular.module('putserviceApp', []);
+        var app = angular.module('putOrder', ['ngMaterial']);
         app.config(['$httpProvider', function ($httpProvider) {
             $httpProvider.defaults.headers.common['customer_token'] = "restaurant848544";
         }])
 
-        app.controller('putserviceCtrl', function ($scope, $http) {
+        app.controller('putOrderCtrl', function ($scope, $http) {
             $scope.food_item = null;
             $scope.count = null;
             $scope.preferences = null;
-            $scope.putdata = function (food_item, count, preferences) {
+            $scope.putorder = function (food_item, count, preferences) {
                 var order_req_body = {
                     food_item: food_item,
                     count: count,
@@ -39,18 +43,110 @@
         });
     </script>
 </head>
+<style>
+    body {
+        width: 100%;
+        padding: 0;
+        margin: 0;
+        box-sizing: border-box;
+    }
+
+    md-content.md-default-theme, md-content {
+        background-color: rgba(163, 160, 160, 0.45);
+    }
+
+    .carddemoBasicUsage .card-media {
+        background-color: #999999;
+    }
+
+    md-card > h2 {
+        padding-left: 15px;
+
+    }
+
+    .note {
+        width: 100%;
+        box-sizing: border-box;
+
+    }
+
+    p.good {
+        line-height: 30px;
+        padding-left: 10px;
+        margin: 10px;
+        box-sizing: border-box;
+        background-color: rgba(0, 128, 0, 0.31);
+    }
+
+    p.warn {
+
+        line-height: 30px;
+        padding-left: 10px;
+        margin: 10px;
+        box-sizing: border-box;
+        background-color: rgba(204, 2, 5, 0.31);
+    }
+</style>
 <body>
-<div ng-app="putserviceApp" ng-controller="putserviceCtrl">
+
+<div ng-app="putOrder" ng-controller="putOrderCtrl">
+
+    <md-content class="md-padding">
+        <div layout="column" layout-gt-xs="row">
+            <md-card flex flex-gt-xs="30">
+                <h2>Card title #1</h2>
+                <md-card-content>
+                    <p>Some content</p>
+                </md-card-content>
+            </md-card>
+            <md-card flex>
+                <h2>Card title #2</h2>
+                <md-card-content>
+                    <p>Some content</p>
+                </md-card-content>
+            </md-card>
+        </div>
+    </md-content>
+
     <div>
-        food_item : <input ng-model="food_item"/><br/><br/>
-        count : <input ng-model="count"/><br/><br/>
-        preferences : <input ng-model="preferences"/><br/><br/>
-        <input type="button" value="Send" ng-click="putdata(food_item, count, preferences)"/> <br/><br/>
+        <p class="good" hide-gt-xs>Using <b>&lt;div layout="column" layout-gt-xs="row"&gt;</b></p>
+        <p class="warn" hide show-gt-xs>
+            Using <b>&lt;div layout="column" layout-gt-xs="row"&gt;</b>
+            <br/>
+            <b>Wrong!</b>: Card #1 should be 30% width of the row!
+        </p>
     </div>
-    <p>Output Message : {{msg}}</p>
-    <p>StatusCode: {{statusval}}</p>
-    <p>Status: {{statustext}}</p>
-    <p>Response body: {{responsebody}}</p>
+
+    <md-content class="md-padding">
+        <div layout="row" layout-xs="column">
+            <md-card flex flex-gt-xs="30">
+                <div>
+                    food_item : <input ng-model="food_item"/><br/><br/>
+                    count : <input ng-model="count"/><br/><br/>
+                    preferences : <input ng-model="preferences"/><br/><br/>
+                    <input type="button" value="put" ng-click="putorder(food_item, count, preferences)"/> <br/><br/>
+                </div>
+
+                <md-card-content>
+                    <p>Output Message : {{msg}}</p>
+                    <p>StatusCode: {{statusval}}</p>
+                    <p>Status: {{statustext}}</p>
+                    <p>Response body: {{responsebody}}</p>
+
+                </md-card-content>
+            </md-card>
+            <md-card flex>
+                <h2>Card title #2</h2>
+                <md-card-content>
+                    <p>Some content</p>
+                </md-card-content>
+            </md-card>
+        </div>
+    </md-content>
+
+    <div>
+        <p class="good">Using <b>&lt;div layout='row' layout-xs="column" &gt;</b></p>
+    </div>
 </div>
 </body>
 </html>
