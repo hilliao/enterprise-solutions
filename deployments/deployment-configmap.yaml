@@ -1,0 +1,48 @@
+---
+apiVersion: "apps/v1"
+kind: "Deployment"
+metadata:
+  name: "hello-java-configmap"
+  namespace: "default"
+  labels:
+    app: "hello-java"
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: "hello-java"
+  template:
+    metadata:
+      labels:
+        app: "hello-java"
+    spec:
+      containers:
+      - name: "hello-java-sha256"
+        image: "gcr.io/tcsplayground/hello-java@sha256:489525fa74816644f9d369d4717fd022f547af846a063b14d14e5e24ed28a2e9"
+        env:
+        - name: NAME
+          valueFrom:
+            configMapKeyRef:
+              name: user-profile
+              key: username
+---
+apiVersion: "autoscaling/v2beta1"
+kind: "HorizontalPodAutoscaler"
+metadata:
+  name: "hello-java-hpa"
+  namespace: "default"
+  labels:
+    app: "hello-java"
+spec:
+  scaleTargetRef:
+    kind: "Deployment"
+    name: "hello-java"
+    apiVersion: "apps/v1"
+  minReplicas: 1
+  maxReplicas: 5
+  metrics:
+  - type: "Resource"
+    resource:
+      name: "cpu"
+      targetAverageUtilization: 85
+
