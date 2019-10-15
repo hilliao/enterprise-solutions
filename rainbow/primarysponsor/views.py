@@ -4,6 +4,7 @@ import base64
 import flask
 import os
 import sys
+import json
 
 app = Flask(__name__)
 
@@ -37,10 +38,15 @@ def template(ceremony):
     token = request.args.get('reg-token')
     px = request.args.get('overlay_font_px')
     token_bytes = base64.b64decode(token)
+    text = token_bytes.decode("utf-8")
+    json_text = json.loads(text)
 
     return render_template('image-text.html',
                            image=ceremony,
-                           decoded=token_bytes.decode("utf-8"),
+                           first_name=json_text['first_name'],
+                           last_name=json_text['last_name'],
+                           phone=json_text['phone'],
+                           seat=json_text['seat'],
                            overlay_font_px=px)
 
 
