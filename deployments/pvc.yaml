@@ -1,0 +1,21 @@
+apiVersion: storage.k8s.io/v1beta1
+kind: StorageClass
+metadata:
+  name: enc-gce-pd
+provisioner: pd.csi.storage.gke.io
+parameters:
+  type: pd-standard
+  disk-encryption-kms-key: projects/tcsplayground/locations/global/keyRings/test-global/cryptoKeys/test-sym
+volumeBindingMode: WaitForFirstConsumer
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: test-data-disk-1
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: enc-gce-pd
+  resources:
+    requests:
+      storage: 10Gi
