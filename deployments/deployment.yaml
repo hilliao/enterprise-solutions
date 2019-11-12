@@ -3,11 +3,10 @@ apiVersion: "apps/v1"
 kind: "Deployment"
 metadata:
   name: "hello-java"
-  namespace: "default"
   labels:
     app: "hello-java"
 spec:
-  replicas: 5
+  replicas: 3
   selector:
     matchLabels:
       app: "hello-java"
@@ -19,12 +18,18 @@ spec:
       containers:
       - name: "hello-java-sha256"
         image: "gcr.io/tcsplayground/hello-java@sha256:9d81fd048acb84412340f398290fa0c35d4a5c17747581186cc31abbc99f92bf"
+        resources:
+          requests:
+            memory: "64Mi"
+            cpu: "250m"
+          limits:
+            memory: "256Mi"
+            cpu: "500m"
 ---
 apiVersion: "autoscaling/v2beta1"
 kind: "HorizontalPodAutoscaler"
 metadata:
   name: "hello-java-hpa"
-  namespace: "default"
   labels:
     app: "hello-java"
 spec:
@@ -39,4 +44,3 @@ spec:
     resource:
       name: "cpu"
       targetAverageUtilization: 25
-
