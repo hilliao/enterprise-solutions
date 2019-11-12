@@ -36,13 +36,12 @@ metadata:
 spec:
   scaleTargetRef:
     kind: "Deployment"
-    name: "hello-java"
+    name: "hello-java-configmap"
     apiVersion: "apps/v1"
   minReplicas: 1
-  maxReplicas: 5
+  maxReplicas: 50
   metrics:
   - type: "Resource"
     resource:
       name: "cpu"
-      targetAverageUtilization: 85
-
+      targetAverageUtilization: 11
