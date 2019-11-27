@@ -4,6 +4,7 @@ import googleapiclient.discovery
 import os
 
 # 2019-11-22 13:38:19.581781
+METADATA_EXPIRY = 'expiry'
 DATETIME_FORMAT = '%Y-%m-%d %H:%M:%S.%f'
 
 # expiry metadata datetime assumes to be the following timezone
@@ -43,7 +44,7 @@ def delete_expired(project, zone):
             metadata_items = instance['metadata']['items']
 
             for metadata in metadata_items:
-                if metadata['key'] == 'expiry':
+                if metadata['key'] == METADATA_EXPIRY:
                     expiry = datetime.datetime.strptime(metadata['value'], DATETIME_FORMAT)
                     print('    parsed expiry in PST: ' + str(expiry))
                     timezone = pytz.timezone(ASSUMED_TIME_ZONE)
