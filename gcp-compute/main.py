@@ -5,6 +5,7 @@ import os
 
 # 2019-11-22 13:38:19.581781
 METADATA_EXPIRY = 'expiry'
+METADATA_EXPIRY_1 = 'expiry-1'
 DATETIME_FORMAT = '%Y-%m-%d %H:%M:%S.%f'
 
 # expiry metadata datetime assumes to be the following timezone
@@ -46,14 +47,23 @@ def delete_expired(project, zone):
             for metadata in metadata_items:
                 if metadata['key'] == METADATA_EXPIRY:
                     expiry = datetime.datetime.strptime(metadata['value'], DATETIME_FORMAT)
-                    print('    parsed expiry in PST: ' + str(expiry))
-                    timezone = pytz.timezone(ASSUMED_TIME_ZONE)
-                    expiry_tz = timezone.localize(expiry)
+                    delete_expired_instance(expiry, instance, project, zone)
 
-                    if expiry_tz < datetime.datetime.now(timezone):
-                        print('    WARNING! about to delete instance ' + instance['name'])
-                        delete_op = delete_instance(compute, project, zone, instance['name'])
-                        print('    deleting instance operation: ' + delete_op['name'])
+                # workbench UI accepts date - 1, add 1 day to the parsed date
+                if metadata['key'] == METADATA_EXPIRY_1:
+                    expiry_1 = datetime.datetime.strptime(metadata['value'], '%Y-%m-%d')
+                    expiry = expiry_1 + datetime.timedelta(days=1)
+                    delete_expired_instance(expiry, instance, project, zone)
+
+
+def delete_expired_instance(expiry, instance, project, zone):
+    print('    parsed expiry in PST: ' + str(expiry))
+    timezone = pytz.timezone(ASSUMED_TIME_ZONE)
+    expiry_tz = timezone.localize(expiry)
+    if expiry_tz < datetime.datetime.now(timezone):
+        print('    WARNING! about to delete instance ' + instance['name'])
+        delete_op = delete_instance(compute, project, zone, instance['name'])
+        print('    deleting instance operation: ' + delete_op['name'])
 
 
 def main(event, context):
