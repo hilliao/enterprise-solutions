@@ -4,9 +4,11 @@ import googleapiclient.discovery
 import os
 
 # 2019-11-22 13:38:19.581781
+DATETIME_FORMAT = '%Y-%m-%d %H:%M:%S.%f'
+DATE_FORMAT = '%Y-%m-%d'
 METADATA_EXPIRY = 'expiry'
 METADATA_EXPIRY_1 = 'expiry-1'
-DATETIME_FORMAT = '%Y-%m-%d %H:%M:%S.%f'
+METADATA_WORKER_GROUP = 'worker-group'
 
 # expiry metadata datetime assumes to be the following timezone
 ASSUMED_TIME_ZONE = 'America/Los_Angeles'
@@ -45,23 +47,44 @@ def delete_expired(project, zone):
             metadata_items = instance['metadata']['items']
 
             for metadata in metadata_items:
+                expiry = None
+
                 if metadata['key'] == METADATA_EXPIRY:
                     expiry = datetime.datetime.strptime(metadata['value'], DATETIME_FORMAT)
-                    delete_expired_instance(expiry, instance, project, zone)
 
                 # workbench UI accepts date - 1, add 1 day to the parsed date
                 if metadata['key'] == METADATA_EXPIRY_1:
-                    expiry_1 = datetime.datetime.strptime(metadata['value'], '%Y-%m-%d')
+                    expiry_1 = datetime.datetime.strptime(metadata['value'], DATE_FORMAT)
                     expiry = expiry_1 + datetime.timedelta(days=1)
-                    delete_expired_instance(expiry, instance, project, zone)
+
+                # delete the instance group and instances only when expiry is in metadata
+                if expiry:
+                    groups = [metadata['value'] for metadata in metadata_items
+                              if metadata['key'] == METADATA_WORKER_GROUP]
+                    delete_expired_instances(expiry, instance, project, zone, groups)
 
 
-def delete_expired_instance(expiry, instance, project, zone):
+def delete_worker_group(group, project, zone):
+    print('    WARNING! about to delete instance group: ' + group)
+    delete_op = compute.instanceGroupManagers().delete(
+        project=project,
+        zone=zone,
+        instanceGroupManager=group).execute()
+    print('    deleting instance group operation: ' + delete_op['name'])
+
+
+def delete_expired_instances(expiry, instance, project, zone, groups):
     print('    parsed expiry in PST: ' + str(expiry))
     timezone = pytz.timezone(ASSUMED_TIME_ZONE)
     expiry_tz = timezone.localize(expiry)
+
     if expiry_tz < datetime.datetime.now(timezone):
-        print('    WARNING! about to delete instance ' + instance['name'])
+        # delete the instance group first; instances in an instance group can't be deleted
+        if groups:
+            for group in groups:
+                delete_worker_group(group, project, zone)
+
+        print('    WARNING! about to delete instance: ' + instance['name'])
         delete_op = delete_instance(compute, project, zone, instance['name'])
         print('    deleting instance operation: ' + delete_op['name'])
 
@@ -71,3 +94,7 @@ def main(event, context):
     result = compute.zones().list(project=project).execute()
     for zone in result['items']:
         delete_expired(project, zone['name'])
+
+
+if __name__ == "__main__":
+    main(None, None)
