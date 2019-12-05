@@ -12,7 +12,7 @@ METADATA_WORKER_GROUP = 'worker-group'
 
 # expiry metadata datetime assumes to be the following timezone
 ASSUMED_TIME_ZONE = 'America/Los_Angeles'
-
+all_zones = []
 compute = googleapiclient.discovery.build('compute', 'v1')
 
 
@@ -66,11 +66,17 @@ def delete_expired(project, zone):
 
 def delete_worker_group(group, project, zone):
     print('    WARNING! about to delete instance group: ' + group)
-    delete_op = compute.instanceGroupManagers().delete(
-        project=project,
-        zone=zone,
-        instanceGroupManager=group).execute()
-    print('    deleting instance group operation: ' + delete_op['name'])
+    # assume the worker instance group is in the same region of the zone argument
+    zones = [z for z in all_zones if z.startswith(zone[:-1])]
+    for z in zones:
+        try:
+            delete_op = compute.instanceGroupManagers().delete(
+                project=project,
+                zone=z,
+                instanceGroupManager=group).execute()
+            print('    deleting instance group operation: ' + delete_op['name'])
+        except googleapiclient.errors.HttpError as err:
+            print('    deleting instance group {} in zone {} failed: {}'.format(group, z, err))
 
 
 def delete_expired_instances(expiry, instance, project, zone, groups):
@@ -90,10 +96,13 @@ def delete_expired_instances(expiry, instance, project, zone, groups):
 
 
 def main(event, context):
-    project = os.environ['GCLOUD_PROJECT']
-    result = compute.zones().list(project=project).execute()
-    for zone in result['items']:
-        delete_expired(project, zone['name'])
+    global all_zones
+    project = os.environ['GCP_PROJECT']
+    listing_zones_result = compute.zones().list(project=project).execute()
+    all_zones = [zone['name'] for zone in listing_zones_result['items']]
+
+    for zone in all_zones:
+        delete_expired(project, zone)
 
 
 if __name__ == "__main__":
