@@ -1,3 +1,5 @@
+# the cloud build service account needs to have the cloud function developer role to deploy the function
+
 steps:
   - name: 'gcr.io/cloud-builders/curl'
     entrypoint: 'bash'
