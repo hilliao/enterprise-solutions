@@ -14,7 +14,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Example of deleting instances of expiry custom metadata and instance group
+"""Example of deleting instances of custom metadata of expiry, instance group, and certain instance templates
 For more information, see the README.md
 """
 
@@ -29,7 +29,8 @@ DATETIME_FORMAT = '%Y-%m-%d %H:%M:%S.%f'
 DATE_FORMAT = '%Y-%m-%d'
 METADATA_EXPIRY = 'expiry'
 METADATA_EXPIRY_1 = 'expiry-1'
-METADATA_WORKER_GROUP = 'worker-group'
+METADATA_INSTANCE_GROUP = 'instance-group'
+INSTANCE_TEMPLATE_STARTS_WITH = 'usb-gce-presto'
 
 # expiry metadata datetime assumes to be the following timezone
 ASSUMED_TIME_ZONE = 'America/Los_Angeles'
@@ -55,15 +56,16 @@ def delete_instance(compute, project, zone, name):
 
 def delete_expired(project, zone):
     """
-    Delete expired compute engine instances with worker group metadata set to an instance group to delete
+    Delete expired compute engine instances with METADATA_INSTANCE_GROUP set to an instance group to delete
     :param project: Google Cloud project ID
     :param zone: compute engine zone
-    :return: None TODO: change to return the delete operation
+    :return: delete operations
     """
     instances = list_instances(compute, project, zone)
+    delete_ops = []
     if not instances:
-        print('no instances in project %s and zone %s to delete' % (project, zone))
-        return
+        # print('no instances in project %s and zone %s to delete' % (project, zone))
+        return delete_ops
     print('searching for expired instances in project %s and zone %s:' % (project, zone))
 
     for instance in instances:
@@ -87,8 +89,36 @@ def delete_expired(project, zone):
                 # delete the instance group and instances only when expiry is in metadata
                 if expiry:
                     groups = [metadata['value'] for metadata in metadata_items
-                              if metadata['key'] == METADATA_WORKER_GROUP]
-                    delete_expired_instance(expiry, instance, project, zone, groups)
+                              if metadata['key'] == METADATA_INSTANCE_GROUP]
+                    # if groups is empty, no instance group will be deleted
+                    delete_ops.extend(delete_expired_instance(expiry, instance, project, zone, groups))
+
+    return delete_ops
+
+
+def delete_instance_templates(project, starts_with):
+    """
+    Delete the instance templates where their name starts with starts_with
+    :param project: Google Cloud project ID
+    :param starts_with: delete instance templates which have names that start with the argument string
+    :return: delete operations
+    """
+    instance_templates = compute.instanceTemplates().list(project=project).execute()
+    instance_templates_starts_with = [template['name'] for template in instance_templates['items']
+                                      if 'items' in instance_templates
+                                      and template['name'].startswith(starts_with)]
+    delete_ops = []
+
+    for instance_template in instance_templates_starts_with:
+        try:
+            delete_op = compute.instanceTemplates().delete(project=project,
+                                                           instanceTemplate=instance_template).execute()
+            print('    deleting instance template {} operation: {}'.format(instance_template, delete_op['name']))
+            delete_ops.append(delete_op['name'])
+        except googleapiclient.errors.HttpError as err:
+            print('    deleting instance template {} failed: {}'.format(instance_template, err))
+
+    return delete_ops
 
 
 def delete_instance_group(group, project, zone):
@@ -98,20 +128,23 @@ def delete_instance_group(group, project, zone):
     :param group: the instance group name
     :param project: Google cloud project ID
     :param zone: Multiple zones in the zone's region would be inspected for instance group deletion
-    :return: None TODO: change to return the delete operation delete_op
+    :return: delete operations
     """
-    print('    WARNING! about to delete instance group: ' + group)
-    # assume the worker instance group is in the same region of the zone argument
+    # assume the worker instance group is in the same region as the zone argument
     zones = [z for z in all_zones if z.startswith(zone[:-1])]
-    for z in zones:
+    delete_ops = []
+    for zone in zones:
         try:
             delete_op = compute.instanceGroupManagers().delete(
                 project=project,
-                zone=z,
+                zone=zone,
                 instanceGroupManager=group).execute()
-            print('    deleting instance group operation: ' + delete_op['name'])
+            print('    deleting instance group {} operation: {}'.format(group, delete_op['name']))
+            delete_ops.append(delete_op['name'])
         except googleapiclient.errors.HttpError as err:
-            print('    deleting instance group {} in zone {} failed: {}'.format(group, z, err))
+            print('    getting instance group {} to delete in zone {} failed: {}'.format(group, zone, err))
+
+    return delete_ops
 
 
 def delete_expired_instance(expiry, instance, project, zone, groups):
@@ -123,32 +156,39 @@ def delete_expired_instance(expiry, instance, project, zone, groups):
     :param project: the Google cloud project ID
     :param zone: the zone parameter to pass to the compute engine API
     :param groups: the instance group name
-    :return: None TODO: change to return the delete operation delete_op
+    :return: delete operations
     """
     print('    parsed expiry in PST: ' + str(expiry))
     timezone = pytz.timezone(ASSUMED_TIME_ZONE)
     expiry_tz = timezone.localize(expiry)
+    delete_ops = []
 
     if expiry_tz < datetime.datetime.now(timezone):
         # delete the instance group first; instances in an instance group can't be deleted
         if groups:
             for group in groups:
-                delete_instance_group(group, project, zone)
+                delete_ops.extend(delete_instance_group(group, project, zone))
 
-        print('    WARNING! about to delete instance: ' + instance['name'])
         delete_op = delete_instance(compute, project, zone, instance['name'])
-        print('    deleting instance operation: ' + delete_op['name'])
+        print('    deleting instance {} operation: {}'.format(instance['name'], delete_op['name']))
+        delete_ops.append(delete_op['name'])
+
+    return delete_ops
 
 
 # for Google cloud function --entry-point=main
 def main(event, context):
     global all_zones
+    delete_ops = []
     project = os.environ['GCP_PROJECT']
     listing_zones_result = compute.zones().list(project=project).execute()
     all_zones = [zone['name'] for zone in listing_zones_result['items']]
 
     for zone in all_zones:
-        delete_expired(project, zone)
+        delete_ops.extend(delete_expired(project, zone))
+
+    delete_ops.extend(delete_instance_templates(project, INSTANCE_TEMPLATE_STARTS_WITH))
+    return delete_ops
 
 
 # for local debugging in Pycharm

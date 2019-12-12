@@ -7,13 +7,17 @@ project owner or editor roles.
 main.py is the cloud function python code to delete expired instances.
 Instances with custom metadata of **expiry** or **expiry-1** is set to
 the following format for the python code to parse. When Cloud Function
-executes, expired instances are deleted.
+executes, expired instances are deleted. If those instances have custom
+metadata **instance-group** set to an instance group, the group is deleted. 
 
 - expiry uses python datetime format: *DATETIME_FORMAT = '%Y-%m-%d %H:%M:%S.%f'*
 - example: *2019-11-22 13:38:19.581781*
 - expiry-1 uses date format and is set to expire by the end of the day:
   *DATE_FORMAT = '%Y-%m-%d'* 
 - example: *2019-11-22* expires at 2019-11-23 00:00:00.000000
+
+Any instance group templates starts with usb-gce-presto are deleted. If
+the template is used in any instance groups, deletion does not happen.
 
 ## Recommended IAM roles for the service account or user to deploy the solution 
 
