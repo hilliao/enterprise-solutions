@@ -1,4 +1,14 @@
-# Compute Engine API Samples
+# Delete expired compute engine instances and instance group with certain metadata
+DevOps team wants to have an automated method to delete instances and instance groups with certain criteria. Google cloud compute engine instance metadata is used to indicate the expiry date or datetime to delete the instances, a good example to automate toil in SRE.
+
+## Configuration
+Look for the fist few lines of UPPER CASE variable names below the import statements in [main.py](https://github.com/hilliao/enterprise-solutions/blob/308b34948fa42d55aba8c3c63311b32b42f25c43/gcp-compute/main.py). E,g,
+- METADATA_EXPIRY = 'expiry'
+- METADATA_EXPIRY_1 = 'expiry-1'
+- METADATA_INSTANCE_GROUP = 'instance-group'
+- INSTANCE_TEMPLATE_STARTS_WITH = 'usb-gce-presto'
+
+## Prerequisites
 Cloud scheduler service initialization requires project owner role. It's
 an one time task. The Cloud pub/sub and function creation don't require
 project owner or editor roles.
