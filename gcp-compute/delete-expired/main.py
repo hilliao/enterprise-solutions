@@ -81,7 +81,9 @@ def delete_expired(project, zone):
                 if metadata['key'] == METADATA_EXPIRY:
                     expiry = datetime.datetime.strptime(metadata['value'], DATETIME_FORMAT)
 
-                # workbench UI accepts date - 1, add 1 day to the parsed date
+                # general misconception of expiry is the last millisecond of the day
+                # reality is expire at 1/31/2020 meaning expire at 1/31/2020 00:00:00.00000
+                # add 1 day to the parsed date to make it 2/1/2020 00:00:00.00000
                 if metadata['key'] == METADATA_EXPIRY_1:
                     expiry_1 = datetime.datetime.strptime(metadata['value'], DATE_FORMAT)
                     expiry = expiry_1 + datetime.timedelta(days=1)
