@@ -70,6 +70,12 @@ spec:
             - name: DRUPAL_DB_NAME
               value: drupal
           image: gcr.io/cloud-marketplace/google/drupal:8.8.4-20200326-152553
+          command: ["/bin/sh", "-c"]
+          args:
+            - cd ~ &&
+              curl -sS https://getcomposer.org/installer -o composer-setup.php &&
+              php composer-setup.php --install-dir=/usr/local/bin --filename=composer &&
+              apache2-foreground
           imagePullPolicy: IfNotPresent
           livenessProbe:
             failureThreshold: 3
