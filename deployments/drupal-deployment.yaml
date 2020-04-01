@@ -1,0 +1,196 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  annotations:
+    kubectl.kubernetes.io/last-applied-configuration: |
+      {"apiVersion":"apps/v1","kind":"StatefulSet","metadata":{"annotations":{},"labels":{"app.kubernetes.io/component":"drupal-webserver","app.kubernetes.io/name":"drupal"},"name":"drupal-drupal","namespace":"default","ownerReferences":[{"apiVersion":"app.k8s.io/v1beta1","blockOwnerDeletion":true,"kind":"Application","name":"drupal","uid":"a8388777-4af8-4127-b501-fa9eec95f0cf"}]},"spec":{"replicas":1,"selector":{"matchLabels":{"app.kubernetes.io/component":"drupal-webserver","app.kubernetes.io/name":"drupal"}},"serviceName":"drupal-drupal-svc","template":{"metadata":{"labels":{"app.kubernetes.io/component":"drupal-webserver","app.kubernetes.io/name":"drupal"}},"spec":{"containers":[{"env":[{"name":"AUTO_INSTALL","value":"yes"},{"name":"DRUPAL_USER","valueFrom":{"secretKeyRef":{"key":"drupal-user","name":"drupal-drupal-secret"}}},{"name":"DRUPAL_PASSWORD","valueFrom":{"secretKeyRef":{"key":"drupal-password","name":"drupal-drupal-secret"}}},{"name":"DRUPAL_EMAIL","valueFrom":{"secretKeyRef":{"key":"drupal-email","name":"drupal-drupal-secret"}}},{"name":"DRUPAL_DB_HOST","value":"drupal-mariadb-svc"},{"name":"DRUPAL_DB_USER","valueFrom":{"secretKeyRef":{"key":"drupal-user","name":"drupal-mariadb-secret"}}},{"name":"DRUPAL_DB_PASSWORD","valueFrom":{"secretKeyRef":{"key":"drupal-password","name":"drupal-mariadb-secret"}}},{"name":"DRUPAL_DB_NAME","value":"drupal"}],"image":"gcr.io/cloud-marketplace/google/drupal:8.8.4-20200326-152553","livenessProbe":{"httpGet":{"path":"/","port":80},"initialDelaySeconds":240},"name":"drupal","ports":[{"containerPort":80,"name":"http"}],"readinessProbe":{"failureThreshold":5,"httpGet":{"path":"/","port":80},"initialDelaySeconds":240,"periodSeconds":30,"successThreshold":2,"timeoutSeconds":5},"resources":{"requests":{"cpu":"100m","memory":"100Mi"}},"volumeMounts":[{"mountPath":"/var/www/html","name":"drupal-drupal-pvc","subPath":"html"}]},{"args":["--scrape_uri=http://127.0.0.1/server-status?auto"],"image":"gcr.io/cloud-marketplace/google/drupal/apache-exporter:8.8.4-20200326-152553","livenessProbe":{"httpGet":{"path":"/metrics","port":9117}},"name":"apache-exporter","ports":[{"containerPort":9117,"name":"exporter"}],"readinessProbe":{"failureThreshold":10,"httpGet":{"path":"/metrics","port":9117},"initialDelaySeconds":60,"periodSeconds":10,"timeoutSeconds":30}},{"command":["/monitor","--stackdriver-prefix=custom.googleapis.com","--source=apache-drupal:http://localhost:9117/metrics","--pod-id=$(POD_NAME)","--namespace-id=$(POD_NAMESPACE)","--monitored-resource-types=k8s"],"env":[{"name":"POD_NAME","valueFrom":{"fieldRef":{"fieldPath":"metadata.name"}}},{"name":"POD_NAMESPACE","valueFrom":{"fieldRef":{"fieldPath":"metadata.namespace"}}}],"image":"gcr.io/cloud-marketplace/google/drupal/prometheus-to-sd:8.8.4-20200326-152553","name":"prometheus-to-sd"}]}},"updateStrategy":{"type":"RollingUpdate"},"volumeClaimTemplates":[{"metadata":{"labels":{"app.kubernetes.io/component":"drupal-webserver","app.kubernetes.io/name":"drupal"},"name":"drupal-drupal-pvc"},"spec":{"accessModes":["ReadWriteOnce"],"resources":{"requests":{"storage":"8Gi"}},"storageClassName":"standard"}}]}}
+  creationTimestamp: "2020-04-01T00:49:58Z"
+  generation: 1
+  labels:
+    app.kubernetes.io/component: drupal-webserver
+    app.kubernetes.io/name: drupal
+  name: drupal-drupal
+  namespace: default
+  ownerReferences:
+    - apiVersion: app.k8s.io/v1beta1
+      blockOwnerDeletion: true
+      kind: Application
+      name: drupal
+      uid: a8388777-4af8-4127-b501-fa9eec95f0cf
+  resourceVersion: "4584"
+  selfLink: /apis/apps/v1/namespaces/default/statefulsets/drupal-drupal
+  uid: ae7ef0cc-5929-429e-9965-0e439810f8d5
+spec:
+  podManagementPolicy: OrderedReady
+  replicas: 1
+  revisionHistoryLimit: 10
+  selector:
+    matchLabels:
+      app.kubernetes.io/component: drupal-webserver
+      app.kubernetes.io/name: drupal
+  serviceName: drupal-drupal-svc
+  template:
+    metadata:
+      creationTimestamp: null
+      labels:
+        app.kubernetes.io/component: drupal-webserver
+        app.kubernetes.io/name: drupal
+    spec:
+      containers:
+        - env:
+            - name: AUTO_INSTALL
+              value: "yes"
+            - name: DRUPAL_USER
+              valueFrom:
+                secretKeyRef:
+                  key: drupal-user
+                  name: drupal-drupal-secret
+            - name: DRUPAL_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  key: drupal-password
+                  name: drupal-drupal-secret
+            - name: DRUPAL_EMAIL
+              valueFrom:
+                secretKeyRef:
+                  key: drupal-email
+                  name: drupal-drupal-secret
+            - name: DRUPAL_DB_HOST
+              value: drupal-mariadb-svc
+            - name: DRUPAL_DB_USER
+              valueFrom:
+                secretKeyRef:
+                  key: drupal-user
+                  name: drupal-mariadb-secret
+            - name: DRUPAL_DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  key: drupal-password
+                  name: drupal-mariadb-secret
+            - name: DRUPAL_DB_NAME
+              value: drupal
+          image: gcr.io/cloud-marketplace/google/drupal:8.8.4-20200326-152553
+          imagePullPolicy: IfNotPresent
+          livenessProbe:
+            failureThreshold: 3
+            httpGet:
+              path: /
+              port: 80
+              scheme: HTTP
+            initialDelaySeconds: 240
+            periodSeconds: 10
+            successThreshold: 1
+            timeoutSeconds: 1
+          name: drupal
+          ports:
+            - containerPort: 80
+              name: http
+              protocol: TCP
+          readinessProbe:
+            failureThreshold: 5
+            httpGet:
+              path: /
+              port: 80
+              scheme: HTTP
+            initialDelaySeconds: 240
+            periodSeconds: 30
+            successThreshold: 2
+            timeoutSeconds: 5
+          resources:
+            requests:
+              cpu: 100m
+              memory: 100Mi
+          terminationMessagePath: /dev/termination-log
+          terminationMessagePolicy: File
+          volumeMounts:
+            - mountPath: /var/www/html
+              name: drupal-drupal-pvc
+              subPath: html
+        - args:
+            - --scrape_uri=http://127.0.0.1/server-status?auto
+          image: gcr.io/cloud-marketplace/google/drupal/apache-exporter:8.8.4-20200326-152553
+          imagePullPolicy: IfNotPresent
+          livenessProbe:
+            failureThreshold: 3
+            httpGet:
+              path: /metrics
+              port: 9117
+              scheme: HTTP
+            periodSeconds: 10
+            successThreshold: 1
+            timeoutSeconds: 1
+          name: apache-exporter
+          ports:
+            - containerPort: 9117
+              name: exporter
+              protocol: TCP
+          readinessProbe:
+            failureThreshold: 10
+            httpGet:
+              path: /metrics
+              port: 9117
+              scheme: HTTP
+            initialDelaySeconds: 60
+            periodSeconds: 10
+            successThreshold: 1
+            timeoutSeconds: 30
+          resources: {}
+          terminationMessagePath: /dev/termination-log
+          terminationMessagePolicy: File
+        - command:
+            - /monitor
+            - --stackdriver-prefix=custom.googleapis.com
+            - --source=apache-drupal:http://localhost:9117/metrics
+            - --pod-id=$(POD_NAME)
+            - --namespace-id=$(POD_NAMESPACE)
+            - --monitored-resource-types=k8s
+          env:
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  apiVersion: v1
+                  fieldPath: metadata.name
+            - name: POD_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  apiVersion: v1
+                  fieldPath: metadata.namespace
+          image: gcr.io/cloud-marketplace/google/drupal/prometheus-to-sd:8.8.4-20200326-152553
+          imagePullPolicy: IfNotPresent
+          name: prometheus-to-sd
+          resources: {}
+          terminationMessagePath: /dev/termination-log
+          terminationMessagePolicy: File
+      dnsPolicy: ClusterFirst
+      restartPolicy: Always
+      schedulerName: default-scheduler
+      securityContext: {}
+      terminationGracePeriodSeconds: 30
+  updateStrategy:
+    type: RollingUpdate
+  volumeClaimTemplates:
+    - metadata:
+        creationTimestamp: null
+        labels:
+          app.kubernetes.io/component: drupal-webserver
+          app.kubernetes.io/name: drupal
+        name: drupal-drupal-pvc
+      spec:
+        accessModes:
+          - ReadWriteOnce
+        resources:
+          requests:
+            storage: 8Gi
+        storageClassName: standard
+        volumeMode: Filesystem
+      status:
+        phase: Pending
+status:
+  collisionCount: 0
+  currentReplicas: 1
+  currentRevision: drupal-drupal-8464bd6588
+  observedGeneration: 1
+  readyReplicas: 1
+  replicas: 1
+  updateRevision: drupal-drupal-8464bd6588
+  updatedReplicas: 1
