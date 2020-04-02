@@ -75,6 +75,9 @@ spec:
             - cd ~ &&
               curl -sS https://getcomposer.org/installer -o composer-setup.php &&
               php composer-setup.php --install-dir=/usr/local/bin --filename=composer &&
+              apt update && apt install -y python &&
+              curl https://sdk.cloud.google.com > install.sh && bash install.sh --disable-prompts &&
+              google-cloud-sdk/bin/gsutil ls gs://www.ufalife.net/ &&
               apache2-foreground
           imagePullPolicy: IfNotPresent
           livenessProbe:
