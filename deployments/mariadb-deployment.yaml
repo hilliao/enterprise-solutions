@@ -78,7 +78,9 @@ spec:
               command:
                 - sh
                 - -c
-                - exec mysqladmin status -uroot -p$MYSQL_ROOT_PASSWORD
+                - mysqladmin status -uroot -p$MYSQL_ROOT_PASSWORD && mysql -u root -p$MYSQL_ROOT_PASSWORD
+                  -e "CREATE DATABASE IF NOT EXISTS devportal;" && mysql -u root -p$MYSQL_ROOT_PASSWORD
+                  -e "GRANT ALL PRIVILEGES ON devportal.* TO 'drupal'@'%';"
             failureThreshold: 3
             initialDelaySeconds: 15
             periodSeconds: 10
