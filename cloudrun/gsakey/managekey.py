@@ -50,7 +50,7 @@ else:
 gcp_tracer = initialize_tracer(gcp_project_id)
 app.config['TRACER'] = gcp_tracer
 gcp_logging_client = logging.Client()
-gcp_logger = gcp_logging_client.logger('gsakeymanager')
+gcp_logger = gcp_logging_client.logger(app_name)
 error_reporting_client = error_reporting.Client()
 
 
@@ -159,7 +159,7 @@ def post_gsa():
 def delete_gsa_keys():
     """Delete GSA keys passed in the request form data as a list"""
     tracer = app.config['TRACER']
-    with tracer.span(name='gsakeymanager-delete') as span_method:
+    with tracer.span(name=('%s-delete' % app_name)) as span_method:
         form_key = 'gsa-key-names'
         if form_key not in request.form or not request.form[form_key]:
             return 'Missing form-data of key: {0} or value empty'.format(form_key), 400
@@ -185,7 +185,7 @@ def delete_gsa_keys():
 
             keys_deleted.append(full_sa_key_name)
 
-        gcp_logger.log_text('DELETE gsakeymanager/gsakey {0}'.format(keys_deleted))
+        gcp_logger.log_text('DELETE {1}/gsakey {0}'.format(keys_deleted, app_name))
     return {'deleted': keys_deleted}
 
 
@@ -210,7 +210,7 @@ def get_gsa_keys(gsa):
     https://cloud.google.com/iam/docs/creating-managing-service-account-keys#iam-service-account-keys-create-python
     """
     tracer = app.config['TRACER']
-    with tracer.span(name='gsakeymanager-get') as span_method:
+    with tracer.span(name=('%s-get' % app_name)) as span_method:
         # form_key = 'gsa'
         # if form_key not in request.form or not request.form[form_key]:
         #     return 'Missing form-data of key: {0} or value empty'.format(form_key), 400
@@ -220,7 +220,7 @@ def get_gsa_keys(gsa):
 
         keys = service.projects().serviceAccounts().keys().list(
             name='projects/-/serviceAccounts/' + service_account_to_get).execute()
-        gcp_logger.log_text('GET gsakeymanager/gsakey {0}'.format(service_account_to_get))
+        gcp_logger.log_text('GET {1}/gsakey {0}'.format(service_account_to_get, app_name))
 
     return jsonify(keys)
 

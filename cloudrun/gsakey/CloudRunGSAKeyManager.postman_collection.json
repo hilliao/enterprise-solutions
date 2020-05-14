@@ -1,0 +1,245 @@
+{
+	"info": {
+		"_postman_id": "d92b0c47-bc3c-480a-9572-e328ec466097",
+		"name": "CloudRunGSAKeyManager",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"item": [
+		{
+			"name": "get GSA keys",
+			"protocolProfileBehavior": {
+				"disableBodyPruning": true
+			},
+			"request": {
+				"method": "GET",
+				"header": [
+					{
+						"key": "Authorization",
+						"value": "Bearer {{access_token}}",
+						"type": "text"
+					}
+				],
+				"body": {
+					"mode": "formdata",
+					"formdata": [
+						{
+							"key": "gsa",
+							"value": "hil-test@PROJECT_ID.iam.gserviceaccount.com",
+							"type": "text",
+							"disabled": true
+						},
+						{
+							"key": "gsa",
+							"value": "alpha-vision@PROJECT_ID.iam.gserviceaccount.com",
+							"type": "text",
+							"disabled": true
+						},
+						{
+							"key": "",
+							"value": "",
+							"type": "text",
+							"disabled": true
+						}
+					],
+					"options": {
+						"formdata": {}
+					}
+				},
+				"url": {
+					"raw": "{{url}}/gsakey/hil-test@PROJECT_ID.iam.gserviceaccount.com",
+					"host": [
+						"{{url}}"
+					],
+					"path": [
+						"gsakey",
+						"hil-test@PROJECT_ID.iam.gserviceaccount.com"
+					]
+				},
+				"description": "List keys for the service account set in the URL\n$ gcloud auth print-identity-token"
+			},
+			"response": []
+		},
+		{
+			"name": "create GSA key",
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Authorization",
+						"type": "text",
+						"value": "Bearer {{access_token}}"
+					}
+				],
+				"body": {
+					"mode": "formdata",
+					"formdata": [
+						{
+							"key": "gsa",
+							"value": "hil-test@PROJECT_ID.iam.gserviceaccount.com",
+							"type": "text",
+							"disabled": true
+						},
+						{
+							"key": "gsa",
+							"value": "hil-test@PROJECT_ID.iam.gserviceaccount.com",
+							"type": "text"
+						},
+						{
+							"key": "secret_name",
+							"value": "tmp-test-secret-0",
+							"type": "text"
+						},
+						{
+							"key": "secret_manager_project_id",
+							"value": "SECRET_MANAGER_PROJECT_ID",
+							"type": "text"
+						}
+					],
+					"options": {
+						"formdata": {}
+					}
+				},
+				"url": {
+					"raw": "{{url}}/gsakey",
+					"host": [
+						"{{url}}"
+					],
+					"path": [
+						"gsakey"
+					]
+				},
+				"description": "Create a Google service account key from request body.form-data.gsa\nspecify secret_name and secret_manager_project_id to store the .JSON content. Secret Manager Admin role is required to create new secret name in secret_manager_project_id\n$ gcloud auth print-identity-token to get the Authorization Bearer token"
+			},
+			"response": []
+		},
+		{
+			"name": "delete GSA keys",
+			"request": {
+				"auth": {
+					"type": "bearer"
+				},
+				"method": "DELETE",
+				"header": [
+					{
+						"key": "Authorization",
+						"value": "Bearer {{access_token}}",
+						"type": "text"
+					}
+				],
+				"body": {
+					"mode": "formdata",
+					"formdata": [
+						{
+							"key": "gsa-key-names",
+							"value": "cb60767158fa4c96fb4e457fcc347550b7de49d2",
+							"type": "text",
+							"disabled": true
+						},
+						{
+							"key": "gsa-key-names",
+							"value": "projects/PROJECT_ID/serviceAccounts/hil-test@PROJECT_ID.iam.gserviceaccount.com/keys/35cd7923c2033279f73a87561cfdbbcabb6702e0,projects/PROJECT_ID/serviceAccounts/hil-test@PROJECT_ID.iam.gserviceaccount.com/keys/400160d4ac8845c5f428f6a7681e62a031a471bc",
+							"type": "text"
+						},
+						{
+							"key": "",
+							"value": "",
+							"type": "text",
+							"disabled": true
+						}
+					],
+					"options": {
+						"formdata": {}
+					}
+				},
+				"url": {
+					"raw": "{{url}}/gsakey",
+					"host": [
+						"{{url}}"
+					],
+					"path": [
+						"gsakey"
+					]
+				},
+				"description": "Delete the service account key by specifying requestBody.gsa-key-names in the format of projects/PROJECT_ID/serviceAccounts/hil-test@PROJECT_ID.iam.gserviceaccount.com/keys/private_key_id separated by ,\n$ gcloud auth print-identity-token"
+			},
+			"response": []
+		},
+		{
+			"name": "delete 1 GSA key",
+			"request": {
+				"auth": {
+					"type": "bearer"
+				},
+				"method": "DELETE",
+				"header": [
+					{
+						"key": "Authorization",
+						"value": "Bearer {{access_token}}",
+						"type": "text"
+					}
+				],
+				"body": {
+					"mode": "formdata",
+					"formdata": [
+						{
+							"key": "gsa-key-names",
+							"value": "cb60767158fa4c96fb4e457fcc347550b7de49d2",
+							"type": "text",
+							"disabled": true
+						},
+						{
+							"key": "gsa-key-names",
+							"value": "projects/PROJECT_ID/serviceAccounts/hil-test@PROJECT_ID.iam.gserviceaccount.com/keys/1e6fd4742829594a848e3f5e1e9c82872ddd54df",
+							"type": "text"
+						},
+						{
+							"key": "",
+							"value": "",
+							"type": "text",
+							"disabled": true
+						}
+					],
+					"options": {
+						"formdata": {}
+					}
+				},
+				"url": {
+					"raw": "{{url}}/gsakey",
+					"host": [
+						"{{url}}"
+					],
+					"path": [
+						"gsakey"
+					]
+				},
+				"description": "Delete the service account key by specifying requestBody.gsa-key-names in the format of projects/PROJECT_ID/serviceAccounts/hil-test@PROJECT_ID.iam.gserviceaccount.com/keys/private_key_id\n$ gcloud auth print-identity-token"
+			},
+			"response": []
+		},
+		{
+			"name": "Health check",
+			"request": {
+				"method": "GET",
+				"header": [
+					{
+						"key": "Authorization",
+						"value": "Bearer {{access_token}}",
+						"type": "text"
+					}
+				],
+				"url": {
+					"raw": "{{url}}/health",
+					"host": [
+						"{{url}}"
+					],
+					"path": [
+						"health"
+					]
+				},
+				"description": "Health check of the app \n$ gcloud auth print-identity-token to get the Authorization Bearer token"
+			},
+			"response": []
+		}
+	],
+	"protocolProfileBehavior": {}
+}
