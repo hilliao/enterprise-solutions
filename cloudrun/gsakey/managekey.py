@@ -64,7 +64,7 @@ def hello_world():
 def post_gsa():
     """Creates a key for a service account; save the key's JSON secret to secret manager"""
     tracer = app.config['TRACER']
-    with tracer.span(name=('%s-post' % app_name)) as span_method:
+    with tracer.start_span(name=('%s-post' % app_name)) as span_method:
 
         form_key_gsa = 'gsa'
         if form_key_gsa not in request.form or not request.form[form_key_gsa]:
@@ -75,20 +75,20 @@ def post_gsa():
             return 'Missing form-data of key: {0} or value empty'.format(form_key_secret), 400
 
         form_key_secret_manager_project_id = 'secret_manager_project_id'
-        if form_key_secret_manager_project_id not in request.form or not request.form[
-            form_key_secret_manager_project_id]:
+        if form_key_secret_manager_project_id not in request.form \
+                or not request.form[form_key_secret_manager_project_id]:
             secret_manager_project_id = gcp_project_id
         else:
             secret_manager_project_id = request.form[form_key_secret_manager_project_id]
 
-        service_account_key_to_create = request.form[form_key_gsa]
+        service_account_for_key = request.form[form_key_gsa]
 
         with span_method.span(name=('%s-post-creategsakey' % app_name)) as span_creategsakey:
             service = googleapiclient.discovery.build('iam', 'v1')
 
             try:
                 key = service.projects().serviceAccounts().keys().create(
-                    name='projects/-/serviceAccounts/' + service_account_key_to_create, body={
+                    name='projects/-/serviceAccounts/' + service_account_for_key, body={
                         'privateKeyType': 'TYPE_GOOGLE_CREDENTIALS_FILE'
                     }).execute()
             except googleapiclient.errors.HttpError as err:
@@ -115,7 +115,11 @@ def post_gsa():
                 gcp_logger.log_text('POST {1}/gsakey secret {0} not found'.format(secret_full_name, app_name))
             except google.api_core.exceptions.PermissionDenied as err:
                 error_reporting_client.report_exception()
-                return str(err), err.code
+                return {
+                           'Error': str(err),
+                           'Warning': 'Action needed: created Service Account key but failed to ingest secrets; ingest manually or delete the key',
+                           'Created': json.loads(gsa_key)
+                       }, err.code
 
             create_secret_result = None
             if is_create_secret:
@@ -129,7 +133,11 @@ def post_gsa():
                     })
                 except (google.api_core.exceptions.PermissionDenied, google.api_core.exceptions.AlreadyExists) as err:
                     error_reporting_client.report_exception()
-                    return str(err), err.code
+                    return {
+                               'Error': str(err),
+                               'Warning': 'Action needed: created Service Account key but failed to ingest secrets; ingest manually or delete the key',
+                               'Created': json.loads(gsa_key)
+                           }, err.code
 
                 gcp_logger.log_text('POST {1}/gsakey secret {0} created'.format(create_secret_result.name, app_name))
 
@@ -140,7 +148,11 @@ def post_gsa():
                 add_secret_ver_result = sm_client.add_secret_version(parent, {'data': gsa_key})
             except google.api_core.exceptions.PermissionDeniedas as err:
                 error_reporting_client.report_exception()
-                return str(err), err.code
+                return {
+                           'Error': str(err),
+                           'Warning': 'Action needed: created Service Account key but failed to ingest secrets; ingest manually or delete the key',
+                           'Created': json.loads(gsa_key)
+                       }, err.code
 
             gcp_logger.log_text('POST {1}/gsakey secret {0} version added'.format(add_secret_ver_result.name, app_name))
 
@@ -159,7 +171,7 @@ def post_gsa():
 def delete_gsa_keys():
     """Delete GSA keys passed in the request form data as a list"""
     tracer = app.config['TRACER']
-    with tracer.span(name=('%s-delete' % app_name)) as span_method:
+    with tracer.start_span(name=('%s-delete' % app_name)) as span_method:
         form_key = 'gsa-key-names'
         if form_key not in request.form or not request.form[form_key]:
             return 'Missing form-data of key: {0} or value empty'.format(form_key), 400
@@ -210,7 +222,7 @@ def get_gsa_keys(gsa):
     https://cloud.google.com/iam/docs/creating-managing-service-account-keys#iam-service-account-keys-create-python
     """
     tracer = app.config['TRACER']
-    with tracer.span(name=('%s-get' % app_name)) as span_method:
+    with tracer.start_span(name=('%s-get' % app_name)) as span_method:
         # form_key = 'gsa'
         # if form_key not in request.form or not request.form[form_key]:
         #     return 'Missing form-data of key: {0} or value empty'.format(form_key), 400
