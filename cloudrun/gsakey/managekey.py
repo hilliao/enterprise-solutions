@@ -14,6 +14,8 @@ from google.cloud import secretmanager
 import google.api_core.exceptions
 from google.cloud import error_reporting
 
+HTTP_SERVER_ERROR = 500
+
 app_name = 'gsakeymanager'
 
 try:
@@ -60,6 +62,20 @@ def hello_world():
     return 'Running Flask {0} on Python {1}!\n'.format(flask.__version__, sys.version)
 
 
+@app.errorhandler(Exception)
+def handle_uncaught_exception(err):
+    error_reporting_client.report_exception()
+    # Pass http errors to the client with the given HTTP code
+    if isinstance(err, googleapiclient.errors.HttpError):
+        return str(err), err.resp.status
+
+    if isinstance(err, google.api_core.exceptions.GoogleAPIError):
+        return str(err), err.code
+
+    # handling non-HTTP exceptions only
+    return str(err), HTTP_SERVER_ERROR
+
+
 @app.route('/gsakey', methods=['POST'])
 def post_gsa():
     """Creates a key for a service account; save the key's JSON secret to secret manager"""
@@ -86,14 +102,10 @@ def post_gsa():
         with span_method.span(name=('%s-post-creategsakey' % app_name)) as span_creategsakey:
             service = googleapiclient.discovery.build('iam', 'v1')
 
-            try:
-                key = service.projects().serviceAccounts().keys().create(
-                    name='projects/-/serviceAccounts/' + service_account_for_key, body={
-                        'privateKeyType': 'TYPE_GOOGLE_CREDENTIALS_FILE'
-                    }).execute()
-            except googleapiclient.errors.HttpError as err:
-                err_result = json.loads(err.content.decode("utf-8"))
-                return err_result, err.resp.status
+            key = service.projects().serviceAccounts().keys().create(
+                name='projects/-/serviceAccounts/' + service_account_for_key, body={
+                    'privateKeyType': 'TYPE_GOOGLE_CREDENTIALS_FILE'
+                }).execute()
 
             gsa_key = base64.b64decode(key['privateKeyData'])
             gcp_logger.log_text(
@@ -107,52 +119,44 @@ def post_gsa():
             secret_name = request.form[form_key_secret]
             secret_full_name = sm_client.secret_path(secret_manager_project_id, secret_name)
             find_secret_result = None
-            try:
-                find_secret_result = sm_client.get_secret(secret_full_name)
-                is_create_secret = False
-            except google.api_core.exceptions.NotFound as err404:
-                is_create_secret = True
-                gcp_logger.log_text('POST {1}/gsakey secret {0} not found'.format(secret_full_name, app_name))
-            except google.api_core.exceptions.PermissionDenied as err:
-                error_reporting_client.report_exception()
-                return {
-                           'Error': str(err),
-                           'Warning': 'Action needed: created Service Account key but failed to ingest secrets; ingest manually or delete the key',
-                           'Created': json.loads(gsa_key)
-                       }, err.code
 
-            create_secret_result = None
-            if is_create_secret:
-                # if not found, create the secret
-                parent = sm_client.project_path(secret_manager_project_id)
+            try:
+
                 try:
+                    find_secret_result = sm_client.get_secret(secret_full_name)
+                    is_create_secret = False
+                except google.api_core.exceptions.NotFound as secret_not_found:
+                    is_create_secret = True
+                    gcp_logger.log_text('POST {1}/gsakey secret {0} not found'.format(secret_full_name, app_name))
+
+                create_secret_result = None
+                # if the given secret not found, create the secret
+                if is_create_secret:
+                    parent = sm_client.project_path(secret_manager_project_id)
                     create_secret_result = sm_client.create_secret(parent, secret_name, {
                         'replication': {
                             'automatic': {},
                         },
                     })
-                except (google.api_core.exceptions.PermissionDenied, google.api_core.exceptions.AlreadyExists) as err:
-                    error_reporting_client.report_exception()
-                    return {
-                               'Error': str(err),
-                               'Warning': 'Action needed: created Service Account key but failed to ingest secrets; ingest manually or delete the key',
-                               'Created': json.loads(gsa_key)
-                           }, err.code
 
-                gcp_logger.log_text('POST {1}/gsakey secret {0} created'.format(create_secret_result.name, app_name))
+                    gcp_logger.log_text(
+                        'POST {1}/gsakey secret {0} created'.format(create_secret_result.name, app_name))
 
-            # update the secret version
-            parent = sm_client.secret_path(secret_manager_project_id, secret_name)
-            add_secret_ver_result = None
-            try:
+                # update the secret version
+                parent = sm_client.secret_path(secret_manager_project_id, secret_name)
+                add_secret_ver_result = None
                 add_secret_ver_result = sm_client.add_secret_version(parent, {'data': gsa_key})
-            except google.api_core.exceptions.PermissionDeniedas as err:
+            except Exception as ex:
                 error_reporting_client.report_exception()
-                return {
-                           'Error': str(err),
-                           'Warning': 'Action needed: created Service Account key but failed to ingest secrets; ingest manually or delete the key',
-                           'Created': json.loads(gsa_key)
-                       }, err.code
+                err_resp = {
+                    'error': str(ex),
+                    'warning': 'Action needed: created Service Account key but failed to ingest secrets; ingest manually or delete the key',
+                    'created': json.loads(gsa_key)
+                }
+                if isinstance(ex, google.api_core.exceptions.GoogleAPIError):
+                    return err_resp, ex.code
+                else:
+                    return err_resp, HTTP_SERVER_ERROR
 
             gcp_logger.log_text('POST {1}/gsakey secret {0} version added'.format(add_secret_ver_result.name, app_name))
 
@@ -184,16 +188,16 @@ def delete_gsa_keys():
             full_sa_key_name = full_sa_key_name.strip()
             try:
                 service.projects().serviceAccounts().keys().delete(name=full_sa_key_name).execute()
-            except googleapiclient.errors.HttpError as err:
-                err_result = json.loads(err.content.decode("utf-8"))
-                err_result['deleted'] = keys_deleted
-                return err_result, err.resp.status
-            except BaseException as baseEx:
+            except Exception as ex:
                 error_reporting_client.report_exception()
-                return {
-                           'Error': str(baseEx),
-                           'Info': keys_deleted
-                       }, 500
+                err_resp = {
+                    'error': str(ex),
+                    'deleted': keys_deleted
+                }
+                if isinstance(ex, googleapiclient.errors.HttpError):
+                    return err_resp, ex.resp.status
+                else:
+                    return err_resp, HTTP_SERVER_ERROR
 
             keys_deleted.append(full_sa_key_name)
 
