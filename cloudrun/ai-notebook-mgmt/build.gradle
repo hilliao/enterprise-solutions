@@ -13,6 +13,8 @@ repositories {
 }
 
 dependencies {
+	implementation enforcedPlatform('com.google.cloud:libraries-bom:8.0.0')
+	implementation 'com.google.cloud:google-cloud-logging:1.101.2'
 	implementation 'org.springframework.boot:spring-boot-starter-web'
 	implementation 'com.squareup.okhttp3:okhttp:4.1.0'
 	compile 'io.opencensus:opencensus-api:0.26.0'

@@ -15,6 +15,16 @@ import org.springframework.web.bind.annotation.*;
 import java.io.IOException;
 import java.util.concurrent.atomic.AtomicLong;
 
+import com.google.cloud.MonitoredResource;
+import com.google.cloud.logging.LogEntry;
+import com.google.cloud.logging.Logging;
+import com.google.cloud.logging.LoggingOptions;
+import com.google.cloud.logging.Payload.StringPayload;
+import com.google.cloud.logging.Severity;
+
+import java.util.Collections;
+
+
 @RestController
 public class CreateAINotebook {
     private static final Tracer tracer = Tracing.getTracer();
@@ -23,11 +33,46 @@ public class CreateAINotebook {
 
     @GetMapping("/sleep")
     public SleepTracked getSleep(@RequestParam(value = "seconds", defaultValue = "1") String sec)
-            throws InterruptedException, IOException {
+            throws InterruptedException {
         try (Scope ss = tracer.spanBuilder("sleep").setSampler(Samplers.alwaysSample()).startScopedSpan()) {
             Thread.sleep(1000 * Integer.parseInt(sec));
             tracer.getCurrentSpan().addAnnotation("waking");
         }
+
+        // test Google cloud logging severity
+        Logging logging = LoggingOptions.getDefaultInstance().getService();
+        String logName = "test-logging";
+        String text = "test logging SeverityEnum of slept " + sec + " seconds";
+        LogEntry logError = LogEntry.newBuilder(StringPayload.of(
+                text.replace("SeverityEnum", "ERROR")))
+                .setSeverity(Severity.ERROR)
+                .setLogName(logName)
+                .setResource(MonitoredResource.newBuilder("global").build())
+                .build();
+        LogEntry logInfo = LogEntry.newBuilder(StringPayload.of(
+                text.replace("SeverityEnum", "INFO")))
+                .setSeverity(Severity.INFO)
+                .setLogName(logName)
+                .setResource(MonitoredResource.newBuilder("global").build())
+                .build();
+        LogEntry logWarning = LogEntry.newBuilder(StringPayload.of(
+                text.replace("SeverityEnum", "WARNING")))
+                .setSeverity(Severity.WARNING)
+                .setLogName(logName)
+                .setResource(MonitoredResource.newBuilder("global").build())
+                .build();
+        LogEntry logDebug = LogEntry.newBuilder(StringPayload.of(
+                text.replace("SeverityEnum", "DEBUG")))
+                .setSeverity(Severity.DEBUG)
+                .setLogName(logName)
+                .setResource(MonitoredResource.newBuilder("global").build())
+                .build();
+        // Writes the log entry asynchronously
+        logging.write(Collections.singleton(logInfo));
+        logging.write(Collections.singleton(logDebug));
+        logging.write(Collections.singleton(logWarning));
+        logging.write(Collections.singleton(logError));
+
         return new SleepTracked(counter.incrementAndGet(), String.format(template, sec));
     }
 
