@@ -20,7 +20,7 @@ Click the run or debug button to start the spring boot application.
 0. Intellij has Java 11 installed
 0. The Google account user has AI Platform notebook admin role
 0. The service account for Cloud Run needs the following predefined roles for Cloud debug, trace to function.
-The other predefined roles recommended.  
+The other predefined roles recommended:
 - Cloud Debugger Agent
 - Cloud Trace Agent
 - Errors Writer

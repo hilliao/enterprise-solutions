@@ -22,7 +22,7 @@ gcp_logger = gcp_logging_client.logger(app_name)
 
 authorization_base_url = "https://accounts.google.com/o/oauth2/v2/auth"
 token_url = "https://www.googleapis.com/oauth2/v4/token"
-client_id = '998082892233-k2fl9kdp2vg4kf77oru10uo5vepe32ip.apps.googleusercontent.com'
+client_id = os.environ.get('CLIENT_ID')
 
 client_secret = os.environ.get('CLIENT_SECRET')
 
@@ -37,8 +37,6 @@ app = Flask(__name__)
 
 # highly recommend changing the secret key in production
 app.secret_key = client_secret
-# highly recommend not using debug mode in production
-app.config['DEBUG'] = True
 
 @app.route("/login")
 def login():
@@ -53,12 +51,10 @@ def login():
     return redirect(authorization_url)
 
 
-def list_instances(creds):
+def list_instances(creds, project_id):
     compute = googleapiclient.discovery.build(serviceName='compute', version='v1', credentials=creds)
-    pubsub_client = pubsub.Client()
-    gcp_project_id = pubsub_client.project
 
-    result = compute.zones().list(project=gcp_project_id).execute()
+    result = compute.zones().list(project=project_id).execute()
     return result['items'] if 'items' in result else None
 
 
@@ -104,12 +100,20 @@ def entry(project_id, dataset, table):
     return str(data_catalog_entry)
 
 
-@app.route("/zones")
-def zones():
+@app.route("/zones/projects/<project_id>")
+def zones(project_id):
     oauth2_session = OAuth2Session(client_id, token=session['oauth_token'])
     google_auth_credentials = credentials_from_session(oauth2_session)
-    zones = list_instances(google_auth_credentials)
+    zones = list_instances(google_auth_credentials, project_id)
     return jsonify(zones)
+
+
+@app.route("/zones")
+def zones_current_proj():
+    pubsub_client = pubsub.Client()
+    gcp_project_id = pubsub_client.project
+
+    return zones(gcp_project_id)
 
 
 if __name__ == "__main__":
