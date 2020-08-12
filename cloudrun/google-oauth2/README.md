@@ -13,7 +13,8 @@ Create a python virtual environment with
 
 `python3 -m venv google-oauth2`
 
-Configure environment variables  
+#### Configure environment variables  
+
 0. OAUTHLIB_INSECURE_TRANSPORT 1 # allows redirect URI to be http instead of https
 0. CLIENT_SECRET
 0. CLIENT_ID
