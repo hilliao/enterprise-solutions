@@ -13,7 +13,7 @@ steps:
     args:
       - '-c'
       - |
-        gcloud secrets versions access latest --secret="oauth2_client_secret_oauth2bigquery_java" > /secrets/client_secret.txt
+        gcloud secrets versions access latest --secret="oauth2_client_secret_oauth2bigquery" > /secrets/client_secret.txt
   # Deploy container image to Cloud Run
   - name: 'gcr.io/cloud-builders/gcloud'
     volumes:
@@ -24,7 +24,7 @@ steps:
       - '-c'
       - |
         gcloud run deploy ai-notebook-mgmt --image gcr.io/$PROJECT_ID/ai-notebook-mgmt --region us-central1 \
-        --platform managed --service-account gke-test@tcsplayground.iam.gserviceaccount.com --allow-unauthenticated \
+        --platform managed --allow-unauthenticated \
         --memory 512M --update-env-vars CLIENT_SECRET=$(cat /secrets/client_secret.txt) \
         --update-env-vars CLIENT_ID=998082892233-vd45ccvtob4l7h1sn43lmrptk6crvcpd.apps.googleusercontent.com
 images:

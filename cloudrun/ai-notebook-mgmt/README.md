@@ -44,16 +44,11 @@ for Cloud run related customization. Replace [paste your web client id here]
 0. Create a secret with specified name `oauth2_client_secret_oauth2bigquery_java` in cloudbuild.yaml to store the client secret
 0. Configure the cloud build service account to have secret accessor role
 
-#### Configure redirect URL in the code
-Set the redirect or callback URL per local debugging and production deployment server's URL 
-```java
-static {
-    if (System.getenv("LOCAL_DEBUG") != null) {
-        CALLBACK_URL = "http://hil.freeddns.org:8080/callback";
-    } else {
-        CALLBACK_URL = "https://ai-notebook-mgmt-zro2itatnq-uc.a.run.app/callback";
-    }
-```
+#### Configure environment variables
+0. Set the redirect or callback URL per local debugging and production deployment server's URL as environment
+variable CALLBACK_URL; add it manually to the Cloud Run service's environment variables
+ after a successful cloud build job.
+0. Set enronment variable CLIENT_SECRET, CLIENT_ID from https://console.cloud.google.com/apis/credentials
 
 ## Running the basic tests
 Call the /sleep?seconds=0 endpoint to see if 200 is returned

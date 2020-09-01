@@ -19,6 +19,7 @@ Create a python virtual environment with
 0. CLIENT_SECRET
 0. CLIENT_ID
 0. GOOGLE_APPLICATION_CREDENTIALS
+0. CALLBACK_URL
 
 In Pycharm, right click on the line of app.run(debug=True), select debug, expect error,
 then add the environment variables in the Debug configuration.
@@ -52,12 +53,9 @@ It's recommended to save client secret in secret manager.
 0. Configure [Authorized redirect URIs](https://console.developers.google.com/apis/credentials)
  to be https://DEPLOYED_CLOUD_RUN_URL/callback and http://YOUR_HOME_IP:5000/callback
 0. Update the configured redirect URL in the python code per local debugging and production deployment server's URL
-```python
-if os.environ.get('LOCAL_DEBUG'):
-    redirect_uri = 'http://hil.freeddns.org:5000/callback'
-else:
-    redirect_uri = 'https://googleoauth2-zro2itatnq-uc.a.run.app/callback'
-```
+in the environment variable CALLBACK_URL; add it manually to the Cloud Run service's environment variables
+ after a successful cloud build job.
+
 ## Running the tests
 0. Open the latest Chrome browser and hit http://YOUR_HOME_IP:5000/login
 0. You should be redirected to Google account sign-in page or select an existing Google account

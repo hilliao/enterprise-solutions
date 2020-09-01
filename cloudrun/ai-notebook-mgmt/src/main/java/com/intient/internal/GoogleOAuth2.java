@@ -53,11 +53,7 @@ public class GoogleOAuth2 {
     private static final JsonFactory JSON_FACTORY = JacksonFactory.getDefaultInstance();
 
     static {
-        if (System.getenv("LOCAL_DEBUG") != null) {
-            CALLBACK_URL = "http://hil.freeddns.org:8080/callback";
-        } else {
-            CALLBACK_URL = "https://ai-notebook-mgmt-zro2itatnq-uc.a.run.app/callback";
-        }
+        CALLBACK_URL = System.getenv("CALLBACK_URL");
 
         try {
             HTTP_TRANSPORT = GoogleNetHttpTransport.newTrustedTransport();

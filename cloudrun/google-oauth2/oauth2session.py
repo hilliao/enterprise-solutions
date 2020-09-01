@@ -25,11 +25,8 @@ token_url = "https://www.googleapis.com/oauth2/v4/token"
 client_id = os.environ.get('CLIENT_ID')
 
 client_secret = os.environ.get('CLIENT_SECRET')
+redirect_uri = os.environ.get('CALLBACK_URL')
 
-if os.environ.get('LOCAL_DEBUG'):
-    redirect_uri = 'http://hil.freeddns.org:5000/callback'
-else:
-    redirect_uri = 'https://googleoauth2-zro2itatnq-uc.a.run.app/callback'
 scope = ["https://www.googleapis.com/auth/userinfo.email", "https://www.googleapis.com/auth/userinfo.profile",
          "https://www.googleapis.com/auth/compute.readonly", 'https://www.googleapis.com/auth/cloud-platform']
 
@@ -37,6 +34,7 @@ app = Flask(__name__)
 
 # highly recommend changing the secret key in production
 app.secret_key = client_secret
+
 
 @app.route("/login")
 def login():

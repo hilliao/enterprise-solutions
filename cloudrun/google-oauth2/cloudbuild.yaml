@@ -25,7 +25,7 @@ steps:
     - '-c'
     - |
       gcloud run deploy googleoauth2 --image gcr.io/$PROJECT_ID/googleoauth2 --region us-central1 --platform managed \
-      --service-account gke-test@tcsplayground.iam.gserviceaccount.com --allow-unauthenticated --memory 512M \
+      --allow-unauthenticated --memory 512M \
       --update-env-vars CLIENT_SECRET=$(cat /secrets/client_secret.txt) --update-env-vars CLIENT_ID=998082892233-k2fl9kdp2vg4kf77oru10uo5vepe32ip.apps.googleusercontent.com
 images:
 - gcr.io/$PROJECT_ID/googleoauth2
