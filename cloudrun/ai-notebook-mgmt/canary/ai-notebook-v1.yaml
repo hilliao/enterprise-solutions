@@ -1,0 +1,35 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ai-notebooks-deployment-v1
+  namespace: ns1
+  labels:
+    app: ai-notebooks
+    version: v1
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ai-notebooks
+      version: v1
+  template:
+    metadata:
+      labels:
+        app: ai-notebooks
+        version: v1
+    spec:
+      containers:
+      - name: ai-notebooks-v1
+        env:
+        - name: PORT
+          value: "8080"
+        - name: CLIENT_SECRET
+          value: $REDACTED
+        - name: CLIENT_ID
+          value: 998082892233-vd45ccvtob4l7h1sn43lmrptk6crvcpd.apps.googleusercontent.com
+        image: gcr.io/prdt-nv-cordv-us-iaas-svc99/ai-notebook-mgmt
+        ports:
+        - name: http
+          containerPort: 8080
+          protocol: TCP
+
