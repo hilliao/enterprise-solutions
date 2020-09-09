@@ -80,7 +80,7 @@ def sampleentry():
                     '/tables/{}' \
         .format('bigquery-public-data', 'covid19_usafacts', 'summary')
 
-    data_catalog_entry = datacatalog.lookup_entry(linked_resource=resource_name)
+    data_catalog_entry = datacatalog.lookup_entry(request={'linked_resource': resource_name})
     return str(data_catalog_entry)
 
 
