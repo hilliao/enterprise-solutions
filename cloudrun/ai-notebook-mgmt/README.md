@@ -74,9 +74,15 @@ curl --request POST \
           	"VPCName":"Shared VPC name or default",
           	"subnetName":"subnet in the VPC such as default",
           	"region":"Google cloud region",
-          	"zone":"Google cloud zone"
+          	"zone":"Google cloud zone",
+            "serviceAccount": "Google svice account used for Notebook's compute engine instance",
+            "machineType": "e2-standard-2",
+            "framework": "TensorFlow:2.3",
+            "imageFamily": "tf2-2-3-cu110-notebooks-debian-10",
+            "publicIp": false
           }'
 ```
+where you may append -notebooks-debian-10 to a value in [imageFamily](https://cloud.google.com/ai-platform/deep-learning-vm/docs/images) to get Debian 10 image.  
 In Chrome, view [https://DEPLOYED_CLOUD_RUN_URL/login](https://ai-notebook-mgmt-zro2itatnq-uc.a.run.app/login) to test.
 
 Inspect the Cloud trace, Cloud Debugger, Cloud Logging to see invoking

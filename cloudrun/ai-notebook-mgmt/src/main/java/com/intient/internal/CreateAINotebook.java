@@ -1,5 +1,11 @@
 package com.intient.internal;
 
+import com.google.cloud.MonitoredResource;
+import com.google.cloud.logging.LogEntry;
+import com.google.cloud.logging.Logging;
+import com.google.cloud.logging.LoggingOptions;
+import com.google.cloud.logging.Payload.StringPayload;
+import com.google.cloud.logging.Severity;
 import io.opencensus.common.Scope;
 import io.opencensus.trace.Tracer;
 import io.opencensus.trace.Tracing;
@@ -10,19 +16,12 @@ import okhttp3.Request;
 import okhttp3.Response;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.*;
 
 import java.io.IOException;
-import java.util.concurrent.atomic.AtomicLong;
-
-import com.google.cloud.MonitoredResource;
-import com.google.cloud.logging.LogEntry;
-import com.google.cloud.logging.Logging;
-import com.google.cloud.logging.LoggingOptions;
-import com.google.cloud.logging.Payload.StringPayload;
-import com.google.cloud.logging.Severity;
-
 import java.util.Collections;
+import java.util.concurrent.atomic.AtomicLong;
 
 
 @RestController
@@ -76,10 +75,11 @@ public class CreateAINotebook {
         return new SleepTracked(counter.incrementAndGet(), String.format(template, sec));
     }
 
-    @PostMapping("/createAINotebook")
-    public ResponseEntity addSleep(@RequestHeader(name = "Authorization", required = true) String Bearer,
-                                   @RequestBody AINotebookReq req) throws IOException {
+    @PostMapping(path = "/createAINotebook", produces = org.springframework.http.MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity createAINotebooks(@RequestHeader(name = "Authorization", required = true) String Bearer,
+                                            @RequestBody AINotebookReq req) throws IOException {
         Response r;
+
         try (Scope ss = tracer.spanBuilder("CreateAINotebook").setSampler(Samplers.alwaysSample()).startScopedSpan()) {
             r = this.createAiNotebook(
                     Bearer,
@@ -89,8 +89,16 @@ public class CreateAINotebook {
                     req.getVPCName(),
                     req.getRegion(),
                     req.getZone(),
-                    req.getSubnetName());
+                    req.getSubnetName(),
+                    StringUtils.isEmpty(req.getServiceAccount()) ? "default" : req.getServiceAccount(),
+                    StringUtils.isEmpty(req.getMachineType()) ? "e2-standard-2" : req.getMachineType(),
+                    StringUtils.isEmpty(req.getImageFamily()) ? "tf2-2-3-cu110-notebooks-debian-10" : req.getImageFamily(), // image family name: https://cloud.google.com/ai-platform/deep-learning-vm/docs/images#images
+                    StringUtils.isEmpty(req.getFramework()) ? "TensorFlow:2.3" : req.getFramework(),
+                    req.getInstallGpuDriver() == null ? false : req.getInstallGpuDriver(),
+                    req.getPublicIp() == null ? false : req.getPublicIp()
+            );
         }
+
         return new ResponseEntity(r.body().string(), HttpStatus.valueOf(r.code()));
     }
 
@@ -102,11 +110,17 @@ public class CreateAINotebook {
             final String VPCName,
             final String region,
             final String zone,
-            final String subnetName) throws IOException {
+            final String subnetName,
+            final String serviceAccount,
+            final String machineType,
+            final String imageFamily,
+            final String framework,
+            final boolean installGpuDriver,
+            final boolean publicIp) throws IOException {
         OkHttpClient client = new OkHttpClient();
 
         MediaType mediaType = MediaType.parse("application/json");
-        String bodyJson = "{\"network\":\"projects/" + VPCProjectId + "/global/networks/" + VPCName + "\",\"subnet\":\"projects/" + VPCProjectId + "/regions/" + region + "/subnetworks/" + subnetName + "\",\"noProxyAccess\":false,\"installGpuDriver\":false,\"machineType\":\"n1-standard-1\",\"metadata\":{\"framework\":\"TensorFlow:2.2\"},\"bootDiskType\":\"DISK_TYPE_UNSPECIFIED\",\"bootDiskSizeGb\":\"100\",\"noPublicIp\":false,\"serviceAccount\":\"default\",\"vmImage\":{\"project\":\"deeplearning-platform-release\",\"imageFamily\":\"tf2-2-2-cu101-notebooks\"}}";
+        String bodyJson = "{\"network\":\"projects/" + VPCProjectId + "/global/networks/" + VPCName + "\",\"subnet\":\"projects/" + VPCProjectId + "/regions/" + region + "/subnetworks/" + subnetName + "\",\"noProxyAccess\":false,\"installGpuDriver\":" + installGpuDriver + ",\"machineType\":\"" + machineType + "\",\"metadata\":{\"framework\":\"" + framework + "\"},\"bootDiskType\":\"DISK_TYPE_UNSPECIFIED\",\"bootDiskSizeGb\":\"100\",\"noPublicIp\":" + !publicIp + ",\"serviceAccount\":\"" + serviceAccount + "\",\"vmImage\":{\"project\":\"deeplearning-platform-release\",\"imageFamily\":\"" + imageFamily + "\"}}";
         okhttp3.RequestBody body = okhttp3.RequestBody.create(bodyJson, mediaType);
         String url = "https://notebooks.googleapis.com/v1beta1/projects/" + projectId + "/locations/" + zone + "/instances?instanceId=" + instanceName;
         Request request = new Request.Builder()
