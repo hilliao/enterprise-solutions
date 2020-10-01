@@ -1,12 +1,13 @@
 # Google service account key management solution
 
-A simple microservice deployed in Google Cloud Run that manages an
-existing Google service account's keys. Initial implementation contains
-GET to list the keys, POST to craete the keys and store in secret
-manager, DELETE to remove keys but may not delete the version from
-secret manager.
+A microservice deployed in Google Cloud Run that manages an
+existing Google service account's keys. Implementation contains
+GET to list the keys, POST to create keys and store in secret
+manager, DELETE to remove keys.
 
 ## Getting Started
+
+Import ../*.postman_collection.json collection 2.1 format to test
 
 ### Set up the local development environment
 
@@ -49,56 +50,33 @@ configuration.
 Clone the code to your cloud source repository. With Cloud build trigger
 configured, pushing to the cloud source repository will trigger the
 build and deployment to Cloud Run. Verify Cloud Run is enabled in your
-project. Change the following section in cloudrun/gsakey/cloudbuild.yaml
-for Cloud run related customization.
+project. In Cloud Build's trigger, substitute variables of name starting with $`_` in
+cloudrun/gsakey/cloudbuild.yaml for Cloud run related customization.
 
 ```
-- name: 'gcr.io/cloud-builders/gcloud'
-  args: ['run', 'deploy'
+gcloud run deploy $_CLOUD_RUN_SVC_NAME --image gcr.io/$PROJECT_ID/gsakeymanager --region us-central1 \
+      --platform managed --service-account $_GCP_SA@$PROJECT_ID.iam.gserviceaccount.com --no-allow-unauthenticated \
+      --memory 512M
 ```
 
-## Running the tests
-Import CloudRunGSAKeyManager.postman_collection.json into Postman for
-easy invocation of the REST methods.
-1. set {{url}} to the cloud run url including https://
-2. set {{access_token}} to the output of gcloud auth
-   print-identity-token from the Google Account with Cloud Run invoker
-   role bound to the cloud run service.
-
-### Break down into end to end tests
+### Basic test
 
 Call the health endpoint
 use postman or
 ```
 curl --request GET 'https://gsakeymanager-uc.a.run.app/health' \
---header 'Authorization: Bearer token'
+--header 'Authorization: Bearer $TOKEN'
 ```
-call the GET endpoint with an existing Google service account in the
-project where the service account of the Cloud Run service has access to
-through Service account admin role use postman or
-```
-curl --request GET \
-'https://gsakeymanager-uc.a.run.app/gsakey/hil-test@[PROJECT_ID].gserviceaccount.com' \
- --header 'Authorization: Bearer token'
-```
-call the POST endpoint to create a service account key for the service
-account set in the request body in postman or
-```
-curl  --request \
-POST 'https://gsakeymanager-uc.a.run.app/gsakey'  --header \
-'Authorization: Bearer token' --form \
-'gsa=hil-test@[PROJECT_ID].iam.gserviceaccount.com'  --form \
-'secret_name=tmp-test-secret-0'  --form \
-'secret_manager_project_id=[SECRET_PROJECT_ID]'
-```
-call the DELETE endpoint to delete the new service account key in
-postman or
-```
-curl  --request DELETE \
-'https://gsakeymanager-uc.a.run.app/gsakey'  --header \
-'Authorization: Bearer token'  --form \
-'gsa-key-names=projects/[PROJECT_ID]/serviceAccounts/hil-test@[PROJECT_ID].iam.gserviceaccount.com/keys/1e6fd4742829594a848e3f5e1e9c82872ddd54df'
-```
+
+## Running the tests
+Import ../*.postman_collection.json into Postman for easy invocation of the REST methods.
+
+0. set {{url}} to the cloud run url including https://
+0. set {{id_token}} to the output of gcloud auth
+   print-identity-token from the Google Account with Cloud Run invoker
+   role bound to the cloud run service.
+0. set {{GSA}} to be the testing Google service account
+0. set {{keys}} to be Google service account full key names separated by `,`: projects/PROJECT_ID/serviceAccounts/GCP_SA@PROJECT_ID.iam.gserviceaccount.com/keys/key_name
 
 ## Deployment
 

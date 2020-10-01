@@ -1,4 +1,4 @@
-FROM python:3.7-slim
+FROM python:3.8
 
 # Copy local code to the container image.
 ENV APP_HOME gsakey

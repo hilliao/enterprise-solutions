@@ -15,10 +15,10 @@ def main():
 
     # Google service account to get the keys for
     GSA = os.environ['GSA']
-    url = "{url}/gsakey/{GSA}".format(url=target_audience, GSA=GSA)
+    url = "{url}/gsas/{GSA}/keys".format(url=target_audience, GSA=GSA)
 
     # local file path to the Google service account key
-    key_path = os.environ['KEY_PATH']
+    key_path = os.environ['GOOGLE_APPLICATION_CREDENTIALS']
     creds = service_account.IDTokenCredentials.from_service_account_file(key_path, target_audience=target_audience)
     authed_session = AuthorizedSession(creds)
 

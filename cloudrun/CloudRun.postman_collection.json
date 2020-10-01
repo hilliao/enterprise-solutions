@@ -1,0 +1,351 @@
+{
+	"info": {
+		"_postman_id": "d92b0c47-bc3c-480a-9572-e328ec466097",
+		"name": "Cloud Run",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"item": [
+		{
+			"name": "get GSA keys",
+			"protocolProfileBehavior": {
+				"disableBodyPruning": true
+			},
+			"request": {
+				"method": "GET",
+				"header": [
+					{
+						"key": "Authorization",
+						"value": "Bearer {{id_token}}",
+						"type": "text"
+					}
+				],
+				"body": {
+					"mode": "formdata",
+					"formdata": [],
+					"options": {
+						"formdata": {}
+					}
+				},
+				"url": {
+					"raw": "{{url}}/gsas/{{GSA}}/keys",
+					"host": [
+						"{{url}}"
+					],
+					"path": [
+						"gsas",
+						"{{GSA}}",
+						"keys"
+					]
+				},
+				"description": "List keys for the service account set in the URL\n$ gcloud auth print-identity-token"
+			},
+			"response": []
+		},
+		{
+			"name": "get GSA keys days older",
+			"protocolProfileBehavior": {
+				"disableBodyPruning": true
+			},
+			"request": {
+				"method": "GET",
+				"header": [
+					{
+						"key": "Authorization",
+						"type": "text",
+						"value": "Bearer {{id_token}}"
+					}
+				],
+				"body": {
+					"mode": "formdata",
+					"formdata": [],
+					"options": {
+						"formdata": {}
+					}
+				},
+				"url": {
+					"raw": "{{url}}/gsas/{{GSA}}/keys-days-older/0.000039",
+					"host": [
+						"{{url}}"
+					],
+					"path": [
+						"gsas",
+						"{{GSA}}",
+						"keys-days-older",
+						"0.000039"
+					]
+				},
+				"description": "List user managed keys over floating point number days old for the service account set in the URL\n$ gcloud auth print-identity-token"
+			},
+			"response": []
+		},
+		{
+			"name": "delete GSA keys days older",
+			"request": {
+				"method": "DELETE",
+				"header": [
+					{
+						"key": "Authorization",
+						"type": "text",
+						"value": "Bearer {{id_token}}"
+					}
+				],
+				"body": {
+					"mode": "formdata",
+					"formdata": [],
+					"options": {
+						"formdata": {}
+					}
+				},
+				"url": {
+					"raw": "{{url}}/gsas/{{GSA}}/keys-days-older/0.000039",
+					"host": [
+						"{{url}}"
+					],
+					"path": [
+						"gsas",
+						"{{GSA}}",
+						"keys-days-older",
+						"0.000039"
+					]
+				},
+				"description": "Delete user managed keys over floating point number days old for the service account set in the URL $ gcloud auth print-identity-token"
+			},
+			"response": []
+		},
+		{
+			"name": "create GSA key, insert to secret manager",
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Authorization",
+						"type": "text",
+						"value": "Bearer {{id_token}}"
+					}
+				],
+				"body": {
+					"mode": "formdata",
+					"formdata": [
+						{
+							"key": "gsa",
+							"value": "{{GSA}}",
+							"type": "text"
+						},
+						{
+							"key": "secret_name",
+							"value": "hil_tmp_GSA",
+							"type": "text"
+						},
+						{
+							"key": "secret_manager_project_id",
+							"value": "{{PROJECT_ID}}",
+							"type": "text"
+						}
+					],
+					"options": {
+						"formdata": {}
+					}
+				},
+				"url": {
+					"raw": "{{url}}/gsakey",
+					"host": [
+						"{{url}}"
+					],
+					"path": [
+						"gsakey"
+					]
+				},
+				"description": "Create a Google service account key from request body.form-data.gsa\nspecify secret_name and secret_manager_project_id to store the .JSON content. Secret Manager Admin role is required to create new secret name in secret_manager_project_id\n$ gcloud auth print-identity-token to get the Authorization Bearer token"
+			},
+			"response": []
+		},
+		{
+			"name": "delete GSA keys",
+			"request": {
+				"auth": {
+					"type": "bearer"
+				},
+				"method": "DELETE",
+				"header": [
+					{
+						"key": "Authorization",
+						"value": "Bearer {{id_token}}",
+						"type": "text"
+					}
+				],
+				"body": {
+					"mode": "formdata",
+					"formdata": [
+						{
+							"key": "gsa-key-names",
+							"value": "{{keys}}",
+							"type": "text"
+						}
+					],
+					"options": {
+						"formdata": {}
+					}
+				},
+				"url": {
+					"raw": "{{url}}/gsakeys",
+					"host": [
+						"{{url}}"
+					],
+					"path": [
+						"gsakeys"
+					]
+				},
+				"description": "Delete the service account key by specifying service account key names separated by , in the format of projects/PROJECT_ID/serviceAccounts/sa@PROJECT_ID.iam.gserviceaccount.com/keys/key_name\n$ gcloud auth print-identity-token"
+			},
+			"response": []
+		},
+		{
+			"name": "delete 1 GSA key",
+			"request": {
+				"auth": {
+					"type": "bearer"
+				},
+				"method": "DELETE",
+				"header": [
+					{
+						"key": "Authorization",
+						"value": "Bearer {{access_token}}",
+						"type": "text"
+					}
+				],
+				"body": {
+					"mode": "formdata",
+					"formdata": [
+						{
+							"key": "gsa-key-names",
+							"value": "projects/{{PROJECT_ID}}/serviceAccounts/{{GSA}}/keys/e982ca1bae91d7a8bd2ca047dd9646e5134fc516",
+							"type": "text"
+						}
+					],
+					"options": {
+						"formdata": {}
+					}
+				},
+				"url": {
+					"raw": "{{url}}/gsakeys",
+					"host": [
+						"{{url}}"
+					],
+					"path": [
+						"gsakeys"
+					]
+				},
+				"description": "Delete the service account key by specifying requestBody.gsa-key-names in the format of projects/PROJECT_ID/serviceAccounts/hil-test@PROJECT_ID.iam.gserviceaccount.com/keys/private_key_id\n$ gcloud auth print-identity-token"
+			},
+			"response": []
+		},
+		{
+			"name": "Health check",
+			"request": {
+				"method": "GET",
+				"header": [
+					{
+						"key": "Authorization",
+						"value": "Bearer {{id_token}}",
+						"type": "text"
+					}
+				],
+				"url": {
+					"raw": "{{url}}/health",
+					"host": [
+						"{{url}}"
+					],
+					"path": [
+						"health"
+					]
+				},
+				"description": "Health check of the app \n$ gcloud auth print-identity-token to get the Authorization Bearer token"
+			},
+			"response": []
+		},
+		{
+			"name": "Create AI platform notebooks",
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "authorization",
+						"value": "ya29.a0AfH6SMCTWX9r_5eGv3Yz3GueBisymvBUVZHnYAia7YKPyZgYuGg7NKPn9GnPmURmm9fIFwemguT-R4wRqYTUQPWOHEzI3q-y2ZsY67I_782q_Pabqpk4B0vUJUUjqR2rgLCBdLxGel5_L1Po6LIq9fBikdWkQUVcoVqmW1DxlhR4fw"
+					},
+					{
+						"key": "content-type",
+						"value": "application/json"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n\"projectId\" : \"PROJECT_ID-astd-svc99\",\n\"instanceName\":\"hil-test-6\",\n\"VPCProjectId\":\"PROJECT_ID-all-hst97\",\n\"VPCName\":\"vpc-PROJECT_ID-shared\",\n\"region\":\"us-east1\",\n\"zone\":\"us-east1-c\",\n\"subnetName\":\"sn-PROJECT_ID-astd-svc\",\n\"serviceAccount\": \"sa-notebook-default-analytics@PROJECT_ID-astd-svc99.iam.gserviceaccount.com\",\n\"machineType\": \"e2-standard-2\",\n\"framework\": \"TensorFlow:2.3\",\n\"imageFamily\": \"tf2-2-3-cu110-notebooks-debian-10\",\n\"publicIp\": false\n}",
+					"options": {
+						"raw": {}
+					}
+				},
+				"url": {
+					"raw": "http://localhost:8080/createAINotebook",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "8080",
+					"path": [
+						"createAINotebook"
+					]
+				},
+				"description": "gcloud auth print-access-token"
+			},
+			"response": []
+		},
+		{
+			"name": "create notebooks",
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Authorization",
+						"value": "Bearer ya29.a0AfH6SMCTWX9r_5eGv3Yz3GueBisymvBUVZHnYAia7YKPyZgYuGg7NKPn9GnPmURmm9fIFwemguT-R4wRqYTUQPWOHEzI3q-y2ZsY67I_782q_Pabqpk4B0vUJUUjqR2rgLCBdLxGel5_L1Po6LIq9fBikdWkQUVcoVqmW1DxlhR4fw",
+						"type": "text"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n  \"network\": \"projects/PROJECT_ID-all-hst97/global/networks/vpc-PROJECT_ID-shared\",\n  \"subnet\": \"projects/PROJECT_ID-all-hst97/regions/us-east1/subnetworks/sn-PROJECT_ID-astd-svc\",\n  \"noProxyAccess\": false,\n  \"installGpuDriver\": false,\n  \"machineType\": \"e2-standard-2\",\n  \"metadata\": {\n    \"framework\": \"TensorFlow:2.3\"\n  },\n  \"bootDiskType\": \"DISK_TYPE_UNSPECIFIED\",\n  \"bootDiskSizeGb\": \"100\",\n  \"noPublicIp\": true,\n  \"serviceAccount\": \"sa-notebook-default-analytics@PROJECT_ID-astd-svc99.iam.gserviceaccount.com\",\n  \"vmImage\": {\n    \"project\": \"deeplearning-platform-release\",\n    \"imageFamily\": \"tf2-2-3-cu110-notebooks-debian-10\"\n  }\n}\n",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "https://notebooks.googleapis.com/v1beta1/projects/PROJECT_ID-astd-svc99/locations/us-east1-b/instances?instanceId=hil-test-4",
+					"protocol": "https",
+					"host": [
+						"notebooks",
+						"googleapis",
+						"com"
+					],
+					"path": [
+						"v1beta1",
+						"projects",
+						"PROJECT_ID-astd-svc99",
+						"locations",
+						"us-east1-b",
+						"instances"
+					],
+					"query": [
+						{
+							"key": "instanceId",
+							"value": "hil-test-4"
+						}
+					]
+				},
+				"description": "Create Google cloud AI platform notebooks per https://cloud.google.com/ai-platform/notebooks/docs/reference/rest/v1beta1/projects.locations.instances/create"
+			},
+			"response": []
+		}
+	],
+	"protocolProfileBehavior": {}
+}

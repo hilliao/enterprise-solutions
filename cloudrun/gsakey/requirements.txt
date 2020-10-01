@@ -5,7 +5,7 @@ Flask
 google-cloud-logging
 grpcio
 google-python-cloud-debugger
-google-cloud-trace
+google-cloud-trace>=0.20.0,<1.0.0
 opencensus
 opencensus-ext-stackdriver
 gcloud

@@ -14,7 +14,7 @@ def get_keys(request):
 
     google_oauth_reqest = google.auth.transport.requests.Request()
     target_audience = cloud_run_url
-    url = "{url}/gsakey/{GSA}".format(url=target_audience, GSA=GSA)
+    url = "{url}/gsas/{GSA}/keys".format(url=target_audience, GSA=GSA)
     creds = compute_engine.IDTokenCredentials(google_oauth_reqest, target_audience=target_audience,
                                               service_account_email=cloud_run_invoker_GSA)
 
