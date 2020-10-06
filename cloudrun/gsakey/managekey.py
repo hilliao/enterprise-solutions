@@ -23,7 +23,9 @@ HTTP_BAD_REQUEST = 400
 HTTP_SERVER_ERROR = 500
 HTTP_NOT_FOUND = 404
 HTTP_MULTI_STATUS = 207
-
+GSA_KEY_REGEX = 'projects/([\w-]+)/serviceAccounts/([\w@-]+)\.iam\.gserviceaccount\.com/keys/(\w+)$'
+GSA_REGEX = '^([\w-]+)@([\w-]+)\.iam\.gserviceaccount\.com$'
+SECRET_REGEX = '^[\w-]+$'
 app_name = 'gsakeymanager'
 
 try:
@@ -108,9 +110,12 @@ def rotate(days):
 
     form_key_secret_prefix = 'secret_name_prefix'
     if form_key_secret_prefix not in request.form or not request.form[form_key_secret_prefix]:
-        return 'Missing form-data of key: {0} or value empty'.format(form_key_secret_prefix), HTTP_BAD_REQUEST
+        secret_name_prefix = ''
     else:
         secret_name_prefix = request.form[form_key_secret_prefix]
+        regex_search_result = re.search(SECRET_REGEX, secret_name_prefix)
+        if not regex_search_result:
+            return 'Secret names can only contain English letters (A-Z), numbers (0-9), dashes (-), and underscores (_)', HTTP_BAD_REQUEST
 
     form_key_secret_manager_project_id = 'secret_manager_project_id'
     if form_key_secret_manager_project_id not in request.form \
@@ -119,17 +124,20 @@ def rotate(days):
     else:
         secret_manager_project_id = request.form[form_key_secret_manager_project_id]
 
+    # sanity check of the Google service account format
     service_accounts = request.form[form_key_GCP_SAs].split(",")
-    if len([sa for sa in service_accounts if "@" in sa and ".iam.gserviceaccount.com" in sa]) < len(service_accounts):
-        return f"Google service accounts in form-data of key {form_key_GCP_SAs} isn't in the format" \
-               f" *@*.iam.gserviceaccount.com", HTTP_BAD_REQUEST
+    for sa in service_accounts:
+        regex_search_result = re.search(GSA_REGEX, sa)
+        if not regex_search_result or len(regex_search_result.groups()) != 2:
+            return f"At least 1 Google service account in form-data of key {form_key_GCP_SAs} fails" \
+                   f" regular expression of {GSA_REGEX}: {sa}", HTTP_BAD_REQUEST
 
     tracer = app.config['TRACER']
     with tracer.start_span(name=f"{app_name}:rotate") as span_rotate_key:
         def gen_key_put_secret(GCP_SA):
             with span_rotate_key.span(name=f"{app_name}:rotate.gen_key({GCP_SA})") as span_gen_key:
                 try:
-                    GCP_SA_PROJECT_ID_search_result = re.search('(.*)@(.*)\.iam\.gserviceaccount\.com', GCP_SA)
+                    GCP_SA_PROJECT_ID_search_result = re.search(GSA_REGEX, GCP_SA)
                     GCP_SA_Name = GCP_SA_PROJECT_ID_search_result.group(1)
                     GCP_SA_PROJECT_ID = GCP_SA_PROJECT_ID_search_result.group(2)
                     gsa_key = gen_key(GCP_SA)
@@ -188,6 +196,7 @@ def rotate(days):
             threads = [executor.submit(gen_key_put_secret, GCP_SA) for GCP_SA in service_accounts]
             futures.wait(threads, return_when=futures.ALL_COMPLETED)
 
+    # BUG: need to verify threads.result() to check if 'error' happened; if error, return 207, else 200
     if days_float > 0:
         gcp_logger.log_text(
             f"{app_name}:rotate Rotated keys of Google service accounts: {request.form[form_key_GCP_SAs]}",
@@ -343,18 +352,23 @@ def delete_gsa_keys():
         return 'Missing form-data of key: {0} or value empty'.format(form_key), 400
 
     full_sa_key_names = request.form[form_key].split(',')
-    if len([sa_key_name for sa_key_name in full_sa_key_names if "keys/" in sa_key_name])<len(full_sa_key_names):
-        return f"Google service account key in form-data of key {form_key} isn't in the format of " \
-               f"projects/PROJECT_ID/serviceAccounts/sa@PROJECT_ID.iam.gserviceaccount.com/keys/key_name"
 
-    return delete_gsa_keys_base(full_sa_key_names)
+    try:
+        return delete_gsa_keys_base(full_sa_key_names)
+    except ValueError as err:
+        return f"Google service account key in form-data of key {form_key} isn't in the format of " \
+               f"projects/PROJECT_ID/serviceAccounts/sa@PROJECT_ID.iam.gserviceaccount.com/keys/key_name: " \
+               f"{str(err)}", HTTP_BAD_REQUEST
 
 
 def delete_gsa_keys_base(full_sa_key_names):
-    search_result = re.search('keys/(.*)', full_sa_key_names[0])
-    key = search_result.group(1)
+    for full_sa_key_name in full_sa_key_names:
+        regex_search_result = re.search(GSA_KEY_REGEX, full_sa_key_name)
+        if not regex_search_result or len(regex_search_result.groups()) != 3:
+            raise ValueError(f"input parameter {full_sa_key_name} failed to match regular expression {GSA_KEY_REGEX}")
+
     tracer = app.config['TRACER']
-    with tracer.start_span(name=f"{app_name}:delete_key({key})") as span_method:
+    with tracer.start_span(name=f"{app_name}:delete_key({regex_search_result.group(2)})") as span_method:
         keys_deleted = []
 
         for full_sa_key_name in full_sa_key_names:
