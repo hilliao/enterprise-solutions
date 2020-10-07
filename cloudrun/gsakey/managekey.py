@@ -7,6 +7,7 @@ from concurrent.futures.thread import ThreadPoolExecutor
 from concurrent import futures
 from datetime import datetime
 from datetime import timedelta
+from http import HTTPStatus
 
 import google.api_core.exceptions
 import googleapiclient.discovery
@@ -19,10 +20,6 @@ from google.cloud import logging
 from google.cloud import secretmanager
 from opencensus.ext.stackdriver import trace_exporter as stackdriver_exporter
 
-HTTP_BAD_REQUEST = 400
-HTTP_SERVER_ERROR = 500
-HTTP_NOT_FOUND = 404
-HTTP_MULTI_STATUS = 207
 GSA_KEY_REGEX = 'projects/([\w-]+)/serviceAccounts/([\w@-]+)\.iam\.gserviceaccount\.com/keys/(\w+)$'
 GSA_REGEX = '^([\w-]+)@([\w-]+)\.iam\.gserviceaccount\.com$'
 SECRET_REGEX = '^[\w-]+$'
@@ -85,13 +82,18 @@ if __name__ != "__main__":
             return str(err), err.code
 
         # handling non-HTTP exceptions only
-        return str(err), HTTP_SERVER_ERROR
+        return str(err), HTTPStatus.INTERNAL_SERVER_ERROR
 
 
 @app.route('/rotate_days_old/<days>', methods=['POST'])
 def rotate(days):
     """
-    Accept a list of Google service accounts, a floating point number of days old keys to delete
+    Accept a list of Google service accounts, a floating point number of days old keys to delete.
+    Secret Manager Admin role is required to create new secret name in secret_manager_project_id
+    1. Create a Google service account keys from request body.form-data.GCP_SAs
+    2. put in secret manager as secret IDs of <secret_name_prefix><PROJECT_ID>_<SA_NAME>
+    3. Delete keys older than specified floating number of days. 0 means do not delete keys.
+
     Args:
         GCP_SAs (header form-data): Google Service Account separated by ,
         secret_name_prefix (header form-data): prefix of secret ID in secret manager
@@ -99,14 +101,14 @@ def rotate(days):
         days (path parameter): floating point number of days; 0 means don't delete keys
 
     Returns:
-        207:
-        Each thread completed; see the thread result['error'] for any error in the response JSON array
+        highest HTTP status code from thread.result()
+        Each thread completed; see the thread result['error'], result['code'] for errors in thread.result()
     """
     days_float = float(days)
     # parsing the form-data from the request header
     form_key_GCP_SAs = 'GCP_SAs'
     if form_key_GCP_SAs not in request.form or not request.form[form_key_GCP_SAs]:
-        return 'Missing form-data of key: {0} or value empty'.format(form_key_GCP_SAs), HTTP_BAD_REQUEST
+        return 'Missing form-data of key: {0} or value empty'.format(form_key_GCP_SAs), HTTPStatus.BAD_REQUEST
 
     form_key_secret_prefix = 'secret_name_prefix'
     if form_key_secret_prefix not in request.form or not request.form[form_key_secret_prefix]:
@@ -115,7 +117,8 @@ def rotate(days):
         secret_name_prefix = request.form[form_key_secret_prefix]
         regex_search_result = re.search(SECRET_REGEX, secret_name_prefix)
         if not regex_search_result:
-            return 'Secret names can only contain English letters (A-Z), numbers (0-9), dashes (-), and underscores (_)', HTTP_BAD_REQUEST
+            return 'Secret names can only contain English letters (A-Z), numbers (0-9), dashes (-), ' \
+                   'and underscores (_)', HTTPStatus.BAD_REQUEST
 
     form_key_secret_manager_project_id = 'secret_manager_project_id'
     if form_key_secret_manager_project_id not in request.form \
@@ -130,7 +133,7 @@ def rotate(days):
         regex_search_result = re.search(GSA_REGEX, sa)
         if not regex_search_result or len(regex_search_result.groups()) != 2:
             return f"At least 1 Google service account in form-data of key {form_key_GCP_SAs} fails" \
-                   f" regular expression of {GSA_REGEX}: {sa}", HTTP_BAD_REQUEST
+                   f" regular expression of {GSA_REGEX}: {sa}", HTTPStatus.BAD_REQUEST
 
     tracer = app.config['TRACER']
     with tracer.start_span(name=f"{app_name}:rotate") as span_rotate_key:
@@ -144,9 +147,13 @@ def rotate(days):
                     secret_id = secret_name_prefix + GCP_SA_PROJECT_ID + "_" + GCP_SA_Name
                 except Exception as ex:
                     error_reporting_client.report_exception()
-                    return {
-                        'error': str(ex)
-                    }
+                    result = {'error': str(ex)}
+                    if isinstance(ex, google.api_core.exceptions.GoogleAPIError):
+                        result['code'] = ex.code
+                    if isinstance(ex, googleapiclient.errors.HttpError):
+                        result['code'] = ex.resp.status
+
+                    return result
 
                 GCP_SA_dict = json.loads(gsa_key)
 
@@ -169,6 +176,11 @@ def rotate(days):
                         'handled': 'Google service account key created but could not put secret; key deleted',
                         'keys': key_op
                     }
+                    if isinstance(ex, google.api_core.exceptions.GoogleAPIError):
+                        result['code'] = ex.code
+                    if isinstance(ex, googleapiclient.errors.HttpError):
+                        result['code'] = ex.resp.status
+
                     return result
 
                 response = GCP_SA_dict
@@ -186,9 +198,13 @@ def rotate(days):
                         response.update(deletion_result)
                     except Exception as ex:
                         error_reporting_client.report_exception()
-                        return {
-                            'error': str(ex)
-                        }
+                        result = {'error': str(ex)}
+                        if isinstance(ex, google.api_core.exceptions.GoogleAPIError):
+                            result['code'] = ex.code
+                        if isinstance(ex, googleapiclient.errors.HttpError):
+                            result['code'] = ex.resp.status
+
+                        return result
 
             return response
 
@@ -196,98 +212,48 @@ def rotate(days):
             threads = [executor.submit(gen_key_put_secret, GCP_SA) for GCP_SA in service_accounts]
             futures.wait(threads, return_when=futures.ALL_COMPLETED)
 
-    # BUG: need to verify threads.result() to check if 'error' happened; if error, return 207, else 200
-    if days_float > 0:
-        gcp_logger.log_text(
-            f"{app_name}:rotate Rotated keys of Google service accounts: {request.form[form_key_GCP_SAs]}",
-            severity='INFO')
+    highest_http_code = HTTPStatus.OK
+    success_counter = 0
+    for t in threads:
+        if t.result():
+            # check if anything bad happened in thread execution
+            if 'error' in t.result():
+                if 'code' in t.result() and t.result()['code'] > highest_http_code:
+                    highest_http_code = t.result()['code']
+            else:
+                success_counter += 1
+
+    if success_counter == len(threads):
+        if days_float > 0:
+            gcp_logger.log_text(
+                f"{app_name}:rotate Rotated keys of Google service accounts: {request.form[form_key_GCP_SAs]}",
+                severity='INFO')
+        else:
+            gcp_logger.log_text(
+                f"{app_name}:rotate Put keys of generated Google service accounts as secrets: "
+                f"{request.form[form_key_GCP_SAs]}", severity='INFO')
+
+    elif 0 < success_counter < len(threads):
+        if days_float > 0:
+            gcp_logger.log_text(
+                f"{app_name}:rotate Rotated keys of Google service accounts with partial success: "
+                f"{request.form[form_key_GCP_SAs]}", severity='WARNING')
+        else:
+            gcp_logger.log_text(
+                f"{app_name}:rotate Put keys of generated Google service accounts as secrets with partial success: "
+                f"{request.form[form_key_GCP_SAs]}", severity='WARNING')
+
     else:
-        gcp_logger.log_text(
-            f"{app_name}:rotate Generated keys of Google service accounts: {request.form[form_key_GCP_SAs]}",
-            severity='INFO')
+        if days_float > 0:
+            gcp_logger.log_text(
+                f"{app_name}:rotate Failed to Rotate keys of Google service accounts: "
+                f"{request.form[form_key_GCP_SAs]}", severity='ERROR')
+        else:
+            gcp_logger.log_text(
+                f"{app_name}:rotate Failed to Put keys of generated Google service accounts as secrets: "
+                f"{request.form[form_key_GCP_SAs]}", severity='ERROR')
 
-    return jsonify([t.result() for t in threads]), HTTP_MULTI_STATUS
-
-
-@app.route('/gsakey', methods=['POST'])
-def post_gsa():
-    """Creates a key for a service account; save the key's JSON secret to secret manager
-       Args:
-            gsa (header form-data): Google Service Account.
-            secret_name (header form-data): secret ID in secret manager
-            secret_manager_project_id (header form-data): secret manager's PROJECT ID
-
-        Returns:
-            HTTP OK:
-            JSON of the following format
-            {
-                "added_secret_version": "projects/PROJECT_NUMBER/secrets/SECRET_ID/versions/VER_NUMBER",
-                "private_key": "-----BEGIN PRIVATE ",
-                "found_secret": "",
-                "created_secret": ""
-            },
-            OR ON ERROR:
-            {
-                'error': str(ex),
-                'warning': 'Action needed:',
-                'created': json.loads(gsa_key)
-            }
-    """
-    # parsing the form-data from the request header
-    form_key_gsa = 'gsa'
-    if form_key_gsa not in request.form or not request.form[form_key_gsa]:
-        return 'Missing form-data of key: {0} or value empty'.format(form_key_gsa), 400
-
-    form_key_secret = 'secret_name'
-    if form_key_secret not in request.form or not request.form[form_key_secret]:
-        return 'Missing form-data of key: {0} or value empty'.format(form_key_secret), 400
-    else:
-        secret_name = request.form[form_key_secret]
-
-    form_key_secret_manager_project_id = 'secret_manager_project_id'
-    if form_key_secret_manager_project_id not in request.form \
-            or not request.form[form_key_secret_manager_project_id]:
-        secret_manager_project_id = gcp_project_id
-    else:
-        secret_manager_project_id = request.form[form_key_secret_manager_project_id]
-
-    service_account_for_key = request.form[form_key_gsa]
-
-    tracer = app.config['TRACER']
-    with tracer.start_span(name=('%s-post' % app_name)) as span_method:
-        # generate a Google service account key
-        with span_method.span(name=('%s-post-creategsakey' % app_name)) as span_creategsakey:
-            gsa_key = gen_key(service_account_for_key)
-
-        # create a secret to store the service account key
-        with span_method.span(name=('%s-post-managesecret' % app_name)) as span_managesecret:
-            try:
-                find_secret_result, create_secret_result, add_secret_ver_result = put_secret(gsa_key,
-                                                                                             secret_manager_project_id,
-                                                                                             secret_name)
-            except Exception as ex:
-                error_reporting_client.report_exception()
-                err_resp = {
-                    'error': str(ex),
-                    'warning': 'Action needed: created Service Account key but failed to ingest secrets; ingest manually or delete the key',
-                    'created': json.loads(gsa_key)
-                }
-                if isinstance(ex, google.api_core.exceptions.GoogleAPIError):
-                    return err_resp, ex.code
-                else:
-                    return err_resp, HTTP_SERVER_ERROR
-
-            gcp_logger.log_text('POST {1}/gsakey secret {0} version added'.format(add_secret_ver_result.name, app_name))
-
-        result = json.loads(gsa_key)
-        if find_secret_result:
-            result['found_secret'] = find_secret_result.name
-        if not find_secret_result and create_secret_result:
-            result['created_secret'] = create_secret_result.name
-        if add_secret_ver_result:
-            result['added_secret_version'] = add_secret_ver_result.name
-
-    return result
+    return jsonify([t.result() for t in threads]), highest_http_code
 
 
 def gen_key(service_account_for_key):
@@ -358,7 +324,7 @@ def delete_gsa_keys():
     except ValueError as err:
         return f"Google service account key in form-data of key {form_key} isn't in the format of " \
                f"projects/PROJECT_ID/serviceAccounts/sa@PROJECT_ID.iam.gserviceaccount.com/keys/key_name: " \
-               f"{str(err)}", HTTP_BAD_REQUEST
+               f"{str(err)}", HTTPStatus.BAD_REQUEST
 
 
 def delete_gsa_keys_base(full_sa_key_names):
@@ -384,8 +350,10 @@ def delete_gsa_keys_base(full_sa_key_names):
                 }
                 if isinstance(ex, googleapiclient.errors.HttpError):
                     return err_resp, ex.resp.status
+                elif isinstance(ex, google.api_core.exceptions.GoogleAPIError):
+                    return err_resp, ex.code
                 else:
-                    return err_resp, HTTP_SERVER_ERROR
+                    return err_resp, HTTPStatus.INTERNAL_SERVER_ERROR
 
             keys_deleted.append(full_sa_key_name)
 
@@ -420,7 +388,7 @@ def get_gsa_keys_days_older(gsa, days):
         return {
                    'keys': [],
                    'names': []
-               }, HTTP_NOT_FOUND
+               }, HTTPStatus.NOT_FOUND
 
     days_older = [item for item in keys if
                   datetime.utcnow() - datetime.strptime(item['validAfterTime'], '%Y-%m-%dT%H:%M:%SZ') > timedelta(

@@ -46,7 +46,9 @@ If PORT environment variable is not set, app will run on 8080. Make sure
 the port is free to use. The main module is
 /cloudrun/gsakey/managekey.py which you should select in Pycharm's debug
 configuration.
+
 ### Installing
+
 Clone the code to your cloud source repository. With Cloud build trigger
 configured, pushing to the cloud source repository will trigger the
 build and deployment to Cloud Run. Verify Cloud Run is enabled in your
@@ -69,14 +71,17 @@ curl --request GET 'https://gsakeymanager-uc.a.run.app/health' \
 ```
 
 ## Running the tests
+
 Import ../*.postman_collection.json into Postman for easy invocation of the REST methods.
 
 0. set {{url}} to the cloud run url including https://
 0. set {{id_token}} to the output of gcloud auth
    print-identity-token from the Google Account with Cloud Run invoker
    role bound to the cloud run service.
-0. set {{GSA}} to be the testing Google service account
+0. set {{GSA}}, {{GSA1}} to be the testing Google service account
 0. set {{keys}} to be Google service account full key names separated by `,`: projects/PROJECT_ID/serviceAccounts/GCP_SA@PROJECT_ID.iam.gserviceaccount.com/keys/key_name
+0. set {{PROJECT_ID}} to be the secret manager's project ID
+0. Endpoint {{url}}/rotate_days_old/{{number_of_days}} is the primary method that rotates Google service account keys
 
 ## Deployment
 

@@ -7,6 +7,22 @@
 	"item": [
 		{
 			"name": "get GSA keys",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"id": "d49da6c6-38f8-4483-a007-96e8d0e6f26b",
+						"exec": [
+							"pm.test(\"getting keys for \"+pm.environment.get(\"GSA\"), function () {",
+							"  pm.response.to.have.status(200);",
+							"  const responseJson = pm.response.json();",
+							"  pm.expect(responseJson.keys).to.instanceOf(Array)",
+							"});"
+						],
+						"type": "text/javascript"
+					}
+				}
+			],
 			"protocolProfileBehavior": {
 				"disableBodyPruning": true
 			},
@@ -113,7 +129,7 @@
 			"response": []
 		},
 		{
-			"name": "create GSA key, insert to secret manager",
+			"name": "rotate Google service account keys",
 			"request": {
 				"method": "POST",
 				"header": [
@@ -127,13 +143,13 @@
 					"mode": "formdata",
 					"formdata": [
 						{
-							"key": "gsa",
-							"value": "{{GSA}}",
+							"key": "GCP_SAs",
+							"value": "{{GSA}},{{GSA1}}",
 							"type": "text"
 						},
 						{
-							"key": "secret_name",
-							"value": "hil_tmp_GSA",
+							"key": "secret_name_prefix",
+							"value": "hil_0_",
 							"type": "text"
 						},
 						{
@@ -147,15 +163,16 @@
 					}
 				},
 				"url": {
-					"raw": "{{url}}/gsakey",
+					"raw": "{{url}}/rotate_days_old/0.000694444",
 					"host": [
 						"{{url}}"
 					],
 					"path": [
-						"gsakey"
+						"rotate_days_old",
+						"0.000694444"
 					]
 				},
-				"description": "Create a Google service account key from request body.form-data.gsa\nspecify secret_name and secret_manager_project_id to store the .JSON content. Secret Manager Admin role is required to create new secret name in secret_manager_project_id\n$ gcloud auth print-identity-token to get the Authorization Bearer token"
+				"description": "1. Create a Google service account keys from request body.form-data.GCP_SAs\n2. put in secret manager as secret IDs of <secret_name_prefix><PROJECT_ID>_<SA_NAME>\n3. Delete keys older than specified floating number of days. 0 means do not delete keys.\nSecret Manager Admin role is required to create new secret name in secret_manager_project_id\n$ gcloud auth print-identity-token to get the Authorization Bearer token"
 			},
 			"response": []
 		},
@@ -209,7 +226,7 @@
 				"header": [
 					{
 						"key": "Authorization",
-						"value": "Bearer {{access_token}}",
+						"value": "Bearer {{id_token}}",
 						"type": "text"
 					}
 				],
