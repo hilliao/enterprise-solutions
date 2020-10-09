@@ -328,13 +328,17 @@ def delete_gsa_keys():
 
 
 def delete_gsa_keys_base(full_sa_key_names):
+    if not full_sa_key_names:
+        gcp_logger.log_text(f"{app_name}:delete_gsa_keys_base has empty key names as input", severity='WARNING')
+        return {'deleted': []}
+
     for full_sa_key_name in full_sa_key_names:
         regex_search_result = re.search(GSA_KEY_REGEX, full_sa_key_name)
         if not regex_search_result or len(regex_search_result.groups()) != 3:
             raise ValueError(f"input parameter {full_sa_key_name} failed to match regular expression {GSA_KEY_REGEX}")
 
     tracer = app.config['TRACER']
-    with tracer.start_span(name=f"{app_name}:delete_key({regex_search_result.group(2)})") as span_method:
+    with tracer.start_span(name=f"{app_name}:delete_gsa_keys_base()") as span_method:
         keys_deleted = []
 
         for full_sa_key_name in full_sa_key_names:
