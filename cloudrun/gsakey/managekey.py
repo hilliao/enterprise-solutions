@@ -20,6 +20,14 @@ from google.cloud import logging
 from google.cloud import secretmanager
 from opencensus.ext.stackdriver import trace_exporter as stackdriver_exporter
 
+RESP_KEY_DELETED = 'deleted'
+RESP_KEY_NAMES = 'names'
+RESP_KEY_KEYS = 'keys'
+LOG_SEVERITY_INFO = 'INFO'
+LOG_SEVERITY_WARNING = 'WARNING'
+LOG_SEVERITY_DEBUG = 'DEBUG'
+APP_CONFIG_TRACER = 'TRACER'
+
 GSA_KEY_REGEX = 'projects/([\w-]+)/serviceAccounts/([\w@-]+)\.iam\.gserviceaccount\.com/keys/(\w+)$'
 GSA_REGEX = '^([\w-]+)@([\w-]+)\.iam\.gserviceaccount\.com$'
 SECRET_REGEX = '^[\w-]+$'
@@ -57,7 +65,7 @@ else:
     gcp_project_id = pubsub_client.project
 
 gcp_tracer = initialize_tracer(gcp_project_id)
-app.config['TRACER'] = gcp_tracer
+app.config[APP_CONFIG_TRACER] = gcp_tracer
 gcp_logging_client = logging.Client()
 gcp_logger = gcp_logging_client.logger(app_name)
 error_reporting_client = error_reporting.Client()
@@ -104,6 +112,8 @@ def rotate(days):
         highest HTTP status code from thread.result()
         Each thread completed; see the thread result['error'], result['code'] for errors in thread.result()
     """
+    thread_result_key_code = 'code'
+
     days_float = float(days)
     # parsing the form-data from the request header
     form_key_GCP_SAs = 'GCP_SAs'
@@ -135,7 +145,7 @@ def rotate(days):
             return f"At least 1 Google service account in form-data of key {form_key_GCP_SAs} fails" \
                    f" regular expression of {GSA_REGEX}: {sa}", HTTPStatus.BAD_REQUEST
 
-    tracer = app.config['TRACER']
+    tracer = app.config[APP_CONFIG_TRACER]
     with tracer.start_span(name=f"{app_name}:rotate") as span_rotate_key:
         def gen_key_put_secret(GCP_SA):
             with span_rotate_key.span(name=f"{app_name}:rotate.gen_key({GCP_SA})") as span_gen_key:
@@ -149,9 +159,9 @@ def rotate(days):
                     error_reporting_client.report_exception()
                     result = {'error': str(ex)}
                     if isinstance(ex, google.api_core.exceptions.GoogleAPIError):
-                        result['code'] = ex.code
+                        result[thread_result_key_code] = ex.code
                     if isinstance(ex, googleapiclient.errors.HttpError):
-                        result['code'] = ex.resp.status
+                        result[thread_result_key_code] = ex.resp.status
 
                     return result
 
@@ -170,16 +180,16 @@ def rotate(days):
                     gcp_logger.log_text(
                         f"{app_name}:rotate Failed to put secret for {GCP_SA_dict['client_email']}'s"
                         f" key {GCP_SA_dict['private_key_id']}, which was created then deleted",
-                        severity='WARNING')
+                        severity=LOG_SEVERITY_WARNING)
                     result = {
                         'error': str(ex),
                         'handled': 'Google service account key created but could not put secret; key deleted',
-                        'keys': key_op
+                        RESP_KEY_KEYS: key_op
                     }
                     if isinstance(ex, google.api_core.exceptions.GoogleAPIError):
-                        result['code'] = ex.code
+                        result[thread_result_key_code] = ex.code
                     if isinstance(ex, googleapiclient.errors.HttpError):
-                        result['code'] = ex.resp.status
+                        result[thread_result_key_code] = ex.resp.status
 
                     return result
 
@@ -195,14 +205,22 @@ def rotate(days):
                 with span_rotate_key.span(name=f"{app_name}:rotate.delete_old_keys({GCP_SA})") as span_delete_old_keys:
                     try:
                         deletion_result = delete_gsa_keys_days_older(GCP_SA, days_float)
-                        response.update(deletion_result)
+                        if type(deletion_result) is tuple:
+                            if RESP_KEY_DELETED in deletion_result[0]:
+                                response[RESP_KEY_DELETED] = deletion_result[0][RESP_KEY_DELETED]
+                            else:
+                                response[RESP_KEY_DELETED] = []
+                        else:
+                            response.update(deletion_result)
+
                     except Exception as ex:
                         error_reporting_client.report_exception()
                         result = {'error': str(ex)}
+                        result.update(response)
                         if isinstance(ex, google.api_core.exceptions.GoogleAPIError):
-                            result['code'] = ex.code
+                            result[thread_result_key_code] = ex.code
                         if isinstance(ex, googleapiclient.errors.HttpError):
-                            result['code'] = ex.resp.status
+                            result[thread_result_key_code] = ex.resp.status
 
                         return result
 
@@ -218,31 +236,36 @@ def rotate(days):
         if t.result():
             # check if anything bad happened in thread execution
             if 'error' in t.result():
-                if 'code' in t.result() and t.result()['code'] > highest_http_code:
-                    highest_http_code = t.result()['code']
+                if thread_result_key_code in t.result() and t.result()[thread_result_key_code] > highest_http_code:
+                    highest_http_code = t.result()[thread_result_key_code]
+                else:
+                    highest_http_code = HTTPStatus.INTERNAL_SERVER_ERROR
             else:
                 success_counter += 1
 
+    # full success
     if success_counter == len(threads):
         if days_float > 0:
             gcp_logger.log_text(
                 f"{app_name}:rotate Rotated keys of Google service accounts: {request.form[form_key_GCP_SAs]}",
-                severity='INFO')
+                severity=LOG_SEVERITY_INFO)
         else:
             gcp_logger.log_text(
                 f"{app_name}:rotate Put keys of generated Google service accounts as secrets: "
-                f"{request.form[form_key_GCP_SAs]}", severity='INFO')
+                f"{request.form[form_key_GCP_SAs]}", severity=LOG_SEVERITY_INFO)
 
+    # partial success
     elif 0 < success_counter < len(threads):
         if days_float > 0:
             gcp_logger.log_text(
                 f"{app_name}:rotate Rotated keys of Google service accounts with partial success: "
-                f"{request.form[form_key_GCP_SAs]}", severity='WARNING')
+                f"{request.form[form_key_GCP_SAs]}", severity=LOG_SEVERITY_WARNING)
         else:
             gcp_logger.log_text(
                 f"{app_name}:rotate Put keys of generated Google service accounts as secrets with partial success: "
-                f"{request.form[form_key_GCP_SAs]}", severity='WARNING')
+                f"{request.form[form_key_GCP_SAs]}", severity=LOG_SEVERITY_WARNING)
 
+    # total failure
     else:
         if days_float > 0:
             gcp_logger.log_text(
@@ -263,7 +286,8 @@ def gen_key(service_account_for_key):
             'privateKeyType': 'TYPE_GOOGLE_CREDENTIALS_FILE'
         }).execute()
     gsa_key = base64.b64decode(key['privateKeyData'])
-    gcp_logger.log_text(f"{app_name}:gen_key created service account key succeeded: {key['name']}", severity='INFO')
+    gcp_logger.log_text(f"{app_name}:gen_key created service account key succeeded: {key['name']}",
+                        severity=LOG_SEVERITY_INFO)
     return gsa_key
 
 
@@ -276,7 +300,7 @@ def put_secret(gsa_key, secret_manager_project_id, secret_name):
         find_secret_result_local = sm_client.get_secret(request={"name": secret_full_name})
     except google.api_core.exceptions.NotFound as secret_not_found:
         find_secret_result_local = None
-        gcp_logger.log_text(f"{app_name}:put_secret secret {secret_full_name} not found", severity='DEBUG')
+        gcp_logger.log_text(f"{app_name}:put_secret secret {secret_full_name} not found", severity=LOG_SEVERITY_DEBUG)
     # if the given secret not found, create the secret
     if not find_secret_result_local:
         parent = f"projects/{secret_manager_project_id}"
@@ -286,7 +310,8 @@ def put_secret(gsa_key, secret_manager_project_id, secret_name):
             "secret": {"replication": {"automatic": {}}}
         })
 
-        gcp_logger.log_text(f"{app_name}:put_secret secret {create_secret_result_local.name} created", severity='INFO')
+        gcp_logger.log_text(f"{app_name}:put_secret secret {create_secret_result_local.name} created",
+                            severity=LOG_SEVERITY_INFO)
     else:
         create_secret_result_local = None
     # update the secret version
@@ -302,10 +327,10 @@ def put_secret(gsa_key, secret_manager_project_id, secret_name):
 def delete_gsa_keys_days_older(gsa, days):
     keys_search_result = get_gsa_keys_days_older(gsa, days)
     if type(keys_search_result) is tuple:
-        # something bad happened; the 2nd item is the HTTP status code
-        return keys_search_result
+        # something bad happened; the last item is the HTTP status code
+        return {RESP_KEY_DELETED: []}, keys_search_result[-1]
 
-    deletion_result = delete_gsa_keys_base(keys_search_result['names'])
+    deletion_result = delete_gsa_keys_base(keys_search_result[RESP_KEY_NAMES])
 
     return deletion_result
 
@@ -329,15 +354,16 @@ def delete_gsa_keys():
 
 def delete_gsa_keys_base(full_sa_key_names):
     if not full_sa_key_names:
-        gcp_logger.log_text(f"{app_name}:delete_gsa_keys_base has empty key names as input", severity='WARNING')
-        return {'deleted': []}
+        gcp_logger.log_text(f"{app_name}:delete_gsa_keys_base has empty key names as input",
+                            severity=LOG_SEVERITY_WARNING)
+        return {RESP_KEY_DELETED: []}
 
     for full_sa_key_name in full_sa_key_names:
         regex_search_result = re.search(GSA_KEY_REGEX, full_sa_key_name)
         if not regex_search_result or len(regex_search_result.groups()) != 3:
             raise ValueError(f"input parameter {full_sa_key_name} failed to match regular expression {GSA_KEY_REGEX}")
 
-    tracer = app.config['TRACER']
+    tracer = app.config[APP_CONFIG_TRACER]
     with tracer.start_span(name=f"{app_name}:delete_gsa_keys_base()") as span_method:
         keys_deleted = []
 
@@ -350,7 +376,7 @@ def delete_gsa_keys_base(full_sa_key_names):
                 error_reporting_client.report_exception()
                 err_resp = {
                     'error': str(ex),
-                    'deleted': keys_deleted
+                    RESP_KEY_DELETED: keys_deleted
                 }
                 if isinstance(ex, googleapiclient.errors.HttpError):
                     return err_resp, ex.resp.status
@@ -361,8 +387,8 @@ def delete_gsa_keys_base(full_sa_key_names):
 
             keys_deleted.append(full_sa_key_name)
 
-        gcp_logger.log_text(f"{app_name}:delete_gsa_keys_base deleted {keys_deleted}", severity='INFO')
-    return {'deleted': keys_deleted}
+        gcp_logger.log_text(f"{app_name}:delete_gsa_keys_base deleted {keys_deleted}", severity=LOG_SEVERITY_INFO)
+    return {RESP_KEY_DELETED: keys_deleted}
 
 
 @app.route('/gsas/<gsa>/keys-days-older/<days>', methods=['GET'])
@@ -378,7 +404,7 @@ def get_gsa_keys_days_older(gsa, days):
             {
                 "keyAlgorithm": "KEY_ALG_RSA_2048",
                 "keyOrigin": "GOOGLE_PROVIDED",
-                "keyType": "SYSTEM_MANAGED",
+                "keyType": "USER_MANAGED",
                 "name": "projects/[Project ID]/serviceAccounts/[name]@[Project ID].iam.gserviceaccount.com/keys/[key ID]",
                 "validAfterTime": "2020-04-12T04:44:38Z",
                 "validBeforeTime": "2020-04-29T04:44:38Z"
@@ -388,21 +414,25 @@ def get_gsa_keys_days_older(gsa, days):
     days_float = float(days)
     keys = get_gsa_keys(gsa)
     keys = [item for item in keys['keys'] if item['keyType'] == 'USER_MANAGED']
+    result_not_found = {
+                           RESP_KEY_KEYS: [],
+                           RESP_KEY_NAMES: []
+                       }, HTTPStatus.NOT_FOUND
     if not keys:
-        return {
-                   'keys': [],
-                   'names': []
-               }, HTTPStatus.NOT_FOUND
+        return result_not_found
 
     days_older = [item for item in keys if
                   datetime.utcnow() - datetime.strptime(item['validAfterTime'], '%Y-%m-%dT%H:%M:%SZ') > timedelta(
                       days=days_float)]
+    if not days_older:
+        return result_not_found
+
     days_older_key_names = [item['name'] for item in days_older]
     names = days_older_key_names
 
     return {
-        'keys': days_older,
-        'names': names
+        RESP_KEY_KEYS: days_older,
+        RESP_KEY_NAMES: names
     }
 
 
@@ -426,13 +456,13 @@ def get_gsa_keys(gsa):
 
     https://cloud.google.com/iam/docs/creating-managing-service-account-keys#iam-service-account-keys-create-python
     """
-    tracer = app.config['TRACER']
+    tracer = app.config[APP_CONFIG_TRACER]
     with tracer.start_span(name=f"{app_name}:get_key({gsa})") as span_method:
         service = googleapiclient.discovery.build('iam', 'v1')
 
         keys = service.projects().serviceAccounts().keys().list(name='projects/-/serviceAccounts/' + gsa).execute()
         names = [key['name'] for key in keys['keys']]
-        gcp_logger.log_text(f"{app_name}:get_gsa_keys {names}", severity='INFO')
+        gcp_logger.log_text(f"{app_name}:get_gsa_keys {names}", severity=LOG_SEVERITY_INFO)
 
     return keys
 
