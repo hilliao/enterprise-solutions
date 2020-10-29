@@ -4,7 +4,7 @@
  * Official Google Cloud BigQuery user authentication doc: https://cloud.google.com/bigquery/docs/authentication/end-user-installed
  */
 
-package com.intient.internal;
+package com.techsightteam;
 
 import com.google.api.client.auth.oauth2.Credential;
 import com.google.api.client.googleapis.auth.oauth2.GoogleAuthorizationCodeFlow;

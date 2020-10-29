@@ -1,4 +1,4 @@
-package com.intient.internal;
+package com.techsightteam;
 
 public class SleepTracked {
 

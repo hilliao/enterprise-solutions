@@ -1,4 +1,4 @@
-package com.intient.internal;
+package com.techsightteam;
 
 import io.opencensus.exporter.trace.stackdriver.StackdriverTraceConfiguration;
 import io.opencensus.exporter.trace.stackdriver.StackdriverTraceExporter;

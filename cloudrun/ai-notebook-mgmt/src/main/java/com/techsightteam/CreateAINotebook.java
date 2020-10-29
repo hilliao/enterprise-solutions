@@ -1,4 +1,4 @@
-package com.intient.internal;
+package com.techsightteam;
 
 import com.google.cloud.MonitoredResource;
 import com.google.cloud.logging.LogEntry;
