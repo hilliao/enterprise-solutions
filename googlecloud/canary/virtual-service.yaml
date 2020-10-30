@@ -1,0 +1,30 @@
+apiVersion: networking.istio.io/v1alpha3
+kind: VirtualService
+metadata:
+  annotations:
+  name: canary
+spec:
+  gateways:
+  - default-gw
+  hosts:
+  - '*'
+  http:
+  - match:
+    - uri:
+        prefix: /apis/default/vssubset
+    name: canary-vssubset
+    rewrite:
+      uri: /
+    route:
+    - destination:
+        host: canary-svc.default.svc.cluster.local
+        port:
+          number: 80
+        subset: v2
+      weight: 90
+    - destination:
+        host: canary-svc.default.svc.cluster.local
+        port:
+          number: 80
+        subset: v1
+      weight: 10

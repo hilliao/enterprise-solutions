@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: canary-svc
+  namespace: default
+spec:
+  selector:
+    app: canary
+  ports:
+    - port: 80
+      protocol: TCP
+      targetPort: 80
