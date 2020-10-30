@@ -8,7 +8,8 @@ Google cloud coole AI platform notebook page during manual notebook creation.
 
 ### Set up the local development environment
 
-Intellij should recognize the directory as a gradle project. Set Java version 
+Intellij should recognize the directory as a gradle project. Set Java version
+ 
 0. Settings > Build, Execution, Deployment > Build Tools > Gradle > Gradle JVM to Java 11
 0. Settings > Build, Execution, Deployment > Compiler > Java Compiler > Project bytecode version to 11
 
@@ -33,22 +34,13 @@ Click the run or debug button to start the spring boot application.
 Clone the code to your cloud source repository. With Cloud build trigger
 configured, pushing to the cloud source repository will trigger the
 build and deployment to Cloud Run. Verify Cloud Run is enabled in your
-project. Change the following section in cloudbuild.yaml
-for Cloud run related customization. substitute $_SVC_NAME with the Cloud run service name in build trigger.
+project.
+
 Add [--service-account parameter](https://cloud.google.com/sdk/gcloud/reference/run/deploy#--service-account) to 
 `gcloud run deploy` and specify a Google service account with recommended roles in cloudbuild.yaml. Otherwise,
-compute engine default service account will be used. 
-
-#### installing client secret
-0. Create a secret with specified name `oauth2_client_secret_oauth2bigquery_java` in cloudbuild.yaml to store the client secret
-0. Configure the cloud build service account to have secret accessor role
-
-#### Configure environment variables
-0. Set the redirect or callback URL per local debugging and production deployment server's URL as environment
-variable CALLBACK_URL; add it manually to the Cloud Run service's environment variables
- after a successful cloud build job.
-0. Set enronment variable CLIENT_SECRET, CLIENT_ID from https://console.cloud.google.com/apis/credentials
-
+compute engine default service account will be used.
+ For Cloud run related customization, substitute $_SVC_NAME with the Cloud run service name in build trigger.
+ 
 ## Running the basic tests
 Call the /sleep?seconds=0 endpoint to see if 200 is returned
 ```
@@ -58,7 +50,7 @@ curl https://$CLOUD_RUN_URL/sleep?seconds=0 -k
 
 ## Post Deployment Tests 
 
-Import the postman collection at a higher directory to call the REST API. The Authorization header does not have
+Import the postman collection at the upper directory to call the REST API. The Authorization header does not have
 `Bearer`
 
 To use a Debian 10 image family, append `-notebooks-debian-10` to a value in
