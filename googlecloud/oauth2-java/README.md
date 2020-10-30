@@ -46,12 +46,22 @@ compute engine default service account will be used.
 0. $_CLIENT_ID > the secret name of Google OAuth2 client ID
 0. $_CALLBACK_URL > the OAuth2 callback URL configured in [Google OAuth2 client ID, secret](https://console.cloud.google.com/apis/credentials)
 
+Bind secret accessor role to the cloud build service account. Otherwise cloud build will fail to access secrets.
+
+0. Configure [Authorized JavaScript origins](https://console.developers.google.com/apis/credentials)
+ to be https://DEPLOYED_CLOUD_RUN_URL and http://YOUR_HOME_IP:5000
+0. Configure [Authorized redirect URIs](https://console.developers.google.com/apis/credentials)
+ to be https://DEPLOYED_CLOUD_RUN_URL/callback and http://YOUR_HOME_IP:5000/callback
+
 ## Running the basic tests
-In Chrome, view http://YOUR_HOME_IP:8080/login to test locally
+0. Open the latest Chrome browser and hit http://YOUR_HOME_IP:8080/login
+0. You should be redirected to Google account sign-in page or select an existing Google account
+0. Grant the app necessary permissions
 
 ## Post Deployment Tests 
 
-Import the postman collection at the upper directory to call the REST API.  
+Refer to code `@GetMapping` to execute curl with once user is logged in.
+  
 Inspect the Cloud trace, Cloud Debugger, Cloud Logging to see invoking
 the endpoints create the trace, logs, and an active debugging
 application. the latency for the trace or logs to show is usually 2
