@@ -1,0 +1,8 @@
+mysqlclient
+google-cloud-bigquery
+google-python-cloud-debugger
+google-cloud-datastore
+grpcio
+google-cloud-error-reporting
+google-cloud-storage
+google-cloud-logging
