@@ -2,7 +2,26 @@
 
 A microservice deployed in Google Cloud Run to create Google cloud AI platform notebook instances. There was no official
 documentation on any client library to create AI platform notebooks. I discovered the Google REST API by debugging on
-Google cloud coole AI platform notebook page during manual notebook creation.
+Google cloud coole AI platform notebook page during manual notebook creation. The result is similar to creating with
+gcloud command:
+```shell script
+OWNER=your_name
+PROJECT_ID=
+INSTANCE_NAME=
+GCP_SA=
+VPC_HOST_PROJ=
+VPC_NET=
+SUBNET=
+REGION=us-east1
+ZONE=us-east1-b
+
+gcloud beta notebooks instances create $INSTANCE_NAME --location=$ZONE --vm-image-family=tf2-2-3-cu110-notebooks-debian-10 \
+--vm-image-project=deeplearning-platform-release --machine-type=e2-standard-2 --labels=owner=$OWNER \
+--metadata=framework=TensorFlow:2.3 --service-account=$GCP_SA \
+--network=projects/$VPC_HOST_PROJ/global/networks/$VPC_NET \
+--subnet=projects/$VPC_HOST_PROJ/regions/$REGION/subnetworks/$SUBNET  --no-public-ip \
+--project $PROJECT_ID
+``` 
 
 ## Getting Started
 
