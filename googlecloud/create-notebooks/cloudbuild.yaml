@@ -1,0 +1,17 @@
+steps:
+  - name: 'gcr.io/cloud-builders/docker'
+    args: [ 'build', '-t', 'gcr.io/$PROJECT_ID/$_SVC_NAME', 'googlecloud/create-notebooks' ]
+  # push the container image to Container Registry
+  - name: 'gcr.io/cloud-builders/docker'
+    args: ['push', 'gcr.io/$PROJECT_ID/$_SVC_NAME']
+  # Deploy container image to Cloud Run
+  - name: 'gcr.io/cloud-builders/gcloud'
+    entrypoint: 'bash'
+    args:
+      - '-c'
+      - |
+        gcloud run deploy $_SVC_NAME --image gcr.io/$PROJECT_ID/$_SVC_NAME --region us-central1 \
+        --platform managed --allow-unauthenticated \
+        --memory 512M
+images:
+  - 'gcr.io/$PROJECT_ID/$_SVC_NAME'

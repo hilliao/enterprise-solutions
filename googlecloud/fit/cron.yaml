@@ -1,0 +1,6 @@
+cron:
+- description: "insert Google fitness API data into Cloud BigQuery"
+  url: /v1/insert_daily_fitness
+  schedule: every day 05:00
+  timezone: America/Vancouver
+#  target: dev

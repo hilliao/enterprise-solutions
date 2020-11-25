@@ -1,0 +1,33 @@
+steps:
+  - name: 'gcr.io/cloud-builders/docker'
+    args: [ 'build', '-t', 'gcr.io/$PROJECT_ID/$_SVC_NAME', './googlecloud/oauth2-java' ]
+  # push the container image to Container Registry
+  - name: 'gcr.io/cloud-builders/docker'
+    args: ['push', 'gcr.io/$PROJECT_ID/$_SVC_NAME']
+  # read secrets from the secret manager as the cloud build service account with roles/secretmanager.secretAccessor
+  - name: 'gcr.io/cloud-builders/gcloud'
+    volumes:
+      - name: 'secrets'
+        path: '/secrets'
+    entrypoint: 'bash'
+    args:
+      - '-c'
+      - |
+        gcloud secrets versions access latest --secret=$_CLIENT_SECRET --project $_SECRET_PROJECT > /secrets/client_secret.txt && \
+        gcloud secrets versions access latest --secret=$_CLIENT_ID --project $_SECRET_PROJECT > /secrets/client_id.txt
+  # Deploy container image to Cloud Run
+  - name: 'gcr.io/cloud-builders/gcloud'
+    volumes:
+      - name: 'secrets'
+        path: '/secrets'
+    entrypoint: 'bash'
+    args:
+      - '-c'
+      - |
+        gcloud run deploy $_SVC_NAME --image gcr.io/$PROJECT_ID/$_SVC_NAME --region us-central1 \
+        --platform managed --allow-unauthenticated \
+        --memory 512M --update-env-vars CLIENT_SECRET=$(cat /secrets/client_secret.txt) \
+        --update-env-vars CLIENT_ID=$(cat /secrets/client_id.txt) \
+        --update-env-vars CALLBACK_URL=$_CALLBACK_URL
+images:
+  - 'gcr.io/$PROJECT_ID/$_SVC_NAME'
