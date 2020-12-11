@@ -1,0 +1,9 @@
+google-cloud-monitoring
+Flask
+google-cloud-resource-manager
+google-cloud-error-reporting
+google-python-cloud-debugger
+google-cloud-logging
+opencensus
+opencensus-ext-stackdriver
+gcloud

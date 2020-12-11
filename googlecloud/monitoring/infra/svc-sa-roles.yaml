@@ -1,0 +1,27 @@
+# gcloud deployment-manager deployments create sa-monitoring-viewer --config infra/svc-sa-roles.yaml --preview
+# bind project owner role to the service account deployment manager uses
+# ref: https://cloud.google.com/deployment-manager/docs/configuration/set-access-control-resources##granting_permission_to_set_iam_policies
+
+imports:
+  - path: sa-roles.py
+
+resources:
+  - name: sa-monitoring-viewer
+    type: sa-roles.py
+    properties:
+      service-account: monitoring-viewer
+      service-account-desc: "bind monitoring viewer role in the monitoring project. intended for the cloud run service. bind cloud run invoker role on service consumers"
+      roles:
+        - roles/cloudtrace.agent
+        - roles/logging.logWriter
+        - roles/errorreporting.writer
+        - roles/clouddebugger.agent
+      apis:
+        - run
+        - cloudbuild
+        - clouderrorreporting
+        - clouddebugger
+        - cloudtrace
+        - logging
+
+# TODO: Grant Project_number@cloudbuild.gserviceaccount.com Cloud Run Admin role
