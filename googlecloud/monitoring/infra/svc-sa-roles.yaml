@@ -10,13 +10,13 @@ resources:
     type: sa-roles.py
     properties:
       service-account: monitoring-viewer
-      service-account-desc: "bind monitoring viewer role in the monitoring project. intended for the cloud run service. bind cloud run invoker role on service consumers"
+      service-account-desc: "bind folder viewer role at the folder level; bind monitoring viewer role in the monitoring project; intended for the cloud run service; bind cloud run invoker role on service consumers"
       roles:
         - roles/cloudtrace.agent
         - roles/logging.logWriter
         - roles/errorreporting.writer
         - roles/clouddebugger.agent
-      apis:
+      apis: # may need to enable serviceusage API at https://console.developers.google.com/apis/api/serviceusage.googleapis.com manually first
         - run
         - cloudbuild
         - clouderrorreporting

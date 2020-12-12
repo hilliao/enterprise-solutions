@@ -4,13 +4,13 @@ import sys
 from concurrent import futures
 from concurrent.futures.thread import ThreadPoolExecutor
 
+import opencensus.trace.tracer
 from flask import Flask
-from google.cloud import monitoring_v3
-from google.cloud import resource_manager
+from gcloud import pubsub  # used to get current project ID
 from google.cloud import error_reporting
 from google.cloud import logging
-from gcloud import pubsub  # used to get current project ID
-import opencensus.trace.tracer
+from google.cloud import monitoring_v3
+from google.cloud import resource_manager
 from opencensus.ext.stackdriver import trace_exporter as stackdriver_exporter
 
 #     DEFAULT = 0
@@ -30,6 +30,14 @@ LOG_SEVERITY_NOTICE = 'NOTICE'
 MAX_WORKERS = os.getenv('MAX_THREADS', 20)
 
 app_name = 'monitoring_gke_node_cpu'
+
+try:
+    import googleclouddebugger
+
+    googleclouddebugger.enable()
+except:
+    for e in sys.exc_info():
+        print(e)
 
 
 def initialize_tracer(project_id):
@@ -92,24 +100,28 @@ def get_avg_cpu_cores(project_id, GKE_project_id, start_time, end_time, alignmen
         }
     )
 
-    results = client.list_time_series(
-        request={
-            "name": project_name,
-            "filter": 'metric.type = "kubernetes.io/node/cpu/total_cores" AND resource.type="k8s_node" AND project= ' +
-                      GKE_project_id,
-            "interval": interval,
-            "view": monitoring_v3.ListTimeSeriesRequest.TimeSeriesView.FULL,
-            "aggregation": aggregation,
-        }
-    )
+    cpu_cores = 0
+    with tracer.start_span(name=f"{app_name} get {GKE_project_id}'s metrics") as trace_span:
+        results = client.list_time_series(
+            request={
+                "name": project_name,
+                "filter": 'metric.type = "kubernetes.io/node/cpu/total_cores" AND resource.type="k8s_node" AND project= ' +
+                          GKE_project_id,
+                "interval": interval,
+                "view": monitoring_v3.ListTimeSeriesRequest.TimeSeriesView.FULL,
+                "aggregation": aggregation,
+            }
+        )
 
-    for result in results:
-        logger.log_text(f"data points collected: {len(result.points)}", severity=LOG_SEVERITY_DEBUG)
         total = 0.0
-        for point in result.points:
-            total += point.value.double_value
+        for result in results:
+            logger.log_text(f"data points collected: {len(result.points)}", severity=LOG_SEVERITY_DEBUG)
+            for point in result.points:
+                total += point.value.double_value
 
-        return total / len(result.points)
+            cpu_cores += total / len(result.points)
+
+    return cpu_cores
 
 
 @app.route('/projects/<project_id_glob>/start-datetime/<start>/end-datetime/<end>/alignment_period_seconds/<secs>',

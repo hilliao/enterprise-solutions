@@ -36,7 +36,16 @@ $ pip install -r requirements.txt
 If PORT environment variable is not set, app will run on 8080. Make sure
 the port is free to use. The main module is gke_cpu.py which you should select in Pycharm's debug configuration.
 
+### Configure CI CD pipelines with cloud build and source repository
+0. Edit environment variables and fill the mandatory fields such as PROJECT_ID in infra/build-triggers.sh
+0. Execute build-triggers.sh to create the build triggers.
+0. Examine the content in infra/svc-sa-roles.yaml and manually execute steps mentioned in comments or string quotes.
+0. Execute the deployment manager command per the comment in svc-sa-roles.yaml
+
 ### Basic testing
+replace the following URL with the cloud run URL. Change the path parameters of projects, start-datetime, end-datetime, 
+alignment_period_seconds. Add -H "Authorization: Bearer $TOKEN" for secured cloud run service where
+TOKEN=gcloud auth print-identity-token
 ```shell
 $ time curl 'http://localhost:8080/projects/some*project*glob/start-datetime/2020-10-24_00:00:00/end-datetime/2020-10-25_00:00:00/alignment_period_seconds/3600'
 ```
