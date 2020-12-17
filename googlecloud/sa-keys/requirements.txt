@@ -2,10 +2,10 @@ google-api-python-client
 google-auth
 google-auth-httplib2
 Flask
-google-cloud-logging==1.15.1
+google-cloud-logging
 grpcio
 google-python-cloud-debugger
-google-cloud-trace>=0.20.0,<1.0.0
+google-cloud-trace<1.0.0,>=0.20.0
 opencensus
 opencensus-ext-stackdriver
 gcloud

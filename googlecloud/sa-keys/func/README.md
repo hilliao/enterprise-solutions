@@ -54,8 +54,15 @@ build and deployment to Cloud Run. Verify Cloud Run is enabled in your
 project. In Cloud Build's trigger, substitute variables of name starting with $`_` in
 cloudbuild.yaml for Cloud run related customization.
 
-#### Firestore function cnofig document
-Create a collection with the name of app_name's value
+#### Firestore function config document
+Create a collection with the name of app_name's value defaulting to `sa-keys-func`. Then create a document named
+`config` containing the fields:
+* SA-regex: String # only service account matching the regular expression will be processed
+* cloud_run: String # Cloud run URL like https://sa-keys-REDACTED-uc.a.run.app
+* gen-sa-keys-add-secrets/delete-keys-days-old/0.000694444: String # subpath to the cloud_run url
+* cloud_run_verb: String # HTTP verb to invoke the cloud run url with
+* project_id_regex: String # only service account where its project ID matching the regular expression will be processed
+* secret_manager_project_id: String # form data's key to invoke cloud run service with 
 
 ### Basic testing
 

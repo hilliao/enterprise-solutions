@@ -18,7 +18,7 @@ import opencensus.trace.tracer
 from flask import jsonify
 from gcloud import pubsub  # used to get project ID
 from google.cloud import error_reporting
-from google.cloud import logging_v2
+from google.cloud import logging
 from google.cloud import secretmanager
 from opencensus.ext.stackdriver import trace_exporter as stackdriver_exporter
 
@@ -36,11 +36,12 @@ KEY_SA_KEY_DETAILS = 'keys'
 #     CRITICAL = 600
 #     ALERT = 700
 #     EMERGENCY = 800
-LOG_SEVERITY_INFO = 'INFO'
 LOG_SEVERITY_DEFAULT = 'DEFAULT'
+LOG_SEVERITY_INFO = 'INFO'
 LOG_SEVERITY_WARNING = 'WARNING'
 LOG_SEVERITY_DEBUG = 'DEBUG'
 LOG_SEVERITY_NOTICE = 'NOTICE'
+LOG_SEVERITY_ERROR = 'ERROR'
 
 SA_KEY_REGEX = 'projects/([\w-]+)/serviceAccounts/([\w@-]+)\.iam\.gserviceaccount\.com/keys/(\w+)$'
 SA_REGEX = '^([\w-]+)@([\w-]+)\.iam\.gserviceaccount\.com$'
@@ -68,19 +69,14 @@ error_reporting_client = error_reporting.Client()
 
 
 def log(text, severity=LOG_SEVERITY_DEFAULT, log_name=app_name):
-    if not severity:
-        severity = LOG_SEVERITY_INFO
+    logging_client = logging.Client()
+    logger = logging_client.logger(log_name)
 
-    gcp_logger_v2 = logging_v2.LoggingServiceV2Client()
-    gcp_logger_v2_log_entry = {'log_name': f"projects/{gcp_log_trace_project_id}/logs/{log_name}", 'resource': {
-        "type": "global",
-        "labels": {
-            "project_id": gcp_log_trace_project_id
-        }
-    }, 'text_payload': text,
-                               'severity': severity}
-
-    return gcp_logger_v2.write_log_entries([gcp_logger_v2_log_entry])
+    return logger.log_text(text, severity=severity,
+                           resource=google.cloud.logging.Resource(type="cloud_run_revision",
+                                                                  labels={
+                                                                      'configuration_name': 'flask-backend'
+                                                                  }))
 
 
 def audit_secrets_sa(secret_manager_project_id, secret_regex):
@@ -523,11 +519,11 @@ def gen_sa_keys_add_secrets_delete_old_keys(days_float, service_accounts, secret
         if days_float > 0:
             log(
                 f"{app_name}:{method_name} failed to generate keys > add them as secrets > delete old keys for Google service accounts: "
-                f"{','.join(service_accounts)}", severity='ERROR')
+                f"{','.join(service_accounts)}", severity=LOG_SEVERITY_ERROR)
         else:
             log(
                 f"{app_name}:{method_name} failed to generate keys > add them as secrets for Google service accounts: "
-                f"{','.join(service_accounts)}", severity='ERROR')
+                f"{','.join(service_accounts)}", severity=LOG_SEVERITY_ERROR)
 
     # remove service account key JSON contents to prevent being logged at the invoker
     for result in thread_results:

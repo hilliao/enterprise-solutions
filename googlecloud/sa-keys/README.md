@@ -17,7 +17,7 @@ gcloud deployment-manager deployments create DEPL_NAME --config infra/FILENAME.y
 ```
 0. Inspect [the deployment's result](https://console.cloud.google.com/dm/deployments)
 
-### Set up the local development environment
+## Set up the local development environment
 
 0. Generate a JSON key file for the service account the infra/svc*.yaml deployment created.
 0. set GOOGLE_APPLICATION_CREDENTIALS environment variable to that key file's path.
@@ -25,7 +25,7 @@ gcloud deployment-manager deployments create DEPL_NAME --config infra/FILENAME.y
 0. set PORT environment variable for the Python flask application.
 0. Examine unittests.py's first few lines to set required environment variables
 
-### Configure CI CD pipelines with cloud build and source repository
+## Configure CI CD pipelines with cloud build and source repository
 
 0. Edit cloud build trigger command at googlecloud/sa-keys/infra/build-triggers.sh
       - provide the correct substitution values for _GCP_SA; inspect the deployment results for the service account used
@@ -43,7 +43,7 @@ pip3 list output to check versions.
 docker run --rm --name tmp  -p 81:8080 -e PORT=8080 -it gcr.io/$PROJECT_ID/sa-keys  pip3 list
 ```
 
-### Prerequisites
+## Prerequisites
 
 Python 3.8 requirements.txt shows required Python modules for the app to
 run. Example python development environment creation steps:
@@ -58,7 +58,7 @@ If PORT environment variable is not set, app will run on 8080. Make sure
 the port is free to use. The main module is
 manager.py which you should select in Pycharm's debug configuration.
 
-### Installing
+## Installing
 
 Clone the code to your cloud source repository. With Cloud build trigger
 configured, pushing to the cloud source repository will trigger the
@@ -66,7 +66,19 @@ build and deployment to Cloud Run. Verify Cloud Run is enabled in your
 project. In Cloud Build's trigger, substitute variables of name starting with $`_` in
 cloudbuild.yaml for Cloud run related customization.
 
-### Basic testing
+Inspect script contents in files under the infra folder to check manual steps required before or after execution.
+For example, logs-router.sh informs manual dataset IAM role binding after execution.
+
+### scheduled-job.sh
+Create scheduled job to call Cloud Run Audit endpoint to scan secrets. Change --message-body
+to the regular expression of secrets to be audited.
+### logs-router.sh
+Create a log sink to write logs to BigQuery. Must have Logs Configuration Writer IAM role to execute.
+### scc_notifications_create.sh
+Create security command center pub/sub notifications. Follow the link in the script that
+has a series of gcloud commands to execute before running the script.
+
+## Basic testing
 
 Call the health endpoint
 use postman or
@@ -89,7 +101,7 @@ Import ../*postman_collection.json into Postman for easy invocation of the REST 
 0. set {{PROJECT_ID}} to be the secret manager's project ID
 0. Endpoint {{url}}/rotate_days_old/{{number_of_days}} is the primary method that rotates Google service account keys
 
-## Deployment
+## Instrumentation
 
 Inspect the Cloud trace, Cloud Debugger, Cloud Logging to see invoking
 the endpoints create the trace, logs, and an active debugging
