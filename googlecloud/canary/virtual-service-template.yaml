@@ -5,25 +5,26 @@ metadata:
   name: canary
 spec:
   gateways:
-  - default-gw
+  - http-gw
+  - https-gw
   hosts:
   - '*'
   http:
   - match:
     - uri:
-        prefix: /apis/default/vssubset
+        prefix: /apis/$NAMESPACE/vssubset
     name: canary-vssubset
     rewrite:
       uri: /
     route:
     - destination:
-        host: canary-svc.default.svc.cluster.local
+        host: canary-svc.$NAMESPACE.svc.cluster.local
         port:
           number: 80
         subset: v2
       weight: 90
     - destination:
-        host: canary-svc.default.svc.cluster.local
+        host: canary-svc.$NAMESPACE.svc.cluster.local
         port:
           number: 80
         subset: v1

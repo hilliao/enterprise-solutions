@@ -2,7 +2,6 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: canary-deployment-v2
-  namespace: default
   labels:
     app: canary
     version: v2
