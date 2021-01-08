@@ -1,0 +1,12 @@
+apiVersion: configsync.gke.io/v1alpha1
+kind: RepoSync
+metadata:
+  name: repo-sync
+  namespace: hil
+spec:
+  git:
+    repo: https://source.developers.google.com/p/$PROJECT_ID/r/gke-config
+    revision: HEAD
+    branch: ns-hil
+    dir: "config-management"
+    auth: gcenode

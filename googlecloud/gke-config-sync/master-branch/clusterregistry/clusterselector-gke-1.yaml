@@ -1,0 +1,9 @@
+kind: ClusterSelector
+apiVersion: configmanagement.gke.io/v1
+metadata:
+  name: $GKE_NAME-1
+spec:
+  selector:
+    matchLabels:
+      num: "1"
+      customer: hil
