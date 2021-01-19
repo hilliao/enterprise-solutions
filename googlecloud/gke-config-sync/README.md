@@ -15,7 +15,8 @@ named gke-config as an example.
 .
 └── config-management
     ├── cluster
-    │   └── role.yaml
+    │   ├── role.yaml
+    │   └── constraint-pod-res-limits.yaml
     ├── clusterregistry
     │   ├── clusterselector-gke-1.yaml
     │   ├── clusterselector-gke-2.yaml

@@ -1,0 +1,15 @@
+apiVersion: constraints.gatekeeper.sh/v1beta1
+kind: K8sContainerLimits
+metadata:
+  name: pod-resource-limits
+  annotations:
+    configmanagement.gke.io/cluster-selector: $GKE_NAME-1
+spec:
+  match:
+    kinds:
+      - apiGroups: [""]
+        kinds: ["Pod"]
+    namespaces: ["hil"]
+  parameters:
+    cpu: "1"
+    memory: "2.5Gi"
