@@ -1,0 +1,13 @@
+kind: ClusterRoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: iam-viewer
+subjects:
+  - kind: User
+    name: user2@gmail.com
+  - kind: User
+    name: user3@gmail.com
+roleRef:
+  kind: ClusterRole
+  name: view
+  apiGroup: rbac.authorization.k8s.io
