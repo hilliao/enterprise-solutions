@@ -1,6 +1,6 @@
 # GKE config sync example of Syncing from multiple repositories
 
-Sample repository code for [Guide to GKE with gke and Config sync](https://hilliao.medium.com/gke-with-istio-and-config-sync-37f0f1302d65)
+Sample repository code for [Guide to GKE with gke and Config sync](https://hilliao.medium.com/gke-with-istio-and-config-sync-37f0f1302d65)
 requires the following steps for the root repository and the namespace repository. Create a cloud source repository
 named gke-config as an example.
 
@@ -42,3 +42,11 @@ named gke-config as an example.
     └── system
         └── repo.yaml
 ```
+
+## Deployment manager scripts to create an auto mode VPC with default firewall rules.
+the deployment manager folder contains the yaml and python template for creating a project's VPC similar to the default
+VPC. The firewall rules avoids allowing all IPs where you may change to 0.0.0.0/0 to allow all IPs to SSH or RDP to
+compute sngine instances. Set values in each of the following files before execution.
+- vpc.py, vpc.yaml: deployment manager template and config file
+- *.sh: gcloud commands to create the build trigger
+- cloudbuild.yaml: cloud build config file configured in the build trigger

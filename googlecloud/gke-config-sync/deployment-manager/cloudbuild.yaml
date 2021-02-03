@@ -1,0 +1,13 @@
+# bind Deployment Manager Editor IAM role to the cloud build service account
+
+steps:
+# Deploy container image to Cloud Run
+- name: 'gcr.io/cloud-builders/gcloud'
+  entrypoint: 'bash'
+  args:
+    - '-c'
+    - |
+      (gcloud deployment-manager deployments describe $_DEPLOYMENT_NAME && gcloud deployment-manager deployments update \
+      $_DEPLOYMENT_NAME \
+      --config deployment-manager/vpc.yaml) || gcloud deployment-manager deployments create $_DEPLOYMENT_NAME --config \
+      deployment-manager/vpc.yaml

@@ -10,6 +10,8 @@ manager, DELETE to remove keys.
 0. [Bind project owner role to Google APIs service account](https://cloud.google.com/deployment-manager/docs/configuration/set-access-control-resources##granting_permission_to_set_iam_policies)
  in order to create deployments in deployment manager
 0. Bind Deployment Manager Editor role to your Google account
+0. Bind project owner IAM role to deployment manager's service account per
+   [Granting Deployment Manager permission to set IAM policies](https://cloud.google.com/deployment-manager/docs/configuration/set-access-control-resources#granting_permission_to_set_iam_policies)
 0. Replace DEPL_NAME with a deployment name, FILENAME with each *.yaml files, then execute the command 
 ```shell script
 gcloud config  set project PROJECT_ID
@@ -63,7 +65,7 @@ manager.py which you should select in Pycharm's debug configuration.
 Clone the code to your cloud source repository. With Cloud build trigger
 configured, pushing to the cloud source repository will trigger the
 build and deployment to Cloud Run. Verify Cloud Run is enabled in your
-project. In Cloud Build's trigger, substitute variables of name starting with $`_` in
+project. In Cloud Build's trigger, substitute variables of name starting with `$_` in
 cloudbuild.yaml for Cloud run related customization.
 
 Inspect script contents in files under the infra folder to check manual steps required before or after execution.

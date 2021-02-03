@@ -1,0 +1,16 @@
+# Create a auto mode VPC network with subnets in all regions, create default firewall rules
+#
+# (gcloud deployment-manager deployments describe $DEPL_NAME && gcloud deployment-manager deployments update $DEPL_NAME \
+# --config deployment-manager/vpc.yaml) || gcloud deployment-manager deployments create $DEPL_NAME --config \
+# deployment-manager/vpc.yaml
+
+
+imports:
+  - path: vpc.py
+
+resources:
+  - name: hil-network
+    type: vpc.py
+    properties:
+      vpc-desc: "Hil is testing using deployment manager to create a VPC"
+      vpc-name: "hil-vpc-0"
