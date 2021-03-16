@@ -1,0 +1,20 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: gcloud
+  labels:
+    app: gcloud-cmd
+spec:
+  #  serviceAccountName: ksa
+  containers:
+    - name: gcloud
+      image: gcr.io/google.com/cloudsdktool/cloud-sdk:latest
+      command: [ "/bin/bash", "-c", "--" ]
+      args: [ "while true; do sleep 30; done;" ]
+      resources:
+        limits:
+          cpu: "0.2"
+          memory: "250Mi"
+        requests:
+          cpu: "0.1"
+          memory: "100Mi"

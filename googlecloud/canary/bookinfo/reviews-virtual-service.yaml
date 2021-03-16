@@ -1,0 +1,22 @@
+# First, deploy the GKE parts of the resources per https://istio.io/latest/docs/examples/bookinfo/
+# kubectl apply -f samples/bookinfo/platform/kube/bookinfo.yaml
+# The virtual service splits the traffic to `curl -I http://reviews:9080/9` between the subsets
+# expect the logs in reviews deployments to have `[WARNING ] No operation matching request path "/9" is found, Relative Path: /9`
+
+apiVersion: networking.istio.io/v1alpha3
+kind: VirtualService
+metadata:
+  name: reviews
+spec:
+  hosts:
+    - reviews
+  http:
+    - route:
+        - destination:
+            host: reviews
+            subset: v1
+          weight: 80
+        - destination:
+            host: reviews
+            subset: v2
+          weight: 20
