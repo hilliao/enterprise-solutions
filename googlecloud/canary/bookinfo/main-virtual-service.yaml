@@ -1,0 +1,46 @@
+# assume the http gateway has name under `gateways:`
+# get the Istio ingress gateway IP: export INGRESS_HOST=$(kubectl -n istio-system get service istio-ingressgateway -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
+# execute `watch curl http://$INGRESS_HOST/reviews/8` to split traffic to reviews subsets
+# expect the logs in reviews deployments to have `[WARNING ] No operation matching request path "/8" is found, Relative Path: /8`
+
+apiVersion: networking.istio.io/v1alpha3
+kind: VirtualService
+metadata:
+  name: bookinfo
+spec:
+  hosts:
+    - "*"
+  gateways:
+    - http-gw
+  http:
+    - match:
+        - uri:
+            exact: /productpage
+        - uri:
+            prefix: /static
+        - uri:
+            exact: /login
+        - uri:
+            exact: /logout
+        - uri:
+            prefix: /api/v1/products
+      route:
+        - destination:
+            host: productpage
+            port:
+              number: 9080
+    - match:
+        - uri:
+            prefix: /reviews/
+      name: reviews-routes
+      rewrite:
+        uri: /
+      route:
+        - destination:
+            host: reviews.default.svc.cluster.local
+            subset: v2
+          weight: 50
+        - destination:
+            host: reviews.default.svc.cluster.local
+            subset: v3
+          weight: 50

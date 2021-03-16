@@ -3,8 +3,14 @@ set -e # exit the script when execution hits any error
 
 export NAMESPACE=dev
 
-kubectl create ns dev
-kubectl label namespace $NAMESPACE istio-injection=enabled
+kubectl create ns $NAMESPACE
+# istio < 1.7
+kubectl label namespace $NAMESPACE istio-injection=enabled || \
+# istio >= 1.9
+kubectl -n istio-system get pods -l app=istiod --show-labels | grep istio.io/rev= || \
+# copy and paste the value after = to the command below; the example value here is asm-191-1
+kubectl label namespace dev  istio-injection- istio.io/rev=asm-191-1 --overwrite
+
 kubectl apply -n $NAMESPACE -f deployment-v1.yaml
 kubectl apply -n $NAMESPACE -f deployment-v2.yaml
 envsubst < destination-rule-template.yaml > destinationrule.yaml

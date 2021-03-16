@@ -1,0 +1,18 @@
+apiVersion: networking.gke.io/v1
+kind: MultiClusterService
+metadata:
+  annotations:
+    # somehow the following annotation does not honor the health check
+    cloud.google.com/backend-config: '{"default": "health-check"}'
+  name: nginx-or-apache
+  namespace: dev
+spec:
+  template:
+    spec:
+      selector:
+        app: canary
+      ports:
+        - name: web
+          protocol: TCP
+          port: 80
+          targetPort: 80

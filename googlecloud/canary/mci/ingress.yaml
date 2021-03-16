@@ -1,0 +1,11 @@
+apiVersion: networking.gke.io/v1
+kind: MultiClusterIngress
+metadata:
+  name: nginx-or-apache
+  namespace: dev
+spec:
+  template:
+    spec:
+      backend:
+        serviceName: nginx-or-apache
+        servicePort: 80
