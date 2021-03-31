@@ -1,7 +1,7 @@
 # bind Deployment Manager Editor IAM role to the cloud build service account
 
 steps:
-# Deploy container image to Cloud Run
+# Create a VPC with deployment manager
 - name: 'gcr.io/cloud-builders/gcloud'
   entrypoint: 'bash'
   args:

@@ -1,0 +1,33 @@
+# Copyright 2021 Google Inc. All rights reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# export GKE_NAME=hil-dm-0 && export ZONE=us-west1-c && export REGION=us-west1 && export VPC=hil-vpc && export SUBNET=hil-vpc && export CLUSTER_IPV4_RANGE=10.72.0.0/14 && export SERVICES_IPV4_RANGE=10.68.16.0/20 && export MASTER_IPV4_RANGE=172.22.32.0/28
+# envsubst < "gke.yaml" > "gke-filled.yaml"
+# gcloud deployment-manager deployments create hil-gke-0 --config gke-filled.yaml
+
+imports:
+  - path: gke.py
+
+resources:
+  - name: hil-gke
+    type: gke.py
+    properties:
+      gke-name: $GKE_NAME # "hil-dm-0"
+      zone: $ZONE # "us-west1-c"
+      region: $REGION # "us-west1"
+      vpc: $VPC # "hil-vpc"
+      subnet: $SUBNET # "hil-vpc"
+      clusterIpv4CidrBlock: $CLUSTER_IPV4_RANGE # "10.72.0.0/14"
+      servicesIpv4CidrBlock: $SERVICES_IPV4_RANGE # "10.68.16.0/20"
+      masterIpv4CidrBlock: $MASTER_IPV4_RANGE # "172.22.32.0/28"

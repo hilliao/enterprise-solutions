@@ -1,0 +1,28 @@
+# bind Deployment Manager Editor IAM role to the cloud build service account
+
+steps:
+# replace environment variables with real values
+- name: 'gcr.io/cloud-builders/gcloud'
+  entrypoint: 'bash'
+  args:
+    - '-c'
+    - |
+      export GKE_NAME=$_GKE_NAME && export ZONE=$_ZONE && export REGION=$_REGION && export VPC=$_VPC && \
+      export SUBNET=$_SUBNET && \
+      export CLUSTER_IPV4_RANGE=$_CLUSTER_IPV4_RANGE && export SERVICES_IPV4_RANGE=$_SERVICES_IPV4_RANGE && \
+      export MASTER_IPV4_RANGE=$_MASTER_IPV4_RANGE && \
+      apt-get update && apt-get -y install gettext-base && \
+      envsubst < "$_DM_DIR/gke.yaml" > "/workspace/gke-filled.yaml" && cp -v $_DM_DIR/gke.py /workspace/ && \
+      echo " *** Content of deployment configuration file ===> " && cat /workspace/gke-filled.yaml && \
+      echo " " && echo " *** Content of deployment template file ===> " && cat /workspace/gke.py
+
+# Create a GKE cluster with deployment manager
+- name: 'gcr.io/cloud-builders/gcloud'
+  entrypoint: 'bash'
+  args:
+    - '-c'
+    - |
+      (gcloud deployment-manager deployments describe $_DEPLOYMENT_NAME && gcloud deployment-manager deployments update \
+      $_DEPLOYMENT_NAME \
+      --config gke-filled.yaml) || gcloud deployment-manager deployments create $_DEPLOYMENT_NAME --config \
+      gke-filled.yaml
