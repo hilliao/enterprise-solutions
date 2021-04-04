@@ -1,7 +1,8 @@
 # Data loss prevention API example
 Unit tests for [the DLP sensitive data de-identification and re-identification](https://cloud.google.com/dlp/docs/deidentify-sensitive-data#dlp_deidentify_replace-python) using Pseudonymization.
 [The video in the article](https://cloud.google.com/dlp/docs/pseudonymization) shows 3 methods
-where the 2 reversible methods are implemented here.  
+where the 2 reversible methods are implemented in this folder. I contributed to the deterministic encryption
+in [this pull request](https://github.com/googleapis/python-dlp/pull/119) from the part of the code here.
 
 0. `CryptoReplaceFfxFpeConfig` preserves the format for backward compatibility. The de-identified string has the same length.
 0. `CryptoDeterministicConfig` works best for new implementations where the de-identified string has a longer string in a different format.
@@ -14,7 +15,7 @@ where the 2 reversible methods are implemented here.
 0. Create a [Cloud KMS symmetric key](https://cloud.google.com/kms/docs/creating-keys)
 0. Bind Cloud KMS CryptoKey Encrypter/Decrypter role to the developer's Google account under the key's IAM permissions tab.
 
-### Create a wrapped key from AWS 16 bit raw key
+### Create a wrapped key from AES 16 bit raw key
 Authenticate the user to the gcloud command. Modify the environment variables per the key ring, key created. 
 ```shell
 gcloud auth application-default login
@@ -48,6 +49,6 @@ Add 2 environment variables to the configuration:
 ## Executing tests
 The unit tests output should look similar to the following:
 * de-identified PII string from DLP crypto_deterministic_config is `My SSN is SSN_TOKEN(36):AcZdGwtYBAJSjm5CS520D9qTgWD+7v/6Mpo=`
-de-identified PII string from DLP crypto_replace_ffx_fpe_config is `My SSN is SSN_TOKEN(9):7I9OBJFOZ`
+* de-identified PII string from DLP crypto_replace_ffx_fpe_config is `My SSN is SSN_TOKEN(9):7I9OBJFOZ`
 * re-identified content from DLP crypto_deterministic_config is `re-identified content is My SSN is 372819127`
 * re-identified content from DLP crypto_replace_ffx_fpe_config is `re-identified content is My SSN is 372819127`
