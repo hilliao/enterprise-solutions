@@ -135,7 +135,6 @@ def GenerateConfig(context):
                         "notificationConfig": {
                             "pubsub": {}
                         },
-                        "initialClusterVersion": "1.18.15-gke.1501",
                         "location": zone
                     }
                 }
