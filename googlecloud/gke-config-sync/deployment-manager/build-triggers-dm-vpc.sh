@@ -14,4 +14,4 @@ gcloud beta builds triggers create cloud-source-repositories \
     --build-config="$REPO_PATH/cloudbuild-dm-vpc.yaml" \
     --included-files="$REPO_PATH/**" \
     --ignored-files="**/README.md" \
-    --substitutions _DEPLOYMENT_NAME=hil-vpc
+    --substitutions _DEPLOYMENT_NAME=hil-vpc,_DM_DIR=$REPO_PATH,_VPC=hil-test

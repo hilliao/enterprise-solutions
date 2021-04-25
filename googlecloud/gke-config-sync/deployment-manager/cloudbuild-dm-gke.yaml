@@ -8,7 +8,7 @@ steps:
     - '-c'
     - |
       export GKE_NAME=$_GKE_NAME && export ZONE=$_ZONE && export REGION=$_REGION && export VPC=$_VPC && \
-      export SUBNET=$_SUBNET && \
+      export SUBNET=$_SUBNET && export MACHINE_TYPE=$_MACHINE_TYPE \
       export CLUSTER_IPV4_RANGE=$_CLUSTER_IPV4_RANGE && export SERVICES_IPV4_RANGE=$_SERVICES_IPV4_RANGE && \
       export MASTER_IPV4_RANGE=$_MASTER_IPV4_RANGE && \
       apt-get update && apt-get -y install gettext-base && \

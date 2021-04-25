@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# export GKE_NAME=hil-dm-0 && export ZONE=us-west1-c && export REGION=us-west1 && export VPC=hil-vpc && export SUBNET=hil-vpc && export CLUSTER_IPV4_RANGE=10.72.0.0/14 && export SERVICES_IPV4_RANGE=10.68.16.0/20 && export MASTER_IPV4_RANGE=172.22.32.0/28
+# export GKE_NAME=hil-dm-0 && export ZONE=us-west1-c && export REGION=us-west1 && export VPC=hil-vpc && export SUBNET=hil-vpc && export CLUSTER_IPV4_RANGE=10.72.0.0/14 && export SERVICES_IPV4_RANGE=10.68.16.0/20 && export MASTER_IPV4_RANGE=172.22.32.0/28 && export MACHINE_TYPE=e2-medium
 # envsubst < "gke.yaml" > "gke-filled.yaml"
 # gcloud deployment-manager deployments create hil-gke-0 --config gke-filled.yaml
 
@@ -31,3 +31,4 @@ resources:
       clusterIpv4CidrBlock: $CLUSTER_IPV4_RANGE # "10.72.0.0/14"
       servicesIpv4CidrBlock: $SERVICES_IPV4_RANGE # "10.68.16.0/20"
       masterIpv4CidrBlock: $MASTER_IPV4_RANGE # "172.22.32.0/28"
+      machineType: $MACHINE_TYPE # "e2-medium"

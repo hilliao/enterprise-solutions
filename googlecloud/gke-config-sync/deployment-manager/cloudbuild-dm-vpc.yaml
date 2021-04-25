@@ -1,6 +1,18 @@
 # bind Deployment Manager Editor IAM role to the cloud build service account
 
 steps:
+# replace environment variables with real values
+- name: 'gcr.io/cloud-builders/gcloud'
+  entrypoint: 'bash'
+  args:
+    - '-c'
+    - |
+      export export VPC=$_VPC && \
+      apt-get update && apt-get -y install gettext-base && \
+      envsubst < "$_DM_DIR/vpc.yaml" > "/workspace/vpc-filled.yaml" && cp -v $_DM_DIR/vpc.py /workspace/ && \
+      echo " *** Content of deployment configuration file ===> " && cat /workspace/vpc-filled.yaml && \
+      echo " " && echo " *** Content of deployment template file ===> " && cat /workspace/vpc.py
+
 # Create a VPC with deployment manager
 - name: 'gcr.io/cloud-builders/gcloud'
   entrypoint: 'bash'
@@ -9,5 +21,5 @@ steps:
     - |
       (gcloud deployment-manager deployments describe $_DEPLOYMENT_NAME && gcloud deployment-manager deployments update \
       $_DEPLOYMENT_NAME \
-      --config deployment-manager/vpc.yaml) || gcloud deployment-manager deployments create $_DEPLOYMENT_NAME --config \
-      deployment-manager/vpc.yaml
+      --config vpc-filled.yaml) || gcloud deployment-manager deployments create $_DEPLOYMENT_NAME --config \
+      vpc-filled.yaml
