@@ -12,5 +12,5 @@ resources:
   - name: hil-network
     type: vpc.py
     properties:
-      vpc-desc: "Hil is testing using deployment manager to create a VPC"
-      vpc-name: "hil-vpc-0"
+      vpc-desc: "Testing using deployment manager to create a VPC"
+      vpc-name: $VPC

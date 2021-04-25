@@ -23,10 +23,12 @@ def GenerateConfig(context):
     clusterIpv4CidrBlock = context.properties['clusterIpv4CidrBlock']
     servicesIpv4CidrBlock = context.properties['servicesIpv4CidrBlock']
     masterIpv4CidrBlock = context.properties['masterIpv4CidrBlock']
+    machineType = context.properties['machineType']
 
     resources = [
         {
             'name': gke_name,
+            # https://cloud.google.com/kubernetes-engine/docs/reference/rest/v1/projects.zones.clusters
             'type': 'container.v1.cluster',
             'properties':
                 {
@@ -54,7 +56,7 @@ def GenerateConfig(context):
                             {
                                 "name": "default-pool",
                                 "config": {
-                                    "machineType": "e2-medium",
+                                    "machineType": machineType,
                                     "diskSizeGb": 30,
                                     "oauthScopes": [
                                         "https://www.googleapis.com/auth/cloud-platform"
@@ -141,4 +143,14 @@ def GenerateConfig(context):
         }
     ]
 
-    return {'resources': resources}
+    outputs = [
+        {
+            'name': "gke-url",
+            'value': f"$(ref.{gke_name}.selfLink)"
+        },
+        {
+            'name': "master",
+            'value': f"$(ref.{gke_name}.endpoint)"
+        }]
+
+    return {'resources': resources, 'outputs': outputs}
