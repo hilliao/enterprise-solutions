@@ -1,0 +1,19 @@
+# Organization level logs router sink does not show in the console. Execute the command to list sinks:
+#     gcloud logging sinks list --organization=$ORG_ID
+# See python templates for required IAM role bindings
+# If an existing pub/sub topic is passed, bind pub/sub publisher to the service account
+# of Sink's writerIdentity in the deployment Layout's outputs[].sink-writerIdentity
+# for example, o$ORG_ID-$RANDOM@gcp-sa-logging.iam.gserviceaccount.com
+
+# gcloud deployment-manager deployments create your-org-log-sink --config org-log-export.yaml --project $PROJECT_ID
+
+imports:
+  - path: org-log-export.py
+
+resources:
+  - name: test-logs-router # used to create logs router sink, pub/sub topic, subscription
+    type: org-log-export.py
+    properties:
+      org_id: "REQUIRED integer"
+      # uncomment to use an existing topic; bind pub/sub publisher role to the logs router sink's writer service account
+      # use_existing_topic: "pubsub.googleapis.com/projects/clean-heading-288602/topics/hil-test"
