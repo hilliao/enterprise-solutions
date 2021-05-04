@@ -144,7 +144,7 @@ def audit_secret_sa(secret_manager_project_id, secret_name):
         sa = secret_json['client_email']
         private_key_id = secret_json['private_key_id']
     except Exception as ex:
-        warning = f"Failed to parse Service Account JSON key in secret payload: {ex}"
+        warning = f"In secret {secret_path_latest}, failed to parse Service Account JSON key: {ex}"
         log(warning, LOG_SEVERITY_WARNING, log_name=log_name_audit)
         return warning, LOG_SEVERITY_WARNING
 
@@ -155,6 +155,13 @@ def audit_secret_sa(secret_manager_project_id, secret_name):
     except HttpError as sa_not_found:
         # in case of SA in secret's latest version but can't be found (perhaps due to lack of access)
         warning = f"Secret {secret_path_latest} has a service account that does not exist: {sa_not_found};" \
+                  f" recommend to delete the secret"
+        log(warning, LOG_SEVERITY_WARNING, log_name=log_name_audit)
+        return warning, LOG_SEVERITY_WARNING
+
+    # service account has no keys
+    if keys == HTTPStatus.NOT_FOUND:
+        warning = f"Secret {secret_path_latest} has a service account without any keys;" \
                   f" recommend to delete the secret"
         log(warning, LOG_SEVERITY_WARNING, log_name=log_name_audit)
         return warning, LOG_SEVERITY_WARNING
@@ -307,23 +314,20 @@ def get_sa_keys_days_older(sa, days):
                 "validBeforeTime": "2020-05-29T04:44:38Z"
             }],
             "names": ["projects/[Project ID]/serviceAccounts/sa@[Project ID].iam.gserviceaccount.com/keys/fd4622af5e3e92df5633f95b7f2497a92751f004",
-             "projects/[Project ID]/serviceAccounts/sa@[Project ID].iam.gserviceaccount.com/keys/dbb5f58c8b7f849bce9c24148dcfdc3f746b9170"]
+                "projects/[Project ID]/serviceAccounts/sa@[Project ID].iam.gserviceaccount.com/keys/dbb5f58c8b7f849bce9c24148dcfdc3f746b9170"]
     """
     days_float = float(days)
     keys = get_sa_keys(sa)
     keys = [item for item in keys['keys'] if item['keyType'] == 'USER_MANAGED']
-    result_not_found = {
-                           KEY_SA_KEY_DETAILS: [],
-                           KEY_SA_KEY_NAMES: []
-                       }, HTTPStatus.NOT_FOUND
+
     if not keys:
-        return result_not_found
+        return HTTPStatus.NOT_FOUND
 
     days_older = [item for item in keys if
                   datetime.utcnow() - datetime.strptime(item['validAfterTime'], '%Y-%m-%dT%H:%M:%SZ') > timedelta(
                       days=days_float)]
     if not days_older:
-        return result_not_found
+        return HTTPStatus.NOT_FOUND
 
     days_older_key_names = [item['name'] for item in days_older]
     names = days_older_key_names
@@ -336,9 +340,9 @@ def get_sa_keys_days_older(sa, days):
 
 def delete_sa_keys_days_older(sa, days):
     keys_search_result = get_sa_keys_days_older(sa, days)
-    if type(keys_search_result) is tuple:
-        # something bad happened; the last item is the HTTP status code
-        return {KEY_DELETED_SA: []}, keys_search_result[-1]
+    if type(keys_search_result) is not dict:
+        # can't find any SA keys this many days older
+        return {KEY_DELETED_SA: []}, keys_search_result
 
     deletion_result = delete_sa_keys_base(keys_search_result[KEY_SA_KEY_NAMES])
 
