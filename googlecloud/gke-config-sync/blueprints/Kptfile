@@ -1,0 +1,87 @@
+apiVersion: kpt.dev/v1alpha1
+kind: Kptfile
+metadata:
+  name: gke
+openAPI:
+  definitions:
+    io.k8s.cli.setters.name:
+      x-k8s-cli:
+        setter:
+          name: name
+          value: $GKE_CLUSTER_NAME
+          required: true
+      description: GKE cluster name
+    io.k8s.cli.setters.network:
+      x-k8s-cli:
+        setter:
+          name: network
+          value: $VPC
+          required: true
+      description: VPC network name
+    io.k8s.cli.setters.subnetwork:
+      x-k8s-cli:
+        setter:
+          name: subnetwork
+          value: $SUBNET
+          required: true
+      description: VPC subnetwork name
+    io.k8s.cli.setters.region:
+      x-k8s-cli:
+        setter:
+          name: region
+          value: $GKE_REGION
+          required: true
+      description: VPC subnetwork region
+    io.k8s.cli.substitutions.workloadidentity:
+      x-k8s-cli:
+        substitution:
+          name: workloadidentity
+          pattern: ${PROJECT_ID}.svc.id.goog
+          values:
+          - marker: ${PROJECT_ID}
+            ref: '#/definitions/io.k8s.cli.setters.project-id'
+    io.k8s.cli.substitutions.gke-name:
+      x-k8s-cli:
+        substitution:
+          name: gke-name
+          pattern: ${NAME}
+          values:
+          - marker: ${PROJECT_ID}
+            ref: '#/definitions/io.k8s.cli.setters.project-id'
+          - marker: ${NAME}
+            ref: '#/definitions/io.k8s.cli.setters.name'
+    io.k8s.cli.substitutions.network:
+      x-k8s-cli:
+        substitution:
+          name: network
+          pattern: https://compute.googleapis.com/compute/v1/projects/${PROJECT_ID}/global/networks/${NETWORK}
+          values:
+          - marker: ${PROJECT_ID}
+            ref: '#/definitions/io.k8s.cli.setters.project-id'
+          - marker: ${NETWORK}
+            ref: '#/definitions/io.k8s.cli.setters.network'
+    io.k8s.cli.substitutions.subnetwork:
+      x-k8s-cli:
+        substitution:
+          name: subnetwork
+          pattern: https://www.googleapis.com/compute/v1/projects/${PROJECT_ID}/regions/${REGION}/subnetworks/${SUBNETWORK}
+          values:
+          - marker: ${PROJECT_ID}
+            ref: '#/definitions/io.k8s.cli.setters.project-id'
+          - marker: ${SUBNETWORK}
+            ref: '#/definitions/io.k8s.cli.setters.subnetwork'
+          - marker: ${REGION}
+            ref: '#/definitions/io.k8s.cli.setters.region'
+    io.k8s.cli.setters.project-id:
+      x-k8s-cli:
+        setter:
+          name: project-id
+          value: $DEFAULT_PROJECT
+          required: true
+      description: Project ID for GKE and other resources
+    io.k8s.cli.setters.namespace:
+      x-k8s-cli:
+        setter:
+          name: namespace
+          value: config-controller-system
+      description: Namespace name for pipeline resources

@@ -1,0 +1,34 @@
+# gcloud projects add-iam-policy-binding $PROJECT_ID --member="serviceAccount:$PROJECT_NUMBER@cloudbuild.gserviceaccount.com" --role=roles/config.admin
+# $PROJECT_ID has the blueprints GKE cluster krmapihost-blueprints-cluster
+
+steps:
+# replace environment variables with real values with cloud build substitutions
+# use $$ to avoid cloud build substitution per https://stackoverflow.com/questions/52337831/how-do-i-set-an-environment-or-substitution-variable-via-a-step-in-google-cloud
+- name: 'gcr.io/cloud-builders/gcloud'
+  entrypoint: 'bash'
+  args:
+    - '-c'
+    - |
+      export GKE_CLUSTER_NAME=$_GKE_CLUSTER_NAME
+      export GKE_REGION=$_GKE_REGION
+      export VPC=$_VPC
+      export SUBNET=$_SUBNET
+      export MACHINE_TYPE=$_MACHINE_TYPE
+      export DISK_GB=$_DISK_GB
+      export POD_IP_RANGE_NAME=$_POD_IP_RANGE_NAME
+      export SVC_IP_RANGE_NAME=$_SVC_IP_RANGE_NAME
+      export MASTER_IP_RANGE=$_MASTER_IP_RANGE
+      export IF_PREEMPTIBLE=$_IF_PREEMPTIBLE
+      apt-get update && apt-get -y install gettext-base && mkdir -p /workspace/blueprints && \
+      envsubst '$$GKE_REGION,$$MACHINE_TYPE,$$DISK_GB,$$POD_IP_RANGE_NAME,$$SVC_IP_RANGE_NAME,$$MASTER_IP_RANGE,$$IF_PREEMPTIBLE' < "$_BLUEPRINTS_DIR/gke.yaml" > "/workspace/blueprints/gke.yaml" && \
+      envsubst '$$GKE_REGION,$$GKE_CLUSTER_NAME,$$VPC,$$SUBNET' < "$_BLUEPRINTS_DIR/Kptfile" > "/workspace/blueprints/Kptfile" && \
+      echo " *** Content of deployment configuration file ===> " && cat /workspace/blueprints/gke.yaml && \
+      echo " " && echo " *** Content of Kptfile file ===> " && cat /workspace/blueprints/Kptfile
+
+# Create a GKE cluster with deployment manager
+- name: 'gcr.io/cloud-builders/gcloud'
+  entrypoint: 'bash'
+  args:
+    - '-c'
+    - |
+      gcloud alpha blueprints apply --source=/workspace/blueprints $_DEPLOYMENT_NAME
