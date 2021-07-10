@@ -1,0 +1,21 @@
+info:
+  title: run a cloud build job to execute gcloud commands
+  author: HIL
+  description: Customize the cloud build steps to execute any kind of 1 time command such as create cloud build triggers
+  version: 0.1
+
+required:
+  - PROJECT_ID
+  - REPO
+  - BUILD_TRIGGER
+
+properties:
+  PROJECT_ID:
+    type: string
+    description: Google cloud project ID
+  REPO:
+    type: string
+    description: cloud source repository name to create
+  BUILD_TRIGGER:
+    type: string
+    description: name of the build trigger to create
