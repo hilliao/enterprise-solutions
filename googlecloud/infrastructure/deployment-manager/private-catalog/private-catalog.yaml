@@ -1,14 +1,14 @@
 # Copyright 2021 GoogleCloud.fr; All rights reserved.
 #
-# Zip files containing build.* to be used with private Catalog per https://cloud.google.com/private-catalog/docs/dm-based-solution
+# Zip files to be used with private Catalog per https://cloud.google.com/private-catalog/docs/dm-based-solution
 # The solution is meant to execute gcloud commands to create a source repository and build triggers in other projects
 # for infrastructure landing zone creation
 
 imports:
-  - path: build.py
+  - path: private-catalog.py
 resources:
   - name: hil-build
-    type: build.py
+    type: private-catalog.py
     properties:
       PROJECT_ID: cloud build service account must have Source Repository Administrator IAM role
       REPO: name of the cloud source repo to create

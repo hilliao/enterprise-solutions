@@ -19,11 +19,13 @@ steps:
       export SVC_IP_RANGE_NAME=$_SVC_IP_RANGE_NAME
       export MASTER_IP_RANGE=$_MASTER_IP_RANGE
       export IF_PREEMPTIBLE=$_IF_PREEMPTIBLE
+      export DEFAULT_PROJECT=$PROJECT_ID
       apt-get update && apt-get -y install gettext-base && mkdir -p /workspace/blueprints && \
       envsubst '$$GKE_REGION,$$MACHINE_TYPE,$$DISK_GB,$$POD_IP_RANGE_NAME,$$SVC_IP_RANGE_NAME,$$MASTER_IP_RANGE,$$IF_PREEMPTIBLE' < "$_BLUEPRINTS_DIR/gke.yaml" > "/workspace/blueprints/gke.yaml" && \
-      envsubst '$$GKE_REGION,$$GKE_CLUSTER_NAME,$$VPC,$$SUBNET' < "$_BLUEPRINTS_DIR/Kptfile" > "/workspace/blueprints/Kptfile" && \
+      envsubst '$$GKE_REGION,$$GKE_CLUSTER_NAME,$$VPC,$$SUBNET,$$DEFAULT_PROJECT' < "$_BLUEPRINTS_DIR/setters.yaml" > "/workspace/blueprints/setters.yaml" && \
       echo " *** Content of deployment configuration file ===> " && cat /workspace/blueprints/gke.yaml && \
-      echo " " && echo " *** Content of Kptfile file ===> " && cat /workspace/blueprints/Kptfile
+      echo " " && echo " *** Content of setters.yaml ===> " && cat /workspace/blueprints/setters.yaml && \
+      cp -v $_BLUEPRINTS_DIR/Kptfile /workspace/blueprints
 
 # Create a GKE cluster with deployment manager
 - name: 'gcr.io/cloud-builders/gcloud'

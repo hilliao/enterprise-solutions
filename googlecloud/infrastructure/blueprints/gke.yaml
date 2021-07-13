@@ -1,0 +1,48 @@
+# https://cloud.google.com/config-connector/docs/reference/resource-docs/container/containercluster#spec
+# gcloud alpha blueprints apply --source=https://source.developers.google.com/p/$PROJECT_ID/r/blueprints-repo@master --source-git-subdir=subdirectory $DEPLOYMENT_NAME
+apiVersion: container.cnrm.cloud.google.com/v1beta1
+kind: ContainerCluster
+metadata:
+  name: blueprints-project-gke # kpt-set: ${name}
+  namespace: config-control # kpt-set: ${namespace}
+  labels:
+    availability: dev
+    target-audience: development
+  annotations:
+    cnrm.cloud.google.com/project-id: blueprints-project # kpt-set: ${project-id}
+spec:
+  addonsConfig:
+    gcePersistentDiskCsiDriverConfig:
+      enabled: false
+    horizontalPodAutoscaling:
+      disabled: false
+    httpLoadBalancing:
+      disabled: false
+  datapathProvider: "ADVANCED_DATAPATH"
+  defaultMaxPodsPerNode: 16
+  description: A GKE cluster confined to one zone configured for development.
+  initialNodeCount: 1
+  ipAllocationPolicy:
+    #    clusterIpv4CidrBlock: string
+    clusterSecondaryRangeName: $POD_IP_RANGE_NAME # string
+    #    servicesIpv4CidrBlock: string
+    servicesSecondaryRangeName: $SVC_IP_RANGE_NAME # string
+  location: $GKE_REGION # us-central1-f (region or zone)
+  networkRef:
+    external: https://compute.googleapis.com/compute/v1/projects/some-project-id/global/networks/default # kpt-set: https://compute.googleapis.com/compute/v1/projects/${project-id}/global/networks/${network}
+  nodeConfig:
+    diskSizeGb: $DISK_GB # 32 (in GB)
+    machineType: $MACHINE_TYPE # "e2-medium"
+    oauthScopes:
+      - "https://www.googleapis.com/auth/cloud-platform"
+    preemptible: $IF_PREEMPTIBLE # true
+  privateClusterConfig:
+    enablePrivateEndpoint: false
+    enablePrivateNodes: true
+    masterGlobalAccessConfig:
+      enabled: true
+    masterIpv4CidrBlock: $MASTER_IP_RANGE
+  subnetworkRef:
+    external: https://www.googleapis.com/compute/v1/projects/some-project-id/regions/us-west1/subnetworks/default # kpt-set: https://www.googleapis.com/compute/v1/projects/${project-id}/regions/${region}/subnetworks/${subnetwork}
+  workloadIdentityConfig:
+    identityNamespace: "$PROJECT_ID.svc.id.goog" # kpt-set: ${project-id}.svc.id.goog
