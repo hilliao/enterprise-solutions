@@ -1,0 +1,4 @@
+Flask
+flask-cors
+google-cloud-firestore
+google-cloud-logging
