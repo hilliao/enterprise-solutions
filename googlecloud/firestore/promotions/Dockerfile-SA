@@ -1,7 +1,7 @@
 # Use the official Python image at https://hub.docker.com/_/python
 FROM python:3.9
 # IMAGE=us-central1-docker.pkg.dev/$PROJECT_ID/helloworld-docker-repo/hil-promo-dev:0.1 && \
-# docker build . -t $IMAGE && \
+# docker build -f Dockerfile-SA . -t $IMAGE && \
 # docker push $IMAGE && \
 # gcloud run deploy hil-promo --image $IMAGE --region us-central1 --platform managed \
 #      --no-allow-unauthenticated --memory 512M --project $PROJECT_ID \
@@ -12,6 +12,9 @@ FROM python:3.9
 ENV APP_HOME /app
 WORKDIR $APP_HOME
 COPY . .
+RUN mkdir -p /secrets
+COPY hil-firestore-rw.json /secrets/
+ENV GOOGLE_APPLICATION_CREDENTIALS=/secrets/hil-firestore-rw.json
 
 # Install cloud run production dependencies.
 RUN pip install gunicorn

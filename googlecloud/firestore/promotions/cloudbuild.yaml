@@ -1,0 +1,14 @@
+steps:
+  - name: 'gcr.io/cloud-builders/gcloud'
+    entrypoint: 'bash'
+    args:
+      - '-c'
+      - |
+        git clone https://github.com/hilliao/enterprise-solutions.git && \
+        mv -v enterprise-solutions/googlecloud/firestore/promotions /workspace && \
+        gcloud secrets versions access latest --secret="hil_acn-anthos-poc_hil-firestore-rw" --project $PROJECT_ID > \
+        /workspace/promotions/hil-firestore-rw.json
+  - name: 'gcr.io/cloud-builders/docker'
+    args: [ 'build', '-t', '${_LOCATION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/${_IMAGE}','-f','/workspace/promotions/Dockerfile-SA', '/workspace/promotions' ]
+images:
+  - '${_LOCATION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/${_IMAGE}'
