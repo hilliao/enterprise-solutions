@@ -2,13 +2,21 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>test jQuery</title>
+    <title>Redemption test</title>
     <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
     <script src="promo.js"></script>
 </head>
 <body>
 <div>
     <p class="response">Promotions: </p>
+    <p class="put_response">Redeem result: </p>
 </div>
+<form>
+    PUT request body:<br>
+    Promo code: <input id="promo" type="text" name="promo code" value="Firestore doc id"><br>
+    your email: <input id="email" type="text" name="email" value="put@example.com"><br>
+    Your name: <input id="name" type="text" name="name" value="html js"><br>
+    <input id="submit" type="button" value="curl -X PUT">
+</form>
 </body>
 </html>

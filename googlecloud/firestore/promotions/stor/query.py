@@ -48,9 +48,9 @@ def log(text, severity=LOG_SEVERITY_DEFAULT, log_name=app_name):
 def get_all_promos():
     db = firestore.Client(project=os.environ['FIRESTORE_PROJECT_ID'])
     docs = db.collection('hil-test').document(PROMO_DOC).collection('2021').stream()
-    response = []
+    response = {}
     for doc in docs:
-        response.append(doc.to_dict())
+        response[doc.id] = doc.to_dict()
         log(f'getting content of doc ID {doc.id}', LOG_SEVERITY_DEBUG)
 
     return jsonify(response)
@@ -73,9 +73,9 @@ def get_unused_promo():
     db = firestore.Client(project=os.environ['FIRESTORE_PROJECT_ID'])
     promo_ref = db.collection('hil-test').document(PROMO_DOC).collection('2021')
     docs = promo_ref.where(u'redemption', u'==', None).stream()
-    response = []
+    response = {}
     for doc in docs:
-        response.append(doc.to_dict())
+        response[doc.id] = doc.to_dict()
         log(f'getting content of doc ID {doc.id}', LOG_SEVERITY_DEBUG)
 
     return jsonify(response)
