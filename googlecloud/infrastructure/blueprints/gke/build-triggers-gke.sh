@@ -5,7 +5,7 @@ set -x # print the executing lines
 #TRIGGER_NAME="${PWD##*/}-gke"
 REPO_NAME=$CSR_REPO
 BRANCH=master
-REPO_PATH=$CSR_REPO_PATH # "googlecloud/infrastructure/blueprints"
+REPO_PATH=$CSR_REPO_PATH # "googlecloud/infrastructure/blueprints/gke"
 
 gcloud beta builds triggers create cloud-source-repositories \
     --repo=$REPO_NAME --name=$TRIGGER_NAME \

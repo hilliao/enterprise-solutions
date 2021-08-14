@@ -1,0 +1,13 @@
+apiVersion: resourcemanager.cnrm.cloud.google.com/v1beta1
+kind: Project
+metadata:
+  name: project-id-in-folder # kpt-set: ${project-id-in-folder}-${random}
+  namespace: config-controller-system # kpt-set: ${namespace}
+  labels:
+    availability: "test"
+  annotations:
+    cnrm.cloud.google.com/auto-create-network: "true"
+spec:
+  name: project-id-in-folder # kpt-set: blueprint-${project-id-in-folder}
+  folderRef:
+    name: "folder-name" # kpt-set: blueprints-${name}

@@ -1,0 +1,10 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: setters
+data:
+  name: hil-kptv1
+  namespace: config-controller-system
+  parent-folder-id: "ID MUST HAVE QUOTES"
+  project-id-in-folder: prj-hil-kptv1
+  random: abc

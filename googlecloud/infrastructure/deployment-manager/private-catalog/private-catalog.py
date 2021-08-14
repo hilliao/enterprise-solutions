@@ -41,7 +41,7 @@ def GenerateConfig(context):
                     ],
                     'env': [
                         'PRODUCTION=false',
-                        'REPO_PATH=googlecloud/infrastructure/blueprints'
+                        'REPO_PATH=googlecloud/infrastructure/blueprints/gke'
                     ]
                 }
             ],
