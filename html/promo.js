@@ -1,15 +1,13 @@
 $(document).ready(function () {
-    $.ajax({
-        url: "http://services.googlecloud.fr:5001/promotions",
-        type: 'GET'
-    }).then(function (data) {
-        $('.response').append(JSON.stringify(data));
-    });
+    const urlParams = new URLSearchParams(window.location.search);
+    const queryParam = urlParams.get('promo-code');
+
+    $('#promo').val(queryParam);
 });
 
 $(document).ready(function () {
     $('#submit').click(function () {
-        console.log("click");
+        console.log("clicked redeem");
         var promo = $('#promo').val();
         var email = $('#email').val();
         var name = $('#name').val();
@@ -23,9 +21,14 @@ $(document).ready(function () {
             data: JSON.stringify({
                 email: email,
                 name: name,
-            })
+            }),
+            error: function (jqXHR, exception) {
+                $('.put_response').append(JSON.stringify(jqXHR));
+                $('.put_response').css("color", "red");
+            }
         }).then(function (put_res) {
             $('.put_response').append(JSON.stringify(put_res));
+            $('.put_response').css("color", "green");
         });
         ;
 

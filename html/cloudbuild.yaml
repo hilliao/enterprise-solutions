@@ -1,18 +1,18 @@
+# https://cloud.google.com/build/docs/building/build-containers#use-dockerfile
+# https://cloud.google.com/artifact-registry/docs/configure-cloud-build#docker
+
 steps:
-# # Build the container image
-# - name: 'gcr.io/cloud-builders/docker'
-#   args: ['build', '-t', 'gcr.io/$PROJECT_ID/$_IMAGE', 'html']
-# # Push the container image to Container Registry
-# - name: 'gcr.io/cloud-builders/docker'
-#   args: ['push', 'gcr.io/$PROJECT_ID/$_IMAGE']
-# Deploy container image to Cloud Run
+- name: 'gcr.io/cloud-builders/docker'
+  args: [ 'build', '-t', '${_LOCATION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/${_IMAGE}', 'html' ]
+- name: 'gcr.io/cloud-builders/docker'
+  args: ['push', '${_LOCATION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/${_IMAGE}']
 - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk:latest'
   entrypoint: 'bash'
   args:
     - '-c'
     - |
       cd ~/ && mkdir .ssh && \
-      gsutil cp gs://firestore-confidential-data_cloudbuild/oracle0.techsightteam.com_id_rsa ~/.ssh/id_rsa && \
+      gsutil cp gs://firestore-confidential-data_cloudbuild/googlecloud.fr-id_rsa ~/.ssh/id_rsa && \
       chmod 400 ~/.ssh/id_rsa && echo "Testing ssh login at remote: $_SSH_WEB_SERVER ..." && \
       ls -Alh ~/.ssh/id_rsa && ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no $_SSH_WEB_SERVER free -m && \
       echo "executing docker ps at remote ..." && ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no $_SSH_WEB_SERVER docker ps && \
@@ -20,7 +20,8 @@ steps:
       ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no $_SSH_WEB_SERVER docker ps --filter expose=80 --format "{{.Names}}" | \
       xargs -r ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no $_SSH_WEB_SERVER docker stop && \
       echo "running docker image $_IMAGE at remote ..." && \
-      ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no $_SSH_WEB_SERVER docker run --restart unless-stopped -d -p 80:80 $_IMAGE
+      ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no $_SSH_WEB_SERVER docker run --restart unless-stopped -d -p 80:80 \
+      ${_LOCATION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/${_IMAGE}
 
-# images:
-# - gcr.io/$PROJECT_ID/$_IMAGE
+images:
+- '${_LOCATION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/${_IMAGE}'
