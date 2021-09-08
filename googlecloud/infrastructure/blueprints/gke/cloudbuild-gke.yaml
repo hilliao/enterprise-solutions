@@ -12,6 +12,7 @@ steps:
       export GKE_CLUSTER_NAME=$_GKE_CLUSTER_NAME
       export GKE_REGION=$_GKE_REGION
       export VPC=$_VPC
+      export NETWORK_PROJECT=$_NETWORK_PROJECT
       export SUBNET=$_SUBNET
       export MACHINE_TYPE=$_MACHINE_TYPE
       export DISK_GB=$_DISK_GB
@@ -22,7 +23,7 @@ steps:
       export DEFAULT_PROJECT=$PROJECT_ID
       apt-get update && apt-get -y install gettext-base && mkdir -p /workspace/blueprints && \
       envsubst '$$GKE_REGION,$$MACHINE_TYPE,$$DISK_GB,$$POD_IP_RANGE_NAME,$$SVC_IP_RANGE_NAME,$$MASTER_IP_RANGE,$$IF_PREEMPTIBLE' < "$_BLUEPRINTS_DIR/gke.yaml" > "/workspace/blueprints/gke.yaml" && \
-      envsubst '$$GKE_REGION,$$GKE_CLUSTER_NAME,$$VPC,$$SUBNET,$$DEFAULT_PROJECT' < "$_BLUEPRINTS_DIR/setters.yaml" > "/workspace/blueprints/setters.yaml" && \
+      envsubst '$$GKE_REGION,$$GKE_CLUSTER_NAME,$$VPC,$$SUBNET,$$DEFAULT_PROJECT,$$NETWORK_PROJECT' < "$_BLUEPRINTS_DIR/setters.yaml" > "/workspace/blueprints/setters.yaml" && \
       echo " *** Content of deployment configuration file ===> " && cat /workspace/blueprints/gke.yaml && \
       echo " " && echo " *** Content of setters.yaml ===> " && cat /workspace/blueprints/setters.yaml && \
       cp -v $_BLUEPRINTS_DIR/Kptfile /workspace/blueprints

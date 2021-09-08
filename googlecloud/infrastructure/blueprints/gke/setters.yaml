@@ -6,6 +6,7 @@ data:
   name: $GKE_CLUSTER_NAME
   namespace: config-control
   network: $VPC
+  network-project-id: $NETWORK_PROJECT
   project-id: $DEFAULT_PROJECT
   region: $GKE_REGION
   subnetwork: $SUBNET

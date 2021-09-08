@@ -2,7 +2,10 @@
 set -e # exit the script when execution hits any error
 set -x # print the executing lines
 
+# The following variables are passed from https://github.com/hilliao/enterprise-solutions/blob/master/googlecloud/infrastructure/deployment-manager/private-catalog/private-catalog.py
 #TRIGGER_NAME="${PWD##*/}-gke"
+#BUILD_PROJECT_ID=
+
 REPO_NAME=$CSR_REPO
 BRANCH=master
 REPO_PATH=$CSR_REPO_PATH # "googlecloud/infrastructure/blueprints/gke"
@@ -13,5 +16,5 @@ gcloud beta builds triggers create cloud-source-repositories \
     --build-config="$REPO_PATH/cloudbuild-gke.yaml" \
     --included-files="$REPO_PATH/**" \
     --ignored-files="**/README.md" \
-    --substitutions _GKE_CLUSTER_NAME=hil-blueprints-test,_DEPLOYMENT_NAME=hil-blueprints-test,_GKE_REGION=us-west1,_VPC=default,_SUBNET=default,_POD_IP_RANGE_NAME=gke-hil-pods,_SVC_IP_RANGE_NAME=gke-hil-services,_MASTER_IP_RANGE=172.22.32.0/28,_BLUEPRINTS_DIR=$REPO_PATH,_MACHINE_TYPE=e2-medium,_IF_PREEMPTIBLE=true,_DISK_GB=55 \
+    --substitutions _GKE_CLUSTER_NAME=hil-blueprints-test,_DEPLOYMENT_NAME=hil-blueprints-test,_GKE_REGION=us-west1,_VPC=default,_SUBNET=default,_POD_IP_RANGE_NAME=gke-hil-pods,_SVC_IP_RANGE_NAME=gke-hil-services,_MASTER_IP_RANGE=172.22.32.0/28,_BLUEPRINTS_DIR=$REPO_PATH,_MACHINE_TYPE=e2-medium,_IF_PREEMPTIBLE=true,_DISK_GB=55,_NETWORK_PROJECT=$BUILD_PROJECT_ID \
     --project $BUILD_PROJECT_ID

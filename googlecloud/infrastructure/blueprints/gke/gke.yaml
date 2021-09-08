@@ -29,7 +29,7 @@ spec:
     servicesSecondaryRangeName: $SVC_IP_RANGE_NAME # string
   location: $GKE_REGION # us-central1-f (region or zone)
   networkRef:
-    external: https://compute.googleapis.com/compute/v1/projects/some-project-id/global/networks/default # kpt-set: https://compute.googleapis.com/compute/v1/projects/${project-id}/global/networks/${network}
+    external: https://compute.googleapis.com/compute/v1/projects/some-project-id/global/networks/default # kpt-set: https://compute.googleapis.com/compute/v1/projects/${network-project-id}/global/networks/${network}
   nodeConfig:
     diskSizeGb: $DISK_GB # 32 (in GB)
     machineType: $MACHINE_TYPE # "e2-medium"
@@ -37,12 +37,20 @@ spec:
       - "https://www.googleapis.com/auth/cloud-platform"
     preemptible: $IF_PREEMPTIBLE # true
   privateClusterConfig:
-    enablePrivateEndpoint: false
+    enablePrivateEndpoint: true
     enablePrivateNodes: true
     masterGlobalAccessConfig:
       enabled: true
     masterIpv4CidrBlock: $MASTER_IP_RANGE
+  masterAuthorizedNetworksConfig:
+    cidrBlocks:
+      - cidrBlock: 10.0.0.0/8
+        displayName: allow-10
+      - cidrBlock: 172.16.0.0/12
+        displayName: allow-172-16
+      - cidrBlock: 192.168.0.0/16
+        displayName: allow-192-168
   subnetworkRef:
-    external: https://www.googleapis.com/compute/v1/projects/some-project-id/regions/us-west1/subnetworks/default # kpt-set: https://www.googleapis.com/compute/v1/projects/${project-id}/regions/${region}/subnetworks/${subnetwork}
+    external: https://www.googleapis.com/compute/v1/projects/some-project-id/regions/us-west1/subnetworks/default # kpt-set: https://www.googleapis.com/compute/v1/projects/${network-project-id}/regions/${region}/subnetworks/${subnetwork}
   workloadIdentityConfig:
     identityNamespace: "$PROJECT_ID.svc.id.goog" # kpt-set: ${project-id}.svc.id.goog
