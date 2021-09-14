@@ -7,6 +7,7 @@
 #
 # Example crontab
 # 0 3 * * * $_HOME/bin/autodelete.py > $_HOME/bin/autodelete.txt 2>&1 && echo "Finding and deleting empty directories..." >> $_HOME/bin/autodelete.txt && find $WORKING_DIR -type d -empty -delete -print >> $_HOME/bin/autodelete.txt 2>&1
+# (date && df -h && tail $_HOME/bin/autodelete.txt $_HOME/bin/autodelete.log) | txt2html > /var/www/html/autodelete.html # make the html writeable for the current user and txt2html is installed
 import time, glob, os, logging
 
 # fresh start of log file
