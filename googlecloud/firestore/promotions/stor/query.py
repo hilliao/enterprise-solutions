@@ -119,16 +119,22 @@ def create_promo():
     request_body = request.get_json()
     req_key_exp = 'expiry'
     req_key_svc = 'service-category'
-    req_key_value = 'value'
+    req_key_charge = 'charge'
+    req_key_form = 'form-url'
 
-    if not request_body or req_key_exp not in request_body or req_key_svc not in request_body or req_key_value not in request_body:
-        return f"Missing request body of JSON: {{'{req_key_exp}': '2025-12-31 23:59:59', '{req_key_svc}': 'Google cloud migration', '{req_key_value}': dollar amount }}", HTTPStatus.BAD_REQUEST
+    if not request_body or req_key_exp not in request_body or req_key_svc not in request_body\
+            or req_key_charge not in request_body or req_key_form not in request_body:
+        return f'Missing some items in request JSON body: {{"{req_key_exp}": "2025-12-31 23:59:59",' \
+               f' "{req_key_svc}": "Google cloud migration", "{req_key_charge}": dollar amount,' \
+               f' "{req_key_form}": "Google form url" }}',\
+               HTTPStatus.BAD_REQUEST
 
     exp_datetime = datetime.strptime(request_body[req_key_exp], '%Y-%m-%d %H:%M:%S')
     promo_doc = {
         req_key_svc: request_body[req_key_svc],
         req_key_exp: exp_datetime,
-        req_key_value: request_body[req_key_value],
+        req_key_charge: request_body[req_key_charge],
+        req_key_form: request_body[req_key_form],
         doc_field_redemption: None
     }
     db = firestore.Client(project=os.environ['FIRESTORE_PROJECT_ID'])

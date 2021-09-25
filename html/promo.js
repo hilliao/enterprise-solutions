@@ -28,9 +28,8 @@ $(document).ready(function () {
             }
         }).then(function (put_res) {
             $('.put_response').append(JSON.stringify(put_res));
+            $('.put_response').append("Please proceed to submit <a href=" + put_res['form-url'] + ">the Google form</a> to complete the process");
             $('.put_response').css("color", "green");
         });
-        ;
-
     });
 });
