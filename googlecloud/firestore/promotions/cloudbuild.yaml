@@ -6,9 +6,29 @@ steps:
       - |
         git clone https://github.com/hilliao/enterprise-solutions.git && \
         mv -v enterprise-solutions/googlecloud/firestore/promotions /workspace && \
-        gcloud secrets versions access latest --secret="hil_acn-anthos-poc_hil-firestore-rw" --project $PROJECT_ID > \
+        gcloud secrets versions access latest --secret="hil-anthos-poc_hil-firestore-rw" --project $PROJECT_ID > \
         /workspace/promotions/hil-firestore-rw.json
   - name: 'gcr.io/cloud-builders/docker'
     args: [ 'build', '-t', '${_LOCATION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/${_IMAGE}','-f','/workspace/promotions/Dockerfile-SA', '/workspace/promotions' ]
+  - name: 'gcr.io/cloud-builders/docker'
+    args: ['push', '${_LOCATION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/${_IMAGE}']
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk:latest'
+    env:
+      - 'CONTAINER=promo'
+    entrypoint: 'bash'
+    args:
+      - '-c'
+      - |
+        cd ~/ && mkdir .ssh && \
+        gsutil cp gs://firestore-confidential-data_cloudbuild/googlecloud.fr-id_rsa ~/.ssh/id_rsa && \
+        chmod 400 ~/.ssh/id_rsa && echo "Testing ssh login at remote: $_SSH_SERVER ..." && \
+        ls -Alh ~/.ssh/id_rsa && ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no $_SSH_SERVER free -m && \
+        echo "executing docker ps at remote ..." && ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no $_SSH_SERVER docker ps && \
+        echo "killing docker container at remote ..." && \
+        ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no $_SSH_SERVER docker rm -f $$CONTAINER && \
+        echo "running docker image $_IMAGE at remote ..." && \
+        ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no $_SSH_SERVER docker run --name $$CONTAINER --restart unless-stopped \
+        -d -p 5001:5000 -e PORT=5000 -e BASIC_AUTH="$_BASIC_AUTH" -e PROJECT_ID=$PROJECT_ID -e FIRESTORE_PROJECT_ID=$PROJECT_ID \
+        ${_LOCATION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/${_IMAGE}
 images:
   - '${_LOCATION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/${_IMAGE}'

@@ -7,6 +7,8 @@ steps:
 - name: 'gcr.io/cloud-builders/docker'
   args: ['push', '${_LOCATION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/${_IMAGE}']
 - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk:latest'
+  env:
+    - 'CONTAINER=html'
   entrypoint: 'bash'
   args:
     - '-c'
@@ -16,11 +18,12 @@ steps:
       chmod 400 ~/.ssh/id_rsa && echo "Testing ssh login at remote: $_SSH_WEB_SERVER ..." && \
       ls -Alh ~/.ssh/id_rsa && ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no $_SSH_WEB_SERVER free -m && \
       echo "executing docker ps at remote ..." && ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no $_SSH_WEB_SERVER docker ps && \
-      echo "stopping docker container at remote ..." && \
+      echo "killing docker container at remote ..." && \
       ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no $_SSH_WEB_SERVER docker ps --filter expose=80 --format "{{.Names}}" | \
       xargs -r ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no $_SSH_WEB_SERVER docker stop && \
+      ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no $_SSH_WEB_SERVER docker rm -f $$CONTAINER && \
       echo "running docker image $_IMAGE at remote ..." && \
-      ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no $_SSH_WEB_SERVER docker run --restart unless-stopped -d -p 80:80 \
+      ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no $_SSH_WEB_SERVER docker run --name $$CONTAINER --restart unless-stopped -d -p 80:80 \
       ${_LOCATION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/${_IMAGE}
 
 images:

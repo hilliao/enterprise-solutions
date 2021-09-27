@@ -32,6 +32,8 @@ LOG_SEVERITY_ERROR = 'ERROR'
 
 query_api = Blueprint('query_api', __name__)
 PROMO_DOC = 'promotions'
+PROMO_YEAR = '2021'
+PROMO_COLL = 'hil-test'
 app_name = PROMO_DOC
 doc_field_redemption = 'redemption'
 
@@ -64,7 +66,7 @@ def get_all_promos():
         return auth_msg, auth_res
 
     db = firestore.Client(project=os.environ['FIRESTORE_PROJECT_ID'])
-    docs = db.collection('hil-test').document(PROMO_DOC).collection('2021').stream()
+    docs = db.collection(PROMO_COLL).document(PROMO_DOC).collection(PROMO_YEAR).stream()
     response = {}
     for doc in docs:
         response[doc.id] = doc.to_dict()
@@ -76,7 +78,7 @@ def get_all_promos():
 @query_api.route('/{}/<promo>'.format(PROMO_DOC), methods=['GET'])
 def get_promo(promo):
     db = firestore.Client(project=os.environ['FIRESTORE_PROJECT_ID'])
-    promo_ref = db.collection('hil-test').document(PROMO_DOC).collection('2021').document(promo)
+    promo_ref = db.collection(PROMO_COLL).document(PROMO_DOC).collection(PROMO_YEAR).document(promo)
     if not promo_ref.get().exists:
         return "Firestore document requested does not exist", HTTPStatus.NOT_FOUND
 
@@ -92,7 +94,7 @@ def get_unused_promo():
         return auth_msg, auth_res
 
     db = firestore.Client(project=os.environ['FIRESTORE_PROJECT_ID'])
-    promo_ref = db.collection('hil-test').document(PROMO_DOC).collection('2021')
+    promo_ref = db.collection(PROMO_COLL).document(PROMO_DOC).collection(PROMO_YEAR)
     docs = promo_ref.where(doc_field_redemption, u'==', None).stream()
     response = {}
     for doc in docs:
@@ -104,7 +106,7 @@ def get_unused_promo():
 
 def is_email_valid(email):
     regex = r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b'
-    if (re.fullmatch(regex, email)):
+    if re.fullmatch(regex, email):
         return True
     else:
         return False
@@ -138,7 +140,7 @@ def create_promo():
         doc_field_redemption: None
     }
     db = firestore.Client(project=os.environ['FIRESTORE_PROJECT_ID'])
-    doc = db.collection('hil-test').document(PROMO_DOC).collection('2021').add(promo_doc)
+    doc = db.collection(PROMO_COLL).document(PROMO_DOC).collection(PROMO_YEAR).add(promo_doc)
     doc_id = doc[1].id
 
     return jsonify({
@@ -160,13 +162,13 @@ def redeem_promo(promo):
         return f"email in request body is invalid: {email}", HTTPStatus.BAD_REQUEST
 
     db = firestore.Client(project=os.environ['FIRESTORE_PROJECT_ID'])
-    promo_ref = db.collection('hil-test').document(PROMO_DOC).collection('2021').document(promo)
+    promo_ref = db.collection(PROMO_COLL).document(PROMO_DOC).collection(PROMO_YEAR).document(promo)
     if not promo_ref.get().exists:
         return "Firestore document requested does not exist; make sure you entered the right promo code", HTTPStatus.NOT_FOUND
     else:
         redeeming = promo_ref.get().to_dict()
         if redeeming['redemption']:
-            return "Firestore document has been redeemed; you can't redeemed an used promotion!", HTTPStatus.BAD_REQUEST
+            return "Firestore document has been redeemed; you can't redeemed a used promotion!", HTTPStatus.BAD_REQUEST
         redeeming['redeemed-by'] = f"{email}:{request_body[req_key_name]}"
         redeeming['redemption'] = datetime.utcnow()
         promo_ref.set(redeeming)
