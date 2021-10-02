@@ -1,13 +1,12 @@
 steps:
   - name: 'gcr.io/cloud-builders/gcloud'
     entrypoint: 'bash'
+    secretEnv: ['SA_KEY']
     args:
       - '-c'
       - |
-        git clone https://github.com/hilliao/enterprise-solutions.git && \
-        mv -v enterprise-solutions/googlecloud/firestore/promotions /workspace && \
-        gcloud secrets versions access latest --secret="sa-key-firestore-rw" --project $PROJECT_ID > \
-        /workspace/promotions/hil-firestore-rw.json
+        mv -v googlecloud/firestore/promotions /workspace && \
+        echo $$SA_KEY > /workspace/promotions/firestore-rw.json
   - name: 'gcr.io/cloud-builders/docker'
     args: [ 'build', '-t', '${_LOCATION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/${_IMAGE}','-f','/workspace/promotions/Dockerfile-SA', '/workspace/promotions' ]
   - name: 'gcr.io/cloud-builders/docker'
@@ -31,5 +30,9 @@ steps:
         ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no $_SSH_SERVER docker run --name $$CONTAINER --restart unless-stopped \
         -d -p 5001:5000 -e PORT=5000 -e BASIC_AUTH="$_BASIC_AUTH" -e PROJECT_ID=$PROJECT_ID -e FIRESTORE_PROJECT_ID=$PROJECT_ID \
         -e FIRESTORE_PATH="$$FIRESTORE_PATH" ${_LOCATION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/${_IMAGE}
+availableSecrets:
+   secretManager:
+   - versionName: projects/$PROJECT_ID/secrets/sa-key-firestore-rw/versions/latest
+     env: 'SA_KEY'
 images:
   - '${_LOCATION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/${_IMAGE}'
