@@ -6,7 +6,7 @@ steps:
       - |
         git clone https://github.com/hilliao/enterprise-solutions.git && \
         mv -v enterprise-solutions/googlecloud/firestore/promotions /workspace && \
-        gcloud secrets versions access latest --secret="hil-anthos-poc_hil-firestore-rw" --project $PROJECT_ID > \
+        gcloud secrets versions access latest --secret="sa-key-firestore-rw" --project $PROJECT_ID > \
         /workspace/promotions/hil-firestore-rw.json
   - name: 'gcr.io/cloud-builders/docker'
     args: [ 'build', '-t', '${_LOCATION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/${_IMAGE}','-f','/workspace/promotions/Dockerfile-SA', '/workspace/promotions' ]
@@ -15,6 +15,7 @@ steps:
   - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk:latest'
     env:
       - 'CONTAINER=promo'
+      - 'FIRESTORE_PATH=hil-test/promotions/2021'
     entrypoint: 'bash'
     args:
       - '-c'
@@ -29,6 +30,6 @@ steps:
         echo "running docker image $_IMAGE at remote ..." && \
         ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no $_SSH_SERVER docker run --name $$CONTAINER --restart unless-stopped \
         -d -p 5001:5000 -e PORT=5000 -e BASIC_AUTH="$_BASIC_AUTH" -e PROJECT_ID=$PROJECT_ID -e FIRESTORE_PROJECT_ID=$PROJECT_ID \
-        ${_LOCATION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/${_IMAGE}
+        -e FIRESTORE_PATH="$$FIRESTORE_PATH" ${_LOCATION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/${_IMAGE}
 images:
   - '${_LOCATION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/${_IMAGE}'

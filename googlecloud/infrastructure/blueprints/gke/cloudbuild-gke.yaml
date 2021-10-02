@@ -28,10 +28,10 @@ steps:
       echo " " && echo " *** Content of setters.yaml ===> " && cat /workspace/blueprints/setters.yaml && \
       cp -v $_BLUEPRINTS_DIR/Kptfile /workspace/blueprints
 
-# Create a GKE cluster with deployment manager
+# Create a GKE cluster with blueprints controller
 - name: 'gcr.io/cloud-builders/gcloud'
   entrypoint: 'bash'
   args:
     - '-c'
     - |
-      gcloud alpha blueprints apply --source=/workspace/blueprints $_DEPLOYMENT_NAME
+      gcloud alpha blueprints apply --source=/workspace/blueprints $_DEPLOYMENT_NAME --project $PROJECT_ID

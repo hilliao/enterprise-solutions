@@ -6,7 +6,7 @@ FROM python:3.9
 # gcloud run deploy hil-promo --image $IMAGE --region us-central1 --platform managed \
 #      --no-allow-unauthenticated --memory 512M --project $PROJECT_ID \
 #      --update-env-vars FIRESTORE_PROJECT_ID=$PROJECT_ID --update-env-vars PROJECT_ID=$PROJECT_ID
-# docker run -d -p 5001:5000 --name promo -e PORT=5000 -e BASIC_AUTH=auth_token -e PROJECT_ID=$PROJECT_ID -e FIRESTORE_PROJECT_ID=$PROJECT_ID $IMAGE
+# docker run -d -p 5001:5000 --name promo -e PORT=5000 -e BASIC_AUTH=auth_token -e FIRESTORE_PATH="hil-test/promotions/2021" -e PROJECT_ID=$PROJECT_ID -e FIRESTORE_PROJECT_ID=$PROJECT_ID $IMAGE
 
 # Copy local code to the container image.
 ENV APP_HOME /app
