@@ -1,0 +1,14 @@
+# follow doc at https://cloud.google.com/anthos-config-management/docs/tutorials/project-namespace-blueprint#configure_a_project_namespace
+
+apiVersion: v1
+kind: ConfigMap
+metadata: # kpt-merge: /setters
+  name: setters
+  annotations:
+    config.kubernetes.io/local-config: "true"
+data:
+  management-namespace: config-control
+  management-project-id: prj-blueprints
+  networking-namespace: tenant-demo-project
+  project-id: tenant-demo-project
+  projects-namespace: config-control
