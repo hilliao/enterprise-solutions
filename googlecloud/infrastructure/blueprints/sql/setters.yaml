@@ -1,0 +1,11 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: setters
+data:
+  name: hil-test-sql
+  namespace: tenant-demo-project
+  management-namespace: config-control
+  management-project-id: blueprints-project
+  project-id: tenant-demo-project
+  region: us-central1
