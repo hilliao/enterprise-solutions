@@ -2,21 +2,45 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Redemption test</title>
+    <title>GoogleCloud.fr</title>
     <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.5.1/jquery.min.js"></script>
     <script src="promo.js"></script>
+    <style>
+        h1 {
+            text-align: center;
+        }
+
+        p {
+            text-align: center;
+        }
+
+        div {
+            text-align: center;
+        }
+
+        form {
+            text-align: center;
+        }
+    </style>
 </head>
 <body>
 <div>
-    <h1>Redeem GoogleCloud.fr promotional credit</h1>
+    <p><img src="images/frlogo.png" height="75" width="393"> <img src="images/gcpartner.png" height="65" width="195">
 </div>
 <form>
-    PUT request body:<br>
-    Promo code: <input id="promo" type="text" name="promo code" value="Firestore doc id"><br>
-    your email: <input id="email" type="text" name="email" value="test-user@example.com"><br>
-    Your name: <input id="name" type="text" name="name" value="Test User"><br>
-    <input id="submit" type="button" value="curl -X PUT">
+    <span
+            style="font-size:24px">Have a promo code?</span><br>Redeem Now!<br>
+    <p>Promo code: <input id="promo" type="text" name="promo code" value="Firestore doc id"> <span
+            style="color:lightgrey">ex:D5wVaDYPgMCirkpcBfQy</span>
+    <p>
+        your email: <input id="email" type="text" name="email" value="test-user@example.com"> <span
+            style="color:lightgrey">ex: test@example.com</span><br>
+    <p>
+        Your name: <input id="name" type="text" name="name" value="Test User"> <span
+            style="color:lightgrey">ex:testuser</span><br>
+    <p>
+        <input id="submit" type="button" value="CONTINUE">
 </form>
-<p class="put_response">Redeem result: </p>
+<p class="put_response">Redeem result:</p>
 </body>
 </html>
