@@ -19,7 +19,12 @@
         }
 
         form {
-            text-align: center; font-size:18px;
+            text-align: center;
+            font-size: 18px;
+        }
+
+        input {
+            font-size: 24px;
         }
 
         table, td {
@@ -32,7 +37,7 @@
     <p><img src="images/frlogo.png" height="75" width="393"> <img src="images/gcpartner.png" height="65" width="195">
     <p><span
             style="font-size:36px">Have a promo code?</span><br><span
-        style="font-size:18px">Redeem Now!</span>
+            style="font-size:18px"><i>Redeem Now!</i></span>
 </div>
 <form>
     <p>
@@ -40,30 +45,30 @@
         <tr>
             <td><span
                     style="font-size:24px">Promo code:</span></td>
-            <td><input style="width:300px; font-size:24px" id="promo" type="text" name="promo code" value="Firestore doc id">
+            <td><input style="width:300px" id="promo" type="text" name="promo code" value="Firestore doc id">
                 <span
-                        style="color:lightgrey">ex:D5wVaDYPgMCirkpcBfQy</span></td>
+                        style="color:lightgrey">ex: D5wVaDYPgMCirkpcBfQy</span></td>
         </tr>
         <p>
             <tr>
                 <td><span
                         style="font-size:24px">your email:</span></td>
-                <td><input style="width:370px ;font-size:24px" id="email" type="text" name="email"><span
-                        style="color:lightgrey">ex:test@example.com</span></td>
+                <td><input style="width:370px " id="email" type="text" name="email"><span
+                        style="color:lightgrey">ex: test@example.com</span></td>
             </tr>
             <br>
         <p>
             <tr>
                 <td><span
                         style="font-size:24px">Your name:</span></td>
-                <td><input style="width:352px; font-size:24px" id="name" type="text" name="name"><span
-                        style="color:lightgrey">ex:first_name last_name</span></td>
+                <td><input style="width:352px" id="name" type="text" name="name"><span
+                        style="color:lightgrey">ex: first_name last_name</span></td>
             </tr>
             <br>
     </table>
     <p>
-        <input id="submit" type="button" value="CONTINUE" style="font-size :18px;" />
+        <input id="submit" type="button" value="CONTINUE" style="font-size :18px;"/>
 </form>
-<p class="put_response">Redeem result:</p>
+<div id="put_response" style="font-size:24px">Redeem result logs:</div>
 </body>
 </html>
