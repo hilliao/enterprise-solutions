@@ -24,8 +24,7 @@ spec:
   region: us-central1 # kpt-set: ${region}
   settings:
     tier: db-f1-micro
-  ipConfiguration:
-    authorizedNetworks:
-      - name: allow-all
-        value: 0.0.0.0/0
-
+    ipConfiguration:
+      authorizedNetworks:
+        - name: allow-all
+          value: 0.0.0.0/0
