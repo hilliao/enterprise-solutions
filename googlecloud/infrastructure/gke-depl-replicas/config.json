@@ -1,0 +1,5 @@
+{
+  "deployments": "deployments.json",
+  "cmd-replicas": "replicas.sh",
+  "cmd-0-replicas": "0-replicas.sh"
+}
