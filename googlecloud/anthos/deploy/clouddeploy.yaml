@@ -1,0 +1,36 @@
+apiVersion: deploy.cloud.google.com/v1beta1
+kind: DeliveryPipeline
+metadata:
+  name: hil-deploy
+description: hil's application deployment pipeline
+serialPipeline:
+  stages:
+    - targetId: hil-dev
+      profiles: [ ]
+    - targetId: gke-non-prod
+      profiles: [ ]
+---
+apiVersion: deploy.cloud.google.com/v1beta1
+kind: Target
+metadata:
+  name: hil-dev
+description: development cluster
+gke:
+  cluster: projects/gke-project/locations/us-central1-f/clusters/hil-dev
+---
+apiVersion: deploy.cloud.google.com/v1beta1
+kind: Target
+metadata:
+  name: gke-non-prod
+description: pre-production cluster
+gke:
+  cluster: projects/gke-non-prod/locations/us-central1/clusters/non-prod-clus01
+executionConfigs:
+  - privatePool:
+      workerPool: "projects/gke-project/locations/us-central1/workerPools/hil-dev"
+    usages:
+      - DEPLOY
+  - defaultPool:
+      artifactStorage: "gke-project_clouddeploy"
+    usages:
+      - RENDER
