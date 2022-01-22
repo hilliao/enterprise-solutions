@@ -175,3 +175,8 @@ def redeem_promo(promo):
         redeeming['redemption'] = datetime.utcnow()
         promo_ref.set(redeeming)
         return jsonify(redeeming)
+
+
+@query_api.route('/healthz'.format(PROMO_DOC), methods=['GET'])
+def health_check():
+    return jsonify({'status': 'OK'})
