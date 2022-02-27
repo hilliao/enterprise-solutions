@@ -7,12 +7,12 @@ import os
 import re
 from datetime import datetime
 from http import HTTPStatus
-from flask import request
+
 from flask import Blueprint
 from flask import jsonify
+from flask import request
 from google.cloud import firestore
 from google.cloud import logging
-from google.cloud.logging import Resource
 
 #     DEFAULT = 0
 #     DEBUG = 100
@@ -32,7 +32,7 @@ LOG_SEVERITY_ERROR = 'ERROR'
 
 query_api = Blueprint('query_api', __name__)
 firebase_path = os.environ['FIRESTORE_PATH']
-firebase_paths=firebase_path.split('/')
+firebase_paths = firebase_path.split('/')
 BASE_COLL = firebase_paths[0]
 PROMO_DOC = firebase_paths[1]
 PROMO_COLL = firebase_paths[2]
@@ -44,11 +44,7 @@ def log(text, severity=LOG_SEVERITY_DEFAULT, log_name=app_name):
     logging_client = logging.Client(project=os.environ['PROJECT_ID'])
     logger = logging_client.logger(log_name)
 
-    return logger.log_text(text, severity=severity,
-                           resource=Resource(type="cloud_run_revision",
-                                             labels={'configuration_name': 'persistence-layer'}
-                                             )
-                           )
+    return logger.log_text(text, severity=severity)
 
 
 def verify_basic_auth():
@@ -126,11 +122,11 @@ def create_promo():
     req_key_charge = 'charge'
     req_key_form = 'form-url'
 
-    if not request_body or req_key_exp not in request_body or req_key_svc not in request_body\
+    if not request_body or req_key_exp not in request_body or req_key_svc not in request_body \
             or req_key_charge not in request_body or req_key_form not in request_body:
         return f'Missing some items in request JSON body: {{"{req_key_exp}": "2025-12-31 23:59:59",' \
                f' "{req_key_svc}": "Google cloud migration", "{req_key_charge}": dollar amount,' \
-               f' "{req_key_form}": "Google form url" }}',\
+               f' "{req_key_form}": "Google form url" }}', \
                HTTPStatus.BAD_REQUEST
 
     exp_datetime = datetime.strptime(request_body[req_key_exp], '%Y-%m-%d %H:%M:%S')

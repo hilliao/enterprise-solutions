@@ -16,12 +16,15 @@ import java.sql.SQLException;
 
 public class TestSql {
     public static String password = "Cloud SQL password";
-    public static String SqlConnectionName = "car-repair-warranty:us-central1:psql-dev";
+    // Google cloud SQL connection name. If the instance name is $SQL_INSTANCE, get the connection name by
+    // gcloud sql instances describe $SQL_INSTANCE --format="get(connectionName)"
+    public static String SqlConnectionName = "hil-anthos-blueprints-0:us-central1:psql-dev";
 
     public static void main(String[] args) throws SQLException {
         HikariConfig config = new HikariConfig();
 
-        config.setJdbcUrl(String.format("jdbc:postgresql:///%s", "patient")); // patient is the database
+        // the database name is postgres
+        config.setJdbcUrl(String.format("jdbc:postgresql:///%s", "postgres"));
         config.setUsername("postgres"); // user should not be root or postgres
         config.setPassword(password); // bad to have clear password in code
 

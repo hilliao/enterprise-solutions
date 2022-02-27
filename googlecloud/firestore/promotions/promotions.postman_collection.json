@@ -1,0 +1,175 @@
+{
+	"info": {
+		"_postman_id": "c76365ad-d1c1-4def-96d2-18b248a8ed15",
+		"name": "promotions",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"item": [
+		{
+			"name": "redeem promotions",
+			"request": {
+				"method": "PUT",
+				"header": [
+					{
+						"key": "Authorization",
+						"value": "",
+						"type": "text"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"email\": \"chris0@example.com\",\n    \"name\": \"Chris LastName\"\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "{{url}}/promotions/hg4CnFHNYKW0b31QYsIM",
+					"host": [
+						"{{url}}"
+					],
+					"path": [
+						"promotions",
+						"hg4CnFHNYKW0b31QYsIM"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "create promotions",
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Authorization",
+						"value": "admin==root",
+						"type": "text"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"expiry\": \"2021-12-31 23:59:59\",\n    \"service-category\": \"Google cloud data warehouse migration\",\n    \"charge\": 789,\n    \"form-url\": \"https://docs.google.com/forms/d/e/1FAIpQLSf_hYI8P3XYl8VACv5WaUNMAt2nkucE4PixAk_K2NZ-XcF3Xg/viewform?usp=sf_link\" \n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "{{url}}/promotions",
+					"host": [
+						"{{url}}"
+					],
+					"path": [
+						"promotions"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "get all promotions",
+			"protocolProfileBehavior": {
+				"disableBodyPruning": true
+			},
+			"request": {
+				"method": "GET",
+				"header": [
+					{
+						"key": "Authorization",
+						"value": "admin==root",
+						"type": "text"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "{{url}}/promotions",
+					"host": [
+						"{{url}}"
+					],
+					"path": [
+						"promotions"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "get unused promotions",
+			"protocolProfileBehavior": {
+				"disableBodyPruning": true
+			},
+			"request": {
+				"method": "GET",
+				"header": [
+					{
+						"key": "Authorization",
+						"value": "admin==root",
+						"type": "text"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "{{url}}/promotions/unused",
+					"host": [
+						"{{url}}"
+					],
+					"path": [
+						"promotions",
+						"unused"
+					],
+					"query": [
+						{
+							"key": "email",
+							"value": "hil@example.com",
+							"disabled": true
+						},
+						{
+							"key": "name",
+							"value": "Foo Bar Foe",
+							"disabled": true
+						}
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "health check",
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "{{url}}/healthz",
+					"host": [
+						"{{url}}"
+					],
+					"path": [
+						"healthz"
+					]
+				},
+				"description": "simply returns 200"
+			},
+			"response": []
+		}
+	]
+}
