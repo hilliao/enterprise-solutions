@@ -2,29 +2,35 @@
 # https://cloud.google.com/artifact-registry/docs/configure-cloud-build#docker
 
 steps:
-- name: 'gcr.io/cloud-builders/docker'
-  args: [ 'build', '-t', '${_LOCATION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/${_IMAGE}', 'html' ]
-- name: 'gcr.io/cloud-builders/docker'
-  args: ['push', '${_LOCATION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/${_IMAGE}']
-- name: 'gcr.io/google.com/cloudsdktool/cloud-sdk:latest'
-  env:
-    - 'CONTAINER=html'
-  entrypoint: 'bash'
-  args:
-    - '-c'
-    - |
-      cd ~/ && mkdir .ssh && \
-      gsutil cp gs://firestore-confidential-data_cloudbuild/googlecloud.fr-id_rsa ~/.ssh/id_rsa && \
-      chmod 400 ~/.ssh/id_rsa && echo "Testing ssh login at remote: $_SSH_WEB_SERVER ..." && \
-      ls -Alh ~/.ssh/id_rsa && ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no $_SSH_WEB_SERVER free -m && \
-      echo "executing docker ps at remote ..." && ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no $_SSH_WEB_SERVER docker ps && \
-      echo "killing docker container at remote ..." && \
-      ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no $_SSH_WEB_SERVER docker ps --filter expose=80 --format "{{.Names}}" | \
-      xargs -r ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no $_SSH_WEB_SERVER docker stop && \
-      ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no $_SSH_WEB_SERVER docker rm -f $$CONTAINER && \
-      echo "running docker image $_IMAGE at remote ..." && \
-      ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no $_SSH_WEB_SERVER docker run --name $$CONTAINER --restart unless-stopped -d -p 80:80 \
-      ${_LOCATION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/${_IMAGE}
-
+  - name: 'gcr.io/cloud-builders/gcloud'
+    entrypoint: 'bash'
+    env:
+      - 'SSH_PRIVATE_KEY_PATH=/workspace/ssh_private_key'
+    args:
+      - '-c'
+      - |
+        gcloud secrets versions access latest --secret=ssh_private_key > $$SSH_PRIVATE_KEY_PATH && \
+        chmod 400 -v $$SSH_PRIVATE_KEY_PATH
+  - name: 'gcr.io/cloud-builders/docker'
+    args: [ 'build', '-t', '${_LOCATION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/${_IMAGE}', 'html' ]
+  - name: 'gcr.io/cloud-builders/docker'
+    args: [ 'push', '${_LOCATION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/${_IMAGE}' ]
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk:latest'
+    env:
+      # the running container name on the web server
+      - 'CONTAINER=html'
+      - 'SSH_PRIVATE_KEY_PATH=/workspace/ssh_private_key'
+    entrypoint: 'bash'
+    args:
+      - '-c'
+      - |
+        echo "Testing ssh login at remote: $_SSH_WEB_SERVER ..." && \
+        ls -Alh $$SSH_PRIVATE_KEY_PATH && ssh -i $$SSH_PRIVATE_KEY_PATH -o StrictHostKeyChecking=no $_SSH_WEB_SERVER free -m && \
+        echo "executing docker ps at remote ..." && ssh -i $$SSH_PRIVATE_KEY_PATH -o StrictHostKeyChecking=no $_SSH_WEB_SERVER docker ps && \
+        echo "killing docker container at remote ..." && \
+        (ssh -i $$SSH_PRIVATE_KEY_PATH -o StrictHostKeyChecking=no $_SSH_WEB_SERVER docker rm -f $$CONTAINER || \
+        echo "Remote container $$CONTAINER not running!") && echo "running docker image $_IMAGE at remote ..." && \
+        ssh -i $$SSH_PRIVATE_KEY_PATH -o StrictHostKeyChecking=no $_SSH_WEB_SERVER docker run --name $$CONTAINER --restart unless-stopped -d -p 80:80 \
+        ${_LOCATION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/${_IMAGE}
 images:
-- '${_LOCATION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/${_IMAGE}'
+  - '${_LOCATION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/${_IMAGE}'
