@@ -13,6 +13,10 @@ from flask import jsonify
 from flask import request
 from google.cloud import firestore
 from google.cloud import logging
+from opentelemetry import trace
+from opentelemetry.exporter.cloud_trace import CloudTraceSpanExporter
+from opentelemetry.sdk.trace import TracerProvider
+from opentelemetry.sdk.trace.export import BatchSpanProcessor
 
 #     DEFAULT = 0
 #     DEBUG = 100
@@ -47,6 +51,18 @@ def log(text, severity=LOG_SEVERITY_DEFAULT, log_name=app_name):
     return logger.log_text(text, severity=severity)
 
 
+tracer_provider = TracerProvider()
+cloud_trace_exporter = CloudTraceSpanExporter()
+tracer_provider.add_span_processor(
+    # BatchSpanProcessor buffers spans and sends them in batches in a
+    # background thread. The default parameters are sensible, but can be
+    # tweaked to optimize your performance
+    BatchSpanProcessor(cloud_trace_exporter)
+)
+trace.set_tracer_provider(tracer_provider)
+tracer = trace.get_tracer(__name__)
+
+
 def verify_basic_auth():
     auth_key = 'BASIC_AUTH'
     auth_token = request.headers.get('Authorization')
@@ -63,12 +79,17 @@ def get_all_promos():
     if auth_res != HTTPStatus.OK:
         return auth_msg, auth_res
 
-    db = firestore.Client(project=os.environ['FIRESTORE_PROJECT_ID'])
-    docs = db.collection(BASE_COLL).document(PROMO_DOC).collection(PROMO_COLL).stream()
-    response = {}
-    for doc in docs:
-        response[doc.id] = doc.to_dict()
-        log(f'getting content of doc ID {doc.id}', LOG_SEVERITY_DEBUG)
+    with tracer.start_span("Firestore operation: get all promotions") as current_span:
+        db = firestore.Client(project=os.environ['FIRESTORE_PROJECT_ID'])
+        docs = db.collection(BASE_COLL).document(PROMO_DOC).collection(PROMO_COLL).stream()
+        response = {}
+        doc_count = 0
+        for doc in docs:
+            response[doc.id] = doc.to_dict()
+            doc_count += 1
+            log(f'getting content of doc ID {doc.id}', LOG_SEVERITY_DEBUG)
+
+        current_span.set_attribute("retrieved promotion count", doc_count)
 
     return jsonify(response)
 
@@ -159,18 +180,24 @@ def redeem_promo(promo):
     if not is_email_valid(email):
         return f"email in request body is invalid: {email}", HTTPStatus.BAD_REQUEST
 
-    db = firestore.Client(project=os.environ['FIRESTORE_PROJECT_ID'])
-    promo_ref = db.collection(BASE_COLL).document(PROMO_DOC).collection(PROMO_COLL).document(promo)
-    if not promo_ref.get().exists:
-        return "Firestore document requested does not exist; make sure you entered the right promo code", HTTPStatus.NOT_FOUND
-    else:
-        redeeming = promo_ref.get().to_dict()
-        if redeeming['redemption']:
-            return "Firestore document has been redeemed; you can't redeemed a used promotion!", HTTPStatus.BAD_REQUEST
-        redeeming['redeemed-by'] = f"{email}:{request_body[req_key_name]}"
-        redeeming['redemption'] = datetime.utcnow()
-        promo_ref.set(redeeming)
-        return jsonify(redeeming)
+    with tracer.start_span("Firestore operation: redeem a promotion") as current_span:
+        db = firestore.Client(project=os.environ['FIRESTORE_PROJECT_ID'])
+        promo_ref = db.collection(BASE_COLL).document(PROMO_DOC).collection(PROMO_COLL).document(promo)
+        if not promo_ref.get().exists:
+            return "Firestore document requested does not exist; make sure you entered the right promo code", HTTPStatus.NOT_FOUND
+        else:
+            redeeming = promo_ref.get().to_dict()
+            if redeeming['redemption']:
+                current_span.set_attribute("is redemption successful", False)
+                return "Firestore document has been redeemed; you can't redeemed a used promotion!", HTTPStatus.BAD_REQUEST
+            if redeeming['expiry'] < datetime.now(redeeming['expiry'].tzinfo):
+                current_span.set_attribute("is redemption successful", False)
+                return "Firestore document has expired; you can't redeemed an expired promotion!", HTTPStatus.BAD_REQUEST
+            redeeming['redeemed-by'] = f"{email}:{request_body[req_key_name]}"
+            redeeming['redemption'] = datetime.utcnow()
+            promo_ref.set(redeeming)
+            current_span.set_attribute("is redemption successful", True)
+            return jsonify(redeeming)
 
 
 @query_api.route('/healthz'.format(PROMO_DOC), methods=['GET'])

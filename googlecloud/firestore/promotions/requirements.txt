@@ -1,4 +1,11 @@
-Flask
+flask
 flask-cors
 google-cloud-firestore
 google-cloud-logging
+opentelemetry-api
+opentelemetry-sdk
+opentelemetry-exporter-gcp-trace
+opentelemetry-propagator-gcp
+requests
+opentelemetry-instrumentation-requests
+opentelemetry-instrumentation-flask
