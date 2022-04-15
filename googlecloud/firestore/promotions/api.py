@@ -26,8 +26,8 @@ tracer_provider.add_span_processor(
     BatchSpanProcessor(cloud_trace_exporter)
 )
 trace.set_tracer_provider(tracer_provider)
-
 tracer = trace.get_tracer(__name__)
+
 from stor import query
 
 app = Flask(__name__)

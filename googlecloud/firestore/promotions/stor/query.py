@@ -51,6 +51,18 @@ def log(text, severity=LOG_SEVERITY_DEFAULT, log_name=app_name):
     return logger.log_text(text, severity=severity)
 
 
+try:
+    import googleclouddebugger
+
+    googleclouddebugger.enable(
+        module='firestor-operation',
+        version=os.environ.get("VERSION", str(datetime.now())),
+        breakpoint_enable_canary=True,
+        service_account_json_file=os.environ.get('GOOGLE_APPLICATION_CREDENTIALS', '/opt/cdbg/gcp-svc.json'))
+except ImportError as err:
+    log(text="import googleclouddebugger failed: {0}".format(str(err)), severity=LOG_SEVERITY_ERROR)
+    pass
+
 tracer_provider = TracerProvider()
 cloud_trace_exporter = CloudTraceSpanExporter()
 tracer_provider.add_span_processor(

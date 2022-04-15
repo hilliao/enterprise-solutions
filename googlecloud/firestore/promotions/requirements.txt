@@ -9,3 +9,4 @@ opentelemetry-propagator-gcp
 requests
 opentelemetry-instrumentation-requests
 opentelemetry-instrumentation-flask
+google-python-cloud-debugger
