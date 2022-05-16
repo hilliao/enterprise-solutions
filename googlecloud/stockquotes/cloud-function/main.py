@@ -9,6 +9,8 @@ from http import HTTPStatus
 
 
 # https://stock-quotes-slnskhfzsa-uw.a.run.app/?tickers=GOOGL,IVV,AMZN
+# curl -X POST http://127.0.0.1:8080/?tickers=AAPL,TSLA -i
+# http://127.0.0.1:8080/?tickers=AMD,GOOGL,UBER
 @functions_framework.http
 def stock_quotes(http_request):
     # read stock quotes
@@ -22,6 +24,8 @@ def stock_quotes(http_request):
             quotes = {}
             for ticker in list_tickers:
                 quotes[ticker] = get_cached_quote(bucket, ticker)
+
+            return serialize_exceptions(quotes)
 
         elif gs_uri:
             bucket = gs_uri.split('/')[2]
@@ -60,7 +64,7 @@ def stock_quotes(http_request):
         saved_quotes = {}
 
         for tickers in querystring['symbols'].split(','):
-            gcs_file = bucket.blob('quotes/{}.json'.format(tickers))
+            gcs_file = bucket.blob('{0}/{1}.json'.format(os.environ.get('FOLDER'), tickers))
             raw_str = str(response.json()['quoteResponse']['result'][counter])
             replaced_str = raw_str.replace("'", '"').replace('True', 'true').replace('False', 'false')
             gcs_file.upload_from_string(replaced_str)
@@ -75,16 +79,31 @@ def stock_quotes(http_request):
         return abort(404)
 
 
+def serialize_exceptions(dict_some_val_ex):
+    if all(isinstance(quote, Exception) for quote in dict_some_val_ex.values()):
+        dict_some_val_ex = {k: str(v) for (k, v) in dict_some_val_ex.items()}
+        return dict_some_val_ex, HTTPStatus.GONE
+    if any(isinstance(quote, Exception) for quote in dict_some_val_ex.values()):
+        dict_some_val_ex = {k: (str(v) if isinstance(v, Exception) else v) for (k, v) in dict_some_val_ex.items()}
+        return dict_some_val_ex, HTTPStatus.MULTI_STATUS
+    else:
+        return dict_some_val_ex
+
+
 def get_cached_quote(bucket, ticker):
     storage_client = storage.Client()
     bucket = storage_client.get_bucket(bucket)
-    blob = bucket.blob("quotes/{0}.json".format(ticker))
-    json_str = blob.download_as_string().decode()
+    blob = bucket.blob("{0}/{1}.json".format(os.environ.get('FOLDER'), ticker))
+    try:
+        json_str = blob.download_as_string().decode()
+    except Exception as err:
+        return err
     json_quote = json.loads(json_str)
     return json_quote
 
 
 # curl -X PUT https://trade-recommendation-slnskhfzsa-uw.a.run.app/?tickers=IVV,GOOGL,FB -H 'Content-Type: application/json' -H 'Accept: application/json' -d '{"cash":11111, "amplify": 1}' -i
+# curl -X PUT http://localhost:8080/?tickers=IVV,GOOGL,FB -H 'Content-Type: application/json' -H 'Accept: application/json' -d '{"cash":11111, "amplify": 1}' -i
 @functions_framework.http
 def get_trade_recommendation(http_request):
     if http_request.method == 'PUT':
@@ -101,6 +120,9 @@ def get_trade_recommendation(http_request):
                     trades = {}
                     for ticker in list_tickers:
                         ticker_quote = get_cached_quote(bucket, ticker)
+                        if isinstance(ticker_quote, Exception):
+                            trades[ticker] = ticker_quote
+                            continue
                         cash = int(request_json['cash']) / len(list_tickers)
                         amplify = request_json['amplify']
                         fiftyDayAverage = ticker_quote['fiftyDayAverage']
@@ -117,9 +139,11 @@ def get_trade_recommendation(http_request):
                         buy_share_count = adjusted_cash / regularMarketPrice
                         trades[ticker] = max(buy_share_count * amplify, 0)
 
-                    return trades
+                    return serialize_exceptions(trades)
                 else:
                     return "missing query string tickers", HTTPStatus.BAD_REQUEST
 
             else:
                 return "JSON is invalid, or missing headers of {0}".format(header_params), HTTPStatus.BAD_REQUEST
+    else:
+        return abort(404)
