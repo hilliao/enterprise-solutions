@@ -35,11 +35,11 @@ LOG_SEVERITY_NOTICE = 'NOTICE'
 LOG_SEVERITY_ERROR = 'ERROR'
 
 query_api = Blueprint('query_api', __name__)
-firebase_path = os.environ['FIRESTORE_PATH']
-firebase_paths = firebase_path.split('/')
-BASE_COLL = firebase_paths[0]
-PROMO_DOC = firebase_paths[1]
-PROMO_COLL = firebase_paths[2]
+firestore_path = os.environ['FIRESTORE_PATH']
+firestore_paths = firestore_path.split('/')
+BASE_COLL = firestore_paths[0]
+PROMO_DOC = firestore_paths[1]
+PROMO_COLL = firestore_paths[2]
 app_name = PROMO_DOC
 doc_field_redemption = 'redemption'
 
@@ -173,6 +173,7 @@ def create_promo():
     db = firestore.Client(project=os.environ['FIRESTORE_PROJECT_ID'])
     doc = db.collection(BASE_COLL).document(PROMO_DOC).collection(PROMO_COLL).add(promo_doc)
     doc_id = doc[1].id
+    log('promo Firestore doc created with ID {}'.format(doc_id), LOG_SEVERITY_INFO)
 
     return jsonify({
         doc_id: promo_doc
@@ -196,19 +197,23 @@ def redeem_promo(promo):
         db = firestore.Client(project=os.environ['FIRESTORE_PROJECT_ID'])
         promo_ref = db.collection(BASE_COLL).document(PROMO_DOC).collection(PROMO_COLL).document(promo)
         if not promo_ref.get().exists:
+            log('promo code {} not found during redemption'.format(promo), LOG_SEVERITY_WARNING)
             return "Firestore document requested does not exist; make sure you entered the right promo code", HTTPStatus.NOT_FOUND
         else:
             redeeming = promo_ref.get().to_dict()
             if redeeming['redemption']:
                 current_span.set_attribute("is redemption successful", False)
+                log('Attempted to consume redeemed promo code {0}'.format(promo))
                 return "Firestore document has been redeemed; you can't redeemed a used promotion!", HTTPStatus.BAD_REQUEST
             if redeeming['expiry'] < datetime.now(redeeming['expiry'].tzinfo):
                 current_span.set_attribute("is redemption successful", False)
+                log('Attempted to consume expired promo code {0}'.format(promo))
                 return "Firestore document has expired; you can't redeemed an expired promotion!", HTTPStatus.BAD_REQUEST
             redeeming['redeemed-by'] = f"{email}:{request_body[req_key_name]}"
             redeeming['redemption'] = datetime.utcnow()
             promo_ref.set(redeeming)
             current_span.set_attribute("is redemption successful", True)
+            log('promo code {} redemption succeeded'.format(promo), LOG_SEVERITY_INFO)
             return jsonify(redeeming)
 
 

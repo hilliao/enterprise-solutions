@@ -105,10 +105,9 @@ def get_cached_quote(bucket, ticker):
 # curl -X PUT https://trade-recommendation-slnskhfzsa-uw.a.run.app/?tickers=IVV,GOOGL,FB -H 'Content-Type: application/json' -H 'Accept: application/json' -d '{"cash":11111, "amplify": 1}' -i
 # curl -X PUT http://localhost:8080/?tickers=IVV,GOOGL,FB -H 'Content-Type: application/json' -H 'Accept: application/json' -d '{"cash":11111, "amplify": 1}' -i
 @functions_framework.http
-def get_trade_recommendation(http_request):
+def trade_recommendation(http_request):
     if http_request.method == 'PUT':
-        content_type = http_request.headers['content-type']
-        if content_type == 'application/json':
+        if 'content-type' in http_request.headers and http_request.headers['content-type'] == 'application/json':
             request_json = http_request.get_json(silent=True)
             header_params = ['cash', 'amplify']
             if request_json and all(item in request_json for item in header_params):
@@ -145,5 +144,7 @@ def get_trade_recommendation(http_request):
 
             else:
                 return "JSON is invalid, or missing headers of {0}".format(header_params), HTTPStatus.BAD_REQUEST
+        else:
+            return "content_type != 'application/json", HTTPStatus.BAD_REQUEST
     else:
         return abort(404)
