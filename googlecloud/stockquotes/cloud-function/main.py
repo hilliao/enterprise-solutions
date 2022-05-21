@@ -1,3 +1,4 @@
+import datetime
 import os
 
 import functions_framework
@@ -6,6 +7,7 @@ from flask import abort
 import json
 import requests
 from http import HTTPStatus
+from google.cloud import bigquery
 
 
 # https://stock-quotes-slnskhfzsa-uw.a.run.app/?tickers=GOOGL,IVV,AMZN
@@ -136,7 +138,20 @@ def trade_recommendation(http_request):
                         adjusted_cash = (buy_adjust + 1) * cash
                         # how many shares to buy
                         buy_share_count = adjusted_cash / regularMarketPrice
-                        trades[ticker] = max(buy_share_count * amplify, 0)
+                        # 2 decimals at mast
+                        trades[ticker] = round(max(buy_share_count * amplify, 0), 2)
+
+                    # save to a BigQuery table
+                    rows_to_insert = [
+                        {"account": 10000, "recommendation": str(trades), "updated": str(datetime.datetime.utcnow())}
+                    ]
+                    client = bigquery.Client()
+                    # TODO: change the hard coded dataset.table to a header parameter
+                    errors = client.insert_rows_json('test-vpc-341000.datalake.trade_recommendation',
+                                                     rows_to_insert)
+                    if errors:  # TODO: change to cloud logging
+                        print("Encountered errors while inserting rows to BigQuery table "
+                              "test-vpc-341000.datalake.trade_recommendation: {}".format(errors))
 
                     return serialize_exceptions(trades)
                 else:
