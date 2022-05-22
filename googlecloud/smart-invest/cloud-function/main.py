@@ -1,13 +1,32 @@
 import datetime
+import json
 import os
+from concurrent import futures
+from concurrent.futures.thread import ThreadPoolExecutor
+from http import HTTPStatus
 
 import functions_framework
-from google.cloud import storage
-from flask import abort
-import json
 import requests
-from http import HTTPStatus
+from flask import abort
 from google.cloud import bigquery
+from google.cloud import logging
+from google.cloud import secretmanager
+from google.cloud import storage
+
+LOG_SEVERITY_DEFAULT = 'DEFAULT'
+LOG_SEVERITY_INFO = 'INFO'
+LOG_SEVERITY_WARNING = 'WARNING'
+LOG_SEVERITY_DEBUG = 'DEBUG'
+LOG_SEVERITY_NOTICE = 'NOTICE'
+LOG_SEVERITY_ERROR = 'ERROR'
+app_name = 'smart-invest'
+
+
+def log(text, severity=LOG_SEVERITY_DEFAULT, log_name=app_name):
+    logging_client = logging.Client(project=os.environ['PROJECT_ID'])
+    logger = logging_client.logger(log_name)
+
+    return logger.log_text(text, severity=severity)
 
 
 # https://stock-quotes-slnskhfzsa-uw.a.run.app/?tickers=GOOGL,IVV,AMZN
@@ -23,9 +42,7 @@ def stock_quotes(http_request):
 
         if tickers:
             list_tickers = tickers.split(',')
-            quotes = {}
-            for ticker in list_tickers:
-                quotes[ticker] = get_cached_quote(bucket, ticker)
+            quotes = get_cached_quotes(bucket, list_tickers)
 
             return serialize_exceptions(quotes)
 
@@ -53,9 +70,17 @@ def stock_quotes(http_request):
 
         querystring = {"region": "US",
                        "symbols": tickers}  # "QQQ,ONEQ,IVV,VOO,JETS,VHT,VDE,VFH,VTWO,BRK-B,ACN,AMD,GOOGL,AMZN,MSFT,MRVL,FB,QCOM,CRM,SNAP,TSM,BHP,RIO,EXPE,BKNG,HD"
+        sm_client = secretmanager.SecretManagerServiceClient()
+        secret_path_latest = sm_client.secret_path(os.environ.get('SECRET_MANAGER_PROJECT_ID'),
+                                                   os.environ.get('SECRET_NAME_YH_API_KEY')) + "/versions/latest"
+        # TODO: check if the secret exists
+        secret_latest_ver_YH_API_key = sm_client.access_secret_version(request={"name": secret_path_latest})
+        log('read from secret for Yahoo Finance API key', LOG_SEVERITY_NOTICE)
+        YH_API_key = secret_latest_ver_YH_API_key.payload.data.decode("UTF-8")
+
         headers = {
             "X-RapidAPI-Host": "yh-finance.p.rapidapi.com",
-            "X-RapidAPI-Key": os.environ.get('X-RAPIDAPI-KEY')
+            "X-RapidAPI-Key": YH_API_key
         }
 
         response = requests.request("GET", url, headers=headers, params=querystring)
@@ -104,31 +129,53 @@ def get_cached_quote(bucket, ticker):
     return json_quote
 
 
+MAX_WORKERS = 10
+
+
+def get_cached_quotes(bucket, tickers):
+    thread_results = {}
+    with ThreadPoolExecutor(max_workers=int(MAX_WORKERS)) as executor:
+        for ticker in tickers:
+            thread_results[ticker] = executor.submit(get_cached_quote, bucket, ticker)
+
+        futures.wait(thread_results.values(), return_when=futures.ALL_COMPLETED)
+
+    for ticker in thread_results:
+        # exception thrown from .result() method if any exception happened
+        try:
+            thread_results[ticker] = thread_results[ticker].result()
+        except Exception as ex:
+            thread_results[ticker] = ex
+
+    return thread_results
+
+
 # curl -X PUT https://trade-recommendation-slnskhfzsa-uw.a.run.app/?tickers=IVV,GOOGL,FB -H 'Content-Type: application/json' -H 'Accept: application/json' -d '{"cash":11111, "amplify": 1}' -i
 # curl -X PUT http://localhost:8080/?tickers=IVV,GOOGL,FB -H 'Content-Type: application/json' -H 'Accept: application/json' -d '{"cash":11111, "amplify": 1}' -i
 @functions_framework.http
 def trade_recommendation(http_request):
-    if http_request.method == 'PUT':
+    if http_request.method == 'POST':
         if 'content-type' in http_request.headers and http_request.headers['content-type'] == 'application/json':
             request_json = http_request.get_json(silent=True)
-            header_params = ['cash', 'amplify']
+            header_params = ['cash', 'amplify', 'bq_table']
             if request_json and all(item in request_json for item in header_params):
                 tickers = http_request.args.get('tickers')  # GOOGL,IVV
                 bucket = os.environ.get('BUCKET')
 
                 if tickers:
                     list_tickers = tickers.split(',')
+                    quotes = get_cached_quotes(bucket, list_tickers)
                     trades = {}
-                    for ticker in list_tickers:
-                        ticker_quote = get_cached_quote(bucket, ticker)
-                        if isinstance(ticker_quote, Exception):
-                            trades[ticker] = ticker_quote
+                    for ticker in quotes:
+                        if isinstance(quotes[ticker], Exception):
+                            trades[ticker] = quotes[ticker]
                             continue
                         cash = int(request_json['cash']) / len(list_tickers)
                         amplify = request_json['amplify']
-                        fiftyDayAverage = ticker_quote['fiftyDayAverage']
-                        twoHundredDayAverage = ticker_quote['twoHundredDayAverage']
-                        regularMarketPrice = ticker_quote['regularMarketPrice']
+                        bq_table = request_json['bq_table']
+                        fiftyDayAverage = quotes[ticker]['fiftyDayAverage']
+                        twoHundredDayAverage = quotes[ticker]['twoHundredDayAverage']
+                        regularMarketPrice = quotes[ticker]['regularMarketPrice']
 
                         # average of the moving averages minus the current stock price
                         average_price_diff = ((fiftyDayAverage + twoHundredDayAverage) / 2 - regularMarketPrice)
@@ -146,12 +193,16 @@ def trade_recommendation(http_request):
                         {"account": 10000, "recommendation": str(trades), "updated": str(datetime.datetime.utcnow())}
                     ]
                     client = bigquery.Client()
-                    # TODO: change the hard coded dataset.table to a header parameter
-                    errors = client.insert_rows_json('test-vpc-341000.datalake.trade_recommendation',
-                                                     rows_to_insert)
-                    if errors:  # TODO: change to cloud logging
-                        print("Encountered errors while inserting rows to BigQuery table "
-                              "test-vpc-341000.datalake.trade_recommendation: {}".format(errors))
+                    try:
+                        errors = client.insert_rows_json(bq_table, rows_to_insert)
+                        if errors:
+                            log("Encountered errors while inserting rows to BigQuery table "
+                                "{}: {}".format(bq_table, errors),
+                                severity=LOG_SEVERITY_ERROR)
+                    except Exception as ex:
+                        log("Encountered errors while inserting rows to BigQuery table "
+                            "{}: {}".format(bq_table, ex),
+                            severity=LOG_SEVERITY_ERROR)
 
                     return serialize_exceptions(trades)
                 else:
