@@ -70,13 +70,9 @@ def stock_quotes(http_request):
 
         querystring = {"region": "US",
                        "symbols": tickers}  # "QQQ,ONEQ,IVV,VOO,JETS,VHT,VDE,VFH,VTWO,BRK-B,ACN,AMD,GOOGL,AMZN,MSFT,MRVL,FB,QCOM,CRM,SNAP,TSM,BHP,RIO,EXPE,BKNG,HD"
-        sm_client = secretmanager.SecretManagerServiceClient()
-        secret_path_latest = sm_client.secret_path(os.environ.get('SECRET_MANAGER_PROJECT_ID'),
-                                                   os.environ.get('SECRET_NAME_YH_API_KEY')) + "/versions/latest"
-        # TODO: check if the secret exists
-        secret_latest_ver_YH_API_key = sm_client.access_secret_version(request={"name": secret_path_latest})
-        log('read from secret for Yahoo Finance API key', LOG_SEVERITY_NOTICE)
-        YH_API_key = secret_latest_ver_YH_API_key.payload.data.decode("UTF-8")
+
+        env_var_secret_name = 'SECRET_NAME_YH_API_KEY'
+        YH_API_key = get_secret_value(env_var_secret_name)
 
         headers = {
             "X-RapidAPI-Host": "yh-finance.p.rapidapi.com",
@@ -104,6 +100,17 @@ def stock_quotes(http_request):
         return abort(403)
     else:
         return abort(404)
+
+
+def get_secret_value(env_var_secret_name):
+    sm_client = secretmanager.SecretManagerServiceClient()
+    secret_path_latest = sm_client.secret_path(os.environ.get('SECRET_MANAGER_PROJECT_ID'),
+                                               os.environ.get(env_var_secret_name)) + "/versions/latest"
+    # TODO: check if the secret exists
+    secret_latest_version = sm_client.access_secret_version(request={"name": secret_path_latest})
+    log('read secret value for secret name {}'.format(os.environ.get(env_var_secret_name)), LOG_SEVERITY_NOTICE)
+    secret_value = secret_latest_version.payload.data.decode("UTF-8")
+    return secret_value
 
 
 def serialize_exceptions(dict_some_val_ex):
@@ -214,3 +221,37 @@ def trade_recommendation(http_request):
             return "content_type != 'application/json", HTTPStatus.BAD_REQUEST
     else:
         return abort(404)
+
+
+# curl "http://cloud-func-url?code=test_auth_code&state=test_state_value"
+@functions_framework.http
+def get_authorization_code(http_request):
+    if http_request.method == 'GET':
+        # get authorization code redirected 302 from https://api.tradestation.com/docs/fundamentals/authentication/auth-code/
+        authorization_code = http_request.args.get(
+            'code')
+        state = http_request.args.get(
+            'state')
+
+        # get access and refresh token
+        url = "https://signin.tradestation.com/oauth/token"
+        # TODO: check if secret exists and is in the correct , separated format
+        client_id_secret = get_secret_value('SECRET_NAME_CLIENT_ID_SECRET')
+        client_id = client_id_secret.split(',')[0]
+        client_secret = client_id_secret.split(',')[1]
+        payload = 'grant_type=authorization_code&client_id={}&client_secret={}&code={}&redirect_uri={}' \
+            .format(client_id, client_secret, authorization_code,
+                    'https://get-authorization-code-slnskhfzsa-uw.a.run.app')
+        headers = {
+            'content-type': 'application/x-www-form-urlencoded'
+        }
+
+        tokens = requests.request("POST", url, headers=headers, data=payload)
+
+        return {
+            'authorization_code': authorization_code,
+            'state': state,
+            'tokens': tokens.json()
+        }
+    else:
+        return abort(403)

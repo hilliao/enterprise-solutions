@@ -20,3 +20,9 @@ gcloud beta functions deploy trade-recommendation \
 --allow-unauthenticated \
 --service-account=$SA \
 --set-env-vars BUCKET=test-vpc-341000,FOLDER=quotes,PROJECT_ID=$PROJECT_ID
+
+gcloud beta functions deploy get-authorization-code \
+ --gen2 --region us-west1 --runtime python39 --trigger-http \
+ --entry-point get_authorization_code --source $FUNCTION_DIR \
+ --allow-unauthenticated --service-account=$SA \
+ --set-env-vars SECRET_MANAGER_PROJECT_ID=test-vpc-341000,SECRET_NAME_CLIENT_ID_SECRET=TradeStation_Client_ID_Secret,PROJECT_ID=$PROJECT_ID
