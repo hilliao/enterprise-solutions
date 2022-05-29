@@ -124,15 +124,56 @@ def serialize_exceptions(dict_some_val_ex):
         return dict_some_val_ex
 
 
+access_token = None
+trade_station_url = 'https://api.tradestation.com/v3'
+trade_station_market_data = '/marketdata/stream/quotes/{symbols}'
+trade_station_token_url = "https://signin.tradestation.com/oauth/token"
+
+
 def get_cached_quote(bucket, ticker):
     storage_client = storage.Client()
     bucket = storage_client.get_bucket(bucket)
     blob = bucket.blob("{0}/{1}.json".format(os.environ.get('FOLDER'), ticker))
     try:
         json_str = blob.download_as_string().decode()
+        json_quote = json.loads(json_str)
     except Exception as err:
+        log(text='Reading quote of {} from Google cloud storage failed: {}'.format(ticker, str(err)),
+            severity=LOG_SEVERITY_WARNING)
         return err
-    json_quote = json.loads(json_str)
+    # attempt to call Trade Station API to get real time price quote
+    global access_token
+    if not access_token:
+        # TODO: check if secret exists and is in the correct , separated format
+        client_id_secret = get_secret_value('SECRET_NAME_CLIENT_ID_SECRET')
+        client_id = client_id_secret.split(',')[0]
+        client_secret = client_id_secret.split(',')[1]
+        refresh_token = get_secret_value('SECRET_NAME_REFRESH_TOKEN')
+        payload = 'grant_type=refresh_token&client_id={}&client_secret={}&refresh_token={}'.format(
+            client_id, client_secret, refresh_token
+        )
+        headers = {
+            'content-type': 'application/x-www-form-urlencoded'
+        }
+
+        token_response = requests.request("POST", trade_station_token_url, headers=headers, data=payload)
+        if token_response.status_code == HTTPStatus.OK:
+            access_token = token_response.json()['access_token']
+
+    trade_station_quote = '{}{}'.format(trade_station_url, trade_station_market_data.format(symbols=ticker))
+    headers = {
+        'Authorization': 'Bearer {}'.format(access_token)
+    }
+    with requests.request("GET", trade_station_quote, headers=headers, stream=True) as quote_response:
+        if quote_response.status_code == HTTPStatus.OK:
+            for chunk in quote_response.iter_content(1024 * 10, decode_unicode=True):
+                ts_quote = json.loads(chunk)
+                break
+
+            json_quote.update(ts_quote)
+        else:
+            log(text='TradeStation get quote of {} failed'.format(ticker), severity=LOG_SEVERITY_WARNING)
+
     return json_quote
 
 
@@ -157,8 +198,8 @@ def get_cached_quotes(bucket, tickers):
     return thread_results
 
 
-# curl -X PUT https://trade-recommendation-slnskhfzsa-uw.a.run.app/?tickers=IVV,GOOGL,FB -H 'Content-Type: application/json' -H 'Accept: application/json' -d '{"cash":11111, "amplify": 1}' -i
-# curl -X PUT http://localhost:8080/?tickers=IVV,GOOGL,FB -H 'Content-Type: application/json' -H 'Accept: application/json' -d '{"cash":11111, "amplify": 1}' -i
+# curl -X POST https://trade-recommendation-slnskhfzsa-uw.a.run.app/?tickers=IVV,GOOGL,FB -H 'Content-Type: application/json' -H 'Accept: application/json' -d '{"cash":11111, "amplify": 1, "bq_table": "test-vpc-341000.datalake.trade_recommendation"}' -i
+# curl -X POST http://localhost:8080/?tickers=IVV,GOOGL,FB -H 'Content-Type: application/json' -H 'Accept: application/json' -d '{"cash":11111, "amplify": 1, "bq_table": "test-vpc-341000.datalake.trade_recommendation"}' -i
 @functions_framework.http
 def trade_recommendation(http_request):
     if http_request.method == 'POST':
@@ -182,22 +223,26 @@ def trade_recommendation(http_request):
                         bq_table = request_json['bq_table']
                         fiftyDayAverage = quotes[ticker]['fiftyDayAverage']
                         twoHundredDayAverage = quotes[ticker]['twoHundredDayAverage']
-                        regularMarketPrice = quotes[ticker]['regularMarketPrice']
+                        if quotes[ticker]['Last']:
+                            ticker_price = float(quotes[ticker]['Last'])
+                        else:
+                            ticker_price = quotes[ticker]['regularMarketPrice']
 
                         # average of the moving averages minus the current stock price
-                        average_price_diff = ((fiftyDayAverage + twoHundredDayAverage) / 2 - regularMarketPrice)
+                        average_price_diff = ((fiftyDayAverage + twoHundredDayAverage) / 2 - ticker_price)
                         # how much more or less does the trader want to buy
-                        buy_adjust = average_price_diff / regularMarketPrice
+                        buy_adjust = average_price_diff / ticker_price
                         # how much cash does thr trader want to use
                         adjusted_cash = (buy_adjust + 1) * cash
                         # how many shares to buy
-                        buy_share_count = adjusted_cash / regularMarketPrice
+                        buy_share_count = adjusted_cash / ticker_price
                         # 2 decimals at mast
                         trades[ticker] = round(max(buy_share_count * amplify, 0), 2)
 
                     # save to a BigQuery table
+                    #TODO: fix the hard coded account number
                     rows_to_insert = [
-                        {"account": 10000, "recommendation": str(trades), "updated": str(datetime.datetime.utcnow())}
+                        {"account": -10000, "recommendation": str(trades), "updated": str(datetime.datetime.utcnow())}
                     ]
                     client = bigquery.Client()
                     try:
@@ -234,19 +279,19 @@ def get_authorization_code(http_request):
             'state')
 
         # get access and refresh token
-        url = "https://signin.tradestation.com/oauth/token"
         # TODO: check if secret exists and is in the correct , separated format
         client_id_secret = get_secret_value('SECRET_NAME_CLIENT_ID_SECRET')
         client_id = client_id_secret.split(',')[0]
         client_secret = client_id_secret.split(',')[1]
         payload = 'grant_type=authorization_code&client_id={}&client_secret={}&code={}&redirect_uri={}' \
             .format(client_id, client_secret, authorization_code,
+                    # TODO: change to self url
                     'https://get-authorization-code-slnskhfzsa-uw.a.run.app')
         headers = {
             'content-type': 'application/x-www-form-urlencoded'
         }
 
-        tokens = requests.request("POST", url, headers=headers, data=payload)
+        tokens = requests.request("POST", trade_station_token_url, headers=headers, data=payload)
 
         return {
             'authorization_code': authorization_code,
