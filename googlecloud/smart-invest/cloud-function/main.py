@@ -198,27 +198,29 @@ def get_cached_quotes(bucket, tickers):
     return thread_results
 
 
-# curl -X POST https://trade-recommendation-slnskhfzsa-uw.a.run.app/?tickers=IVV,GOOGL,FB -H 'Content-Type: application/json' -H 'Accept: application/json' -d '{"cash":11111, "amplify": 1, "bq_table": "test-vpc-341000.datalake.trade_recommendation"}' -i
-# curl -X POST http://localhost:8080/?tickers=IVV,GOOGL,FB -H 'Content-Type: application/json' -H 'Accept: application/json' -d '{"cash":11111, "amplify": 1, "bq_table": "test-vpc-341000.datalake.trade_recommendation"}' -i
+# curl -X POST https://trade-recommendation-slnskhfzsa-uw.a.run.app -H 'Content-Type: application/json' -H 'Accept: application/json' -d '{"orders": {"GOOGL": 5000,"QQQ": 15000,"DAL": 800},"amplify": 1,"bq_table": "test-vpc-341000.datalake.recommended_trades"}' -i
+# curl -X POST http://localhost:8080 -H 'Content-Type: application/json' -H 'Accept: application/json' -d '{"orders": {"GOOGL": 5000,"QQQ": 15000,"DAL": 800},"amplify": 1,"bq_table": "test-vpc-341000.datalake.recommended_trades"}' -i
 @functions_framework.http
 def trade_recommendation(http_request):
     if http_request.method == 'POST':
         if 'content-type' in http_request.headers and http_request.headers['content-type'] == 'application/json':
             request_json = http_request.get_json(silent=True)
-            header_params = ['cash', 'amplify', 'bq_table']
+            header_params = ['orders', 'amplify', 'bq_table']
             if request_json and all(item in request_json for item in header_params):
-                tickers = http_request.args.get('tickers')  # GOOGL,IVV
+                orders = request_json['orders']  # GOOGL: 5000,IVV: 12000
                 bucket = os.environ.get('BUCKET')
 
-                if tickers:
-                    list_tickers = tickers.split(',')
+                if orders and type(orders) is dict:
+                    list_tickers = orders.keys()
                     quotes = get_cached_quotes(bucket, list_tickers)
                     trades = {}
+                    total = 0
                     for ticker in quotes:
                         if isinstance(quotes[ticker], Exception):
+                            # assign the Exception to the dictionary's value for later processing
                             trades[ticker] = quotes[ticker]
                             continue
-                        cash = int(request_json['cash']) / len(list_tickers)
+                        cash = int(orders[ticker])
                         amplify = request_json['amplify']
                         bq_table = request_json['bq_table']
                         fiftyDayAverage = quotes[ticker]['fiftyDayAverage']
@@ -237,13 +239,28 @@ def trade_recommendation(http_request):
                         # how many shares to buy
                         buy_share_count = adjusted_cash / ticker_price
                         # 2 decimals at mast
-                        trades[ticker] = round(max(buy_share_count * amplify, 0), 2)
+                        shares_count = round(max(buy_share_count * amplify, 0), 2)
+                        trades[ticker] = {"shares": shares_count,
+                                          "cash": shares_count * ticker_price,
+                                          "price": ticker_price}
+                        total += trades[ticker]["cash"]
 
                     # save to a BigQuery table
-                    #TODO: fix the hard coded account number
-                    rows_to_insert = [
-                        {"account": -10000, "recommendation": str(trades), "updated": str(datetime.datetime.utcnow())}
-                    ]
+                    # TODO: fix the hard coded account number
+                    account_num = -1
+                    recommended_timestamp = str(datetime.datetime.utcnow())
+                    rows_to_insert = []
+                    for ticker, order in trades.items():
+                        if isinstance(order, Exception):
+                            continue
+                        rows_to_insert.append(
+                            {"account": account_num,
+                             "ticker": ticker,
+                             "cash": order["cash"],
+                             "price": order["price"],
+                             "shares": order["shares"],
+                             "updated": recommended_timestamp}
+                        )
                     client = bigquery.Client()
                     try:
                         errors = client.insert_rows_json(bq_table, rows_to_insert)
@@ -256,10 +273,14 @@ def trade_recommendation(http_request):
                             "{}: {}".format(bq_table, ex),
                             severity=LOG_SEVERITY_ERROR)
 
-                    return serialize_exceptions(trades)
+                    serialized_trades = serialize_exceptions(trades)
+                    # returned a tuple if there are exceptions in the values
+                    if type(serialized_trades) is tuple:
+                        return {"trades": serialized_trades[0], "total": total}, serialized_trades[1]
+                    else:
+                        return {"trades": serialized_trades, "total": total}
                 else:
-                    return "missing query string tickers", HTTPStatus.BAD_REQUEST
-
+                    return "missing orders dictionary in request body; e,g, orders: {GOOGL: 3000, QQQ: 5000}", HTTPStatus.BAD_REQUEST
             else:
                 return "JSON is invalid, or missing headers of {0}".format(header_params), HTTPStatus.BAD_REQUEST
         else:
