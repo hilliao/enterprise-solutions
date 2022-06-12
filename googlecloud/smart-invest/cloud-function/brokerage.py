@@ -7,25 +7,13 @@ from concurrent.futures.thread import ThreadPoolExecutor
 from http import HTTPStatus
 
 import requests
-from google.cloud import logging
-from google.cloud import secretmanager
 from google.cloud import storage
 
-LOG_SEVERITY_DEFAULT = 'DEFAULT'
-LOG_SEVERITY_INFO = 'INFO'
-LOG_SEVERITY_WARNING = 'WARNING'
-LOG_SEVERITY_DEBUG = 'DEBUG'
-LOG_SEVERITY_NOTICE = 'NOTICE'
-LOG_SEVERITY_ERROR = 'ERROR'
-app_name = 'smart-invest'
-
-
-def log(text, severity=LOG_SEVERITY_DEFAULT, log_name=app_name):
-    logging_client = logging.Client(project=os.environ['PROJECT_ID'])
-    logger = logging_client.logger(log_name)
-
-    return logger.log_text(text, severity=severity)
-
+from cloud_native import log
+from cloud_native import LOG_SEVERITY_DEBUG
+from cloud_native import LOG_SEVERITY_ERROR
+from cloud_native import LOG_SEVERITY_WARNING
+from cloud_native import get_secret_value
 
 access_token = {
     'token': None,
@@ -134,17 +122,6 @@ def get_cached_quotes(bucket, tickers):
             thread_results[ticker] = ex
 
     return thread_results
-
-
-def get_secret_value(env_var_secret_name):
-    sm_client = secretmanager.SecretManagerServiceClient()
-    secret_path_latest = sm_client.secret_path(os.environ.get('SECRET_MANAGER_PROJECT_ID'),
-                                               os.environ.get(env_var_secret_name)) + "/versions/latest"
-    # TODO: check if the secret exists
-    secret_latest_version = sm_client.access_secret_version(request={"name": secret_path_latest})
-    log('read secret value for secret name {}'.format(os.environ.get(env_var_secret_name)), LOG_SEVERITY_NOTICE)
-    secret_value = secret_latest_version.payload.data.decode("UTF-8")
-    return secret_value
 
 
 def execute_trade_order(trade_orders: dict, account_id: str):

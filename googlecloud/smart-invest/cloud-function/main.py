@@ -1,4 +1,3 @@
-import datetime
 import json
 import os
 from http import HTTPStatus
@@ -6,12 +5,11 @@ from http import HTTPStatus
 import functions_framework
 import requests
 from flask import abort
-from google.cloud import bigquery
 from google.cloud import storage
 
+import algo_trade
 import brokerage
-from brokerage import LOG_SEVERITY_ERROR
-from brokerage import log
+import cloud_native
 
 
 # https://stock-quotes-slnskhfzsa-uw.a.run.app/?tickers=GOOGL,IVV,AMZN
@@ -104,10 +102,19 @@ def trade_recommendation(http_request):
                 if orders and type(orders) is dict:
                     list_tickers = orders.keys()
                     quotes = brokerage.get_cached_quotes(bucket, list_tickers)
-                    sum_cash, trades = recommend(amplify, orders, quotes)
+                    trades = algo_trade.recommend(amplify, orders, quotes)
+                    sum_cash = 0
+                    [sum_cash := sum_cash + trade['cash'] for trade in trades.values() if
+                     not isinstance(trade, Exception)]
 
                     # save to a BigQuery table
-                    insert_to_bq(bq_table, trades)
+                    if 'account' in request_json:
+                        errors = cloud_native.insert_to_bq(bq_table, trades, int(request_json['account']))
+                    else:
+                        errors = cloud_native.insert_to_bq(bq_table, trades)
+
+                    cloud_native.log(text='Inserting to BigQuery has errors: {}'.format(errors),
+                                     severity=cloud_native.LOG_SEVERITY_DEBUG)
 
                     # execute trades if trade station account number is provided
                     if 'account' in request_json:
@@ -127,68 +134,6 @@ def trade_recommendation(http_request):
             return "content_type != 'application/json", HTTPStatus.BAD_REQUEST
     else:
         return abort(404)
-
-
-def insert_to_bq(bq_table, trades):
-    # TODO: fix the hard coded account number
-    account = -1
-    recommended_timestamp = str(datetime.datetime.utcnow())
-    rows_to_insert = []
-    for ticker, order in trades.items():
-        if isinstance(order, Exception):
-            continue
-        rows_to_insert.append(
-            {"account": account,
-             "ticker": ticker,
-             "cash": order["cash"],
-             "price": order["price"],
-             "shares": order["shares"],
-             "updated": recommended_timestamp}
-        )
-    client = bigquery.Client()
-    try:
-        errors = client.insert_rows_json(bq_table, rows_to_insert)
-        if errors:
-            log("Encountered errors while inserting rows to BigQuery table "
-                "{}: {}".format(bq_table, errors),
-                severity=LOG_SEVERITY_ERROR)
-    except Exception as ex:
-        log("Encountered errors while inserting rows to BigQuery table "
-            "{}: {}".format(bq_table, ex),
-            severity=LOG_SEVERITY_ERROR)
-
-
-def recommend(amplify, orders, quotes):
-    trades = {}
-    sum_cash = 0
-    for ticker in quotes:
-        if isinstance(quotes[ticker], Exception):
-            # assign the Exception to the dictionary's value for later processing
-            trades[ticker] = quotes[ticker]
-            continue
-        cash = float(orders[ticker])
-        fiftyDayAverage = quotes[ticker]['fiftyDayAverage']
-        twoHundredDayAverage = quotes[ticker]['twoHundredDayAverage']
-        if 'Last' in quotes[ticker]:
-            ticker_price = float(quotes[ticker]['Last'])
-        else:
-            ticker_price = quotes[ticker]['regularMarketPrice']
-
-        # average of the moving averages minus the current stock price
-        average_price_diff = ((fiftyDayAverage + twoHundredDayAverage) / 2 - ticker_price)
-        # how much more or less does the trader want to buy
-        buy_adjust = average_price_diff / ticker_price
-        # how much cash does thr trader want to use
-        adjusted_cash = (buy_adjust + 1) * cash
-        # how many shares to buy
-        buy_share_count = adjusted_cash / ticker_price
-        # 2 decimals at mast
-        shares_count = round(max(buy_share_count * amplify, 0), 2)
-        trades[ticker] = {"shares": shares_count,
-                          "cash": shares_count * ticker_price,
-                          "price": ticker_price}
-        sum_cash += trades[ticker]["cash"]
-    return sum_cash, trades
 
 
 # curl "http://cloud-func-url?code=test_auth_code&state=test_state_value"
