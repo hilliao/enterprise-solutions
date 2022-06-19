@@ -85,10 +85,10 @@ def serialize_exceptions(dict_some_val_ex):
         return dict_some_val_ex
 
 
-# curl -X POST https://trade-recommendation-slnskhfzsa-uw.a.run.app -H 'Content-Type: application/json' -H 'Accept: application/json' -d '{"orders": {"GOOGL": 5000,"QQQ": 15000,"DAL": 800},"amplify": 1,"bq_table": "test-vpc-341000.datalake.recommended_trades"}' -i
+# curl -X POST https://cloud-func-slnskhfzsa-uw.a.run.app -H 'Content-Type: application/json' -H 'Accept: application/json' -d '{"orders": {"GOOGL": 5000,"QQQ": 15000,"DAL": 800},"amplify": 1,"bq_table": "test-vpc-341000.datalake.recommended_trades","account":"12345","limit_order_off":0.02}' -i
 # curl -X POST http://localhost:8080 -H 'Content-Type: application/json' -H 'Accept: application/json' -d '{"orders": {"GOOGL": 5000,"QQQ": 15000,"DAL": 800},"amplify": 1,"bq_table": "test-vpc-341000.datalake.recommended_trades"}' -i
 @functions_framework.http
-def trade_recommendation(http_request):
+def execute_trade(http_request):
     if http_request.method == 'POST':
         if 'content-type' in http_request.headers and http_request.headers['content-type'] == 'application/json':
             request_json = http_request.get_json(silent=True)
@@ -118,7 +118,11 @@ def trade_recommendation(http_request):
 
                     # execute trades if trade station account number is provided
                     if 'account' in request_json:
-                        brokerage.execute_trade_order(trades, request_json['account'])
+                        if 'limit_order_off' in request_json:
+                            brokerage.execute_trade_order(trades, request_json['account'],
+                                                          float(request_json['limit_order_off']))
+                        else:
+                            brokerage.execute_trade_order(trades, request_json['account'])
 
                     serialized_trades = serialize_exceptions(trades)
                     # returned a tuple if there are exceptions in the values where exception is the 2nd item

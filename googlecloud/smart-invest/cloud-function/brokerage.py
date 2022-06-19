@@ -124,7 +124,7 @@ def get_cached_quotes(bucket, tickers):
     return thread_results
 
 
-def execute_trade_order(trade_orders: dict, account_id: str):
+def execute_trade_order(trade_orders: dict, account_id: str, limit_order_off: float = 0.01):
     trade_station_order_api = "{}/orderexecution/ordergroups".format(trade_station_url)
 
     orders = []
@@ -138,8 +138,8 @@ def execute_trade_order(trade_orders: dict, account_id: str):
             "Quantity": str(math.floor(order['shares'])),
             # TODO: make order type a parameter
             "OrderType": "Limit",
-            # TODO: make limit order price a parameter, 100 is for rounding to 2 decimals, 0.9 is hard coded
-            "LimitPrice": str(math.floor(order['price'] * 0.9 * 100) / 100.0),
+            # 100 is for rounding to 2 decimals
+            "LimitPrice": str(math.floor(order['price'] * (1 - limit_order_off) * 100) / 100.0),
             "TradeAction": "BUY",
             # TODO: make order type a parameter, GTC means good til cancel
             "TimeInForce": {"Duration": "GTC"},

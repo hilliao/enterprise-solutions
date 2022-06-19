@@ -14,11 +14,11 @@ gcloud beta functions deploy stock-quotes \
 --set-env-vars SECRET_NAME_REFRESH_TOKEN=TradeStation_RefreshToken,SECRET_NAME_CLIENT_ID_SECRET=TradeStation_Client_ID_Secret \
 --set-env-vars FOLDER=quotes,PROJECT_ID=$PROJECT_ID &
 
-gcloud beta functions deploy trade-recommendation \
+gcloud beta functions deploy execute-trade \
 --gen2 --region us-west1 \
 --runtime python39 \
 --trigger-http \
---entry-point trade_recommendation \
+--entry-point execute_trade \
 --source $FUNCTION_DIR \
 --allow-unauthenticated \
 --service-account=$SA \

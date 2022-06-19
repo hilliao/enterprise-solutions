@@ -32,7 +32,7 @@ def get_secret_value(env_var_secret_name):
     return secret_value
 
 
-def insert_to_bq(bq_table: str, trades: dict, account:int=-1):
+def insert_to_bq(bq_table: str, trades: dict, account: int = -1):
     recommended_timestamp = str(datetime.datetime.utcnow())
     rows_to_insert = []
     for ticker, order in trades.items():
