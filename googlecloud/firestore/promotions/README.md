@@ -32,6 +32,6 @@ The cloud build step copies the content of the service account key, source files
  - FIRESTORE_PATH: refer to FIRESTORE_PATH in cloudbuild.yaml; e,g, root-collection/document/sub-collection 
 
 ## Test the microservice
-Install Postman and import the collection.json file to try hitting the REST API
+Install Postman and import the *collection.json file to try invoking the REST API
  - /healthz: health check endpoint
  - /promotions: *[more in the *postman_collection.json file]*

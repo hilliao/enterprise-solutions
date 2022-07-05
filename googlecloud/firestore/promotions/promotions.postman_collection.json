@@ -18,7 +18,7 @@
 				],
 				"body": {
 					"mode": "raw",
-					"raw": "{\n    \"email\": \"chris0@example.com\",\n    \"name\": \"Chris LastName\"\n}",
+					"raw": "{\n    \"email\": \"chris0@example.com\",\n    \"name\": \"Chris Regent\"\n}",
 					"options": {
 						"raw": {
 							"language": "json"
@@ -26,13 +26,13 @@
 					}
 				},
 				"url": {
-					"raw": "{{url}}/promotions/hg4CnFHNYKW0b31QYsIM",
+					"raw": "{{url}}/promotions/ZyoAjAI45h7dCNrPHFQt",
 					"host": [
 						"{{url}}"
 					],
 					"path": [
 						"promotions",
-						"hg4CnFHNYKW0b31QYsIM"
+						"ZyoAjAI45h7dCNrPHFQt"
 					]
 				}
 			},
@@ -51,7 +51,7 @@
 				],
 				"body": {
 					"mode": "raw",
-					"raw": "{\n    \"expiry\": \"2021-12-31 23:59:59\",\n    \"service-category\": \"Google cloud data warehouse migration\",\n    \"charge\": 789,\n    \"form-url\": \"https://docs.google.com/forms/d/e/1FAIpQLSf_hYI8P3XYl8VACv5WaUNMAt2nkucE4PixAk_K2NZ-XcF3Xg/viewform?usp=sf_link\" \n}",
+					"raw": "{\n    \"expiry\": \"2022-09-01 00:00:01\",\n    \"service-category\": \"Google cloud architecture assessment\",\n    \"charge\": 1,\n    \"form-url\": \"https://docs.google.com/forms/d/e/1FAIpQLSf_hYI8P3XYl8VACv5WaUNMAt2nkucE4PixAk_K2NZ-XcF3Xg/viewform?usp=sf_link\" \n}",
 					"options": {
 						"raw": {
 							"language": "json"
@@ -100,6 +100,43 @@
 					],
 					"path": [
 						"promotions"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "get a specific promotions",
+			"protocolProfileBehavior": {
+				"disableBodyPruning": true
+			},
+			"request": {
+				"method": "GET",
+				"header": [
+					{
+						"key": "Authorization",
+						"type": "text",
+						"value": "admin==root",
+						"disabled": true
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "{{url}}/promotions/{{promo_code}}",
+					"host": [
+						"{{url}}"
+					],
+					"path": [
+						"promotions",
+						"{{promo_code}}"
 					]
 				}
 			},
