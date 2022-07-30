@@ -25,7 +25,7 @@ def stock_quotes(http_request):
 
         if tickers:
             list_tickers = tickers.split(',')
-            quotes = brokerage.get_cached_quotes(bucket, list_tickers)
+            quotes = brokerage.get_cached_or_realtime_quotes(bucket, list_tickers)
 
             return serialize_exceptions(quotes)
 
@@ -101,7 +101,7 @@ def execute_trade(http_request):
 
                 if orders and type(orders) is dict:
                     list_tickers = orders.keys()
-                    quotes = brokerage.get_cached_quotes(bucket, list_tickers)
+                    quotes = brokerage.get_cached_or_realtime_quotes(bucket, list_tickers)
                     trades = algo_trade.recommend(amplify, orders, quotes)
                     sum_cash = 0
                     [sum_cash := sum_cash + trade['cash'] for trade in trades.values() if

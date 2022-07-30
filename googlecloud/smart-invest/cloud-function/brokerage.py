@@ -2,6 +2,7 @@ import datetime
 import json
 import math
 import os
+import urllib.error
 from concurrent import futures
 from concurrent.futures.thread import ThreadPoolExecutor
 from http import HTTPStatus
@@ -26,17 +27,20 @@ trade_station_market_data = '/marketdata/stream/quotes/{symbols}'
 trade_station_token_url = "https://signin.tradestation.com/oauth/token"
 
 
-def get_cached_quote(bucket, ticker):
+def get_cached_or_realtime_quote(bucket, ticker):
     storage_client = storage.Client()
     bucket = storage_client.get_bucket(bucket)
-    blob = bucket.blob("{0}/{1}.json".format(os.environ.get('FOLDER'), ticker))
+    gcs_path = "{0}/{1}.json".format(os.environ.get('FOLDER'), ticker)
+    blob = bucket.blob(gcs_path)
     try:
         json_str = blob.download_as_string().decode()
         json_quote = json.loads(json_str)
     except Exception as err:
-        log(text='Reading quote of {} from Google cloud storage failed: {}'.format(ticker, str(err)),
+        log(text='Reading quote of {} from Google cloud storage at gs://{}/{} failed: {}'
+            .format(ticker, os.environ.get('BUCKET'), gcs_path, str(err)),
             severity=LOG_SEVERITY_WARNING)
-        return err
+        # hoping the real time quote API will succeed
+        json_quote = {}
     # attempt to call Trade Station API to get real time price quote
     refresh_global_access_token()
 
@@ -55,13 +59,16 @@ def get_cached_quote(bucket, ticker):
                 log(text='TradeStation get quote of {} succeeded: {}'.format(ticker, quote_response.text),
                     severity=LOG_SEVERITY_DEBUG)
             else:
-                log(text='TradeStation get quote of {} failed with {}: {}'.format(ticker,
-                                                                                  quote_response.status_code,
-                                                                                  quote_response.text),
-                    severity=LOG_SEVERITY_ERROR)
+                error_text = 'TradeStation get quote of {} failed with {}: {}'.format(ticker,
+                                                                                      quote_response.status_code,
+                                                                                      quote_response.text)
+                log(text=error_text, severity=LOG_SEVERITY_ERROR)
+                return Exception(error_text)
     else:
-        log(text='Failed to get TradeStation access token from refresh token in secret {}'.format(
-            os.environ.get('SECRET_NAME_REFRESH_TOKEN')), severity=LOG_SEVERITY_ERROR)
+        error_text = 'Failed to get TradeStation access token from refresh token in secret {}'.format(
+            os.environ.get('SECRET_NAME_REFRESH_TOKEN'))
+        log(text=error_text, severity=LOG_SEVERITY_ERROR)
+        return Exception(error_text)
 
     return json_quote
 
@@ -106,11 +113,11 @@ def refresh_access_token():
 MAX_WORKERS = 10
 
 
-def get_cached_quotes(bucket, tickers):
+def get_cached_or_realtime_quotes(bucket, tickers):
     thread_results = {}
     with ThreadPoolExecutor(max_workers=int(MAX_WORKERS)) as executor:
         for ticker in tickers:
-            thread_results[ticker] = executor.submit(get_cached_quote, bucket, ticker)
+            thread_results[ticker] = executor.submit(get_cached_or_realtime_quote, bucket, ticker)
 
         futures.wait(thread_results.values(), return_when=futures.ALL_COMPLETED)
 

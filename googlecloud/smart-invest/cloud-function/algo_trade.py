@@ -6,6 +6,10 @@ def recommend(amplify, orders, quotes):
             # assign the Exception to trade dictionary's value for later processing
             trades[ticker] = quotes[ticker]
             continue
+        if 'fiftyDayAverage' not in quotes[ticker] or 'twoHundredDayAverage' not in quotes[ticker]:
+            trades[ticker] = Exception("Failed to get fiftyDayAverage or twoHundredDayAverage from cached quotes")
+            continue
+
         cash = float(orders[ticker])
         fiftyDayAverage = quotes[ticker]['fiftyDayAverage']
         twoHundredDayAverage = quotes[ticker]['twoHundredDayAverage']
