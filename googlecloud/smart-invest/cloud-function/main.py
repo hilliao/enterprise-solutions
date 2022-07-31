@@ -27,7 +27,8 @@ def stock_quotes(http_request):
             list_tickers = tickers.split(',')
             quotes = brokerage.get_cached_or_realtime_quotes(bucket, list_tickers)
 
-            return serialize_exceptions(quotes)
+            quotes_ex_serialized = serialize_exceptions(quotes)
+            return quotes_ex_serialized
 
         elif gs_uri:
             bucket = gs_uri.split('/')[2]
@@ -35,14 +36,11 @@ def stock_quotes(http_request):
             storage_client = storage.Client()
             bucket = storage_client.get_bucket(bucket)
             blob = bucket.blob(object_name)
-
             json_str = blob.download_as_string().decode()
-            quotes = json.loads(json_str)
 
+            return json.loads(json_str)
         else:
             return "missing query string tickers or gs_uri", HTTPStatus.BAD_REQUEST
-
-        return quotes
 
     # save the quotes from Yahoo finance to Google cloud storage for get quotes to read from the bucket
     elif http_request.method == 'POST':
@@ -74,15 +72,27 @@ def stock_quotes(http_request):
         return abort(404)
 
 
-def serialize_exceptions(dict_some_val_ex):
-    if all(isinstance(quote, Exception) for quote in dict_some_val_ex.values()):
-        dict_some_val_ex = {k: str(v) for (k, v) in dict_some_val_ex.items()}
-        return dict_some_val_ex, HTTPStatus.GONE
-    if any(isinstance(quote, Exception) for quote in dict_some_val_ex.values()):
-        dict_some_val_ex = {k: (str(v) if isinstance(v, Exception) else v) for (k, v) in dict_some_val_ex.items()}
-        return dict_some_val_ex, HTTPStatus.MULTI_STATUS
+def serialize_exceptions(dict_maybe_some_val_ex):
+    # every value is an exception
+    if all(isinstance(quote, Exception) for quote in dict_maybe_some_val_ex.values()):
+        http_status = HTTPStatus.GONE
+    # some values are exceptions
+    elif any(isinstance(quote, Exception) for quote in dict_maybe_some_val_ex.values()):
+        http_status = HTTPStatus.MULTI_STATUS
+    # no exception in values
     else:
-        return dict_some_val_ex
+        http_status = HTTPStatus.OK
+
+    # serialize per value's type
+    for k in dict_maybe_some_val_ex:
+        if isinstance(dict_maybe_some_val_ex[k], Exception):
+            dict_maybe_some_val_ex[k] = str(dict_maybe_some_val_ex[k])
+        elif isinstance(dict_maybe_some_val_ex[k], brokerage.Quote):
+            dict_maybe_some_val_ex[k] = dict_maybe_some_val_ex[k].raw_dict
+        elif isinstance(dict_maybe_some_val_ex[k], algo_trade.Order):
+            dict_maybe_some_val_ex[k] = dict_maybe_some_val_ex[k].to_dict()
+
+    return dict_maybe_some_val_ex, http_status
 
 
 # curl -X POST https://cloud-func-slnskhfzsa-uw.a.run.app -H 'Content-Type: application/json' -H 'Accept: application/json' -d '{"orders": {"GOOGL": 5000,"QQQ": 15000,"DAL": 800},"amplify": 1,"bq_table": "test-vpc-341000.datalake.recommended_trades","account":"12345","limit_order_off":0.02}' -i
@@ -104,8 +114,7 @@ def execute_trade(http_request):
                     quotes = brokerage.get_cached_or_realtime_quotes(bucket, list_tickers)
                     trades = algo_trade.recommend(amplify, orders, quotes)
                     sum_cash = 0
-                    [sum_cash := sum_cash + trade['cash'] for trade in trades.values() if
-                     not isinstance(trade, Exception)]
+                    [sum_cash := sum_cash + order.cash for order in trades.values() if not isinstance(order, Exception)]
 
                     # save to a BigQuery table
                     if 'account' in request_json:
@@ -125,11 +134,8 @@ def execute_trade(http_request):
                             brokerage.execute_trade_order(trades, request_json['account'])
 
                     serialized_trades = serialize_exceptions(trades)
-                    # returned a tuple if there are exceptions in the values where exception is the 2nd item
-                    if type(serialized_trades) is tuple:
-                        return {"trades": serialized_trades[0], "sum_cash": sum_cash}, serialized_trades[1]
-                    else:
-                        return {"trades": serialized_trades, "sum_cash": sum_cash}
+                    # returned tuple's 2nd item is the HTTPStatus code
+                    return {"trades": serialized_trades[0], "sum_cash": sum_cash}, serialized_trades[1]
                 else:
                     return "missing orders dictionary in request body; e,g, orders: {GOOGL: 3000, QQQ: 5000}", HTTPStatus.BAD_REQUEST
             else:
@@ -145,20 +151,20 @@ def execute_trade(http_request):
 def get_authorization_code(http_request):
     if http_request.method == 'GET':
         # get authorization code redirected 302 from https://api.tradestation.com/docs/fundamentals/authentication/auth-code/
-        authorization_code = http_request.args.get(
-            'code')
-        state = http_request.args.get(
-            'state')
+        authorization_code = http_request.args.get('code')
+        state = http_request.args.get('state')
+        redirect_uri = http_request.base_url
+        redirect_uri = redirect_uri.replace('http://', 'https://')
 
         # get access and refresh token
-        # TODO: check if secret exists and is in the correct comma separated format
         client_id_secret = brokerage.get_secret_value('SECRET_NAME_CLIENT_ID_SECRET')
+        if len(client_id_secret.split(',')) != 2:
+            raise Exception("Failed to get TradeStation client ID and client secret")
+
         client_id = client_id_secret.split(',')[0]
         client_secret = client_id_secret.split(',')[1]
-        payload = 'grant_type=authorization_code&client_id={}&client_secret={}&code={}&redirect_uri={}' \
-            .format(client_id, client_secret, authorization_code,
-                    # TODO: change to self url
-                    'https://get-authorization-code-slnskhfzsa-uw.a.run.app')
+        payload = 'grant_type=authorization_code&client_id={}&client_secret={}&code={}&redirect_uri={}'.format(
+            client_id, client_secret, authorization_code, redirect_uri)
         headers = {
             'content-type': 'application/x-www-form-urlencoded'
         }

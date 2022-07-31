@@ -5,7 +5,7 @@ SA="stockquote@$PROJECT_ID.iam.gserviceaccount.com"
 gcloud beta functions deploy stock-quotes \
   --gen2 --region us-west1 \
   --runtime python39 \
-  --trigger-http --allow-unauthenticated \
+  --trigger-http  \
   --entry-point stock_quotes \
   --source $FUNCTION_DIR \
   --service-account=$SA \
@@ -26,7 +26,7 @@ gcloud beta functions deploy execute-trade \
 gcloud beta functions deploy get-authorization-code \
   --gen2 --region us-west1 --runtime python39 --trigger-http \
   --entry-point get_authorization_code --source $FUNCTION_DIR \
-  --service-account=$SA --quiet \
+  --service-account=$SA --quiet --allow-unauthenticated \
   --set-env-vars SECRET_MANAGER_PROJECT_ID=$PROJECT_ID,SECRET_NAME_CLIENT_ID_SECRET=TradeStation_Client_ID_Secret,PROJECT_ID=$PROJECT_ID &
 
 #gcloud scheduler jobs create http get-quotes --schedule="0 15 * * 1-5" --location us-west1 \

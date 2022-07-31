@@ -2,7 +2,6 @@ import datetime
 import json
 import math
 import os
-import urllib.error
 from concurrent import futures
 from concurrent.futures.thread import ThreadPoolExecutor
 from http import HTTPStatus
@@ -10,11 +9,11 @@ from http import HTTPStatus
 import requests
 from google.cloud import storage
 
-from cloud_native import log
 from cloud_native import LOG_SEVERITY_DEBUG
 from cloud_native import LOG_SEVERITY_ERROR
 from cloud_native import LOG_SEVERITY_WARNING
 from cloud_native import get_secret_value
+from cloud_native import log
 
 access_token = {
     'token': None,
@@ -25,6 +24,33 @@ trade_station_access_token_keep_alive = datetime.timedelta(minutes=19)
 trade_station_url = 'https://api.tradestation.com/v3'
 trade_station_market_data = '/marketdata/stream/quotes/{symbols}'
 trade_station_token_url = "https://signin.tradestation.com/oauth/token"
+
+
+class Quote:
+    def __init__(self, json_quote):
+        if 'fiftyDayAverage' in json_quote:
+            self.average50days = json_quote['fiftyDayAverage']
+        if 'twoHundredDayAverage' in json_quote:
+            self.average200days = json_quote['twoHundredDayAverage']
+        if 'Last' in json_quote:
+            self.latest_price = float(json_quote['Last'])
+        if 'regularMarketPrice' in json_quote:
+            self.cached_price = json_quote['regularMarketPrice']
+        self.raw_dict = json_quote
+
+    def diff_price_average(self):
+        if hasattr(self, 'average200days') and hasattr(self, 'average50days') and self.latest_ticker_price():
+            return self.latest_ticker_price() - (self.average200days + self.average50days) / 2
+        else:
+            return None
+
+    def latest_ticker_price(self):
+        if hasattr(self, 'latest_price'):
+            return self.latest_price
+        elif hasattr(self, 'cached_price'):
+            return self.cached_price
+        else:
+            return None
 
 
 def get_cached_or_realtime_quote(bucket, ticker):
@@ -70,7 +96,8 @@ def get_cached_or_realtime_quote(bucket, ticker):
         log(text=error_text, severity=LOG_SEVERITY_ERROR)
         return Exception(error_text)
 
-    return json_quote
+    quote = Quote(json_quote)
+    return quote
 
 
 # refresh access token if the last refresh time gets close to 20 minutes ago
@@ -82,8 +109,10 @@ def refresh_global_access_token():
 
 
 def refresh_access_token():
-    # TODO: check if secret exists and is in the correct , separated format
     client_id_secret = get_secret_value('SECRET_NAME_CLIENT_ID_SECRET')
+    if len(client_id_secret.split(',')) != 2:
+        raise Exception("Failed to get TradeStation client ID and client secret")
+
     client_id = client_id_secret.split(',')[0]
     client_secret = client_id_secret.split(',')[1]
     refresh_token = get_secret_value('SECRET_NAME_REFRESH_TOKEN')
@@ -102,10 +131,7 @@ def refresh_access_token():
             'last_modified': last_modified
         }
     else:
-        local_access_token = {
-            'token': None,
-            'last_modified': None
-        }
+        token_response.raise_for_status()
 
     return local_access_token
 
@@ -142,13 +168,13 @@ def execute_trade_order(trade_orders: dict, account_id: str, limit_order_off: fl
         orders.append({
             "AccountID": account_id,
             "Symbol": ticker,
-            "Quantity": str(math.floor(order['shares'])),
+            "Quantity": str(math.floor(order.shares)),
             # TODO: make order type a parameter
             "OrderType": "Limit",
             # 100 is for rounding to 2 decimals
-            "LimitPrice": str(math.floor(order['price'] * (1 - limit_order_off) * 100) / 100.0),
+            "LimitPrice": str(math.floor(order.price * (1 - limit_order_off) * 100) / 100.0),
             "TradeAction": "BUY",
-            # TODO: make order type a parameter, GTC means good til cancel
+            # TODO: make TimeInForce a parameter, GTC means good til cancel
             "TimeInForce": {"Duration": "GTC"},
             "Route": "Intelligent"
         })
@@ -164,15 +190,17 @@ def execute_trade_order(trade_orders: dict, account_id: str, limit_order_off: fl
     }
 
     order_exec_response = requests.request("POST", trade_station_order_api, json=payload, headers=headers)
-    if order_exec_response.status_code == HTTPStatus.OK:
-        trade_orders['executions'] = {'status': order_exec_response.status_code,
-                                      'results': json.loads(order_exec_response.text),
-                                      'url': trade_station_order_api}
-    else:
-        log(text='Trade station order execution failed at {} with status {}: {}'.format(
+    trade_orders['executions'] = {'status': order_exec_response.status_code,
+                                  'results': json.loads(order_exec_response.text),
+                                  'reason': order_exec_response.reason,
+                                  'url': trade_station_order_api}
+    if not order_exec_response.status_code == HTTPStatus.OK:
+        log(text='Trade station order execution failed at {} with status {}, reason {}: {}'.format(
             trade_station_order_api,
             order_exec_response.status_code,
-            order_exec_response.text), severity=LOG_SEVERITY_ERROR)
+            order_exec_response.reason,
+            order_exec_response.text),
+            severity=LOG_SEVERITY_ERROR)
 
     return trade_orders
 

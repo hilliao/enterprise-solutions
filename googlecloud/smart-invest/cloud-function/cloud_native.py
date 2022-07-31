@@ -41,9 +41,9 @@ def insert_to_bq(bq_table: str, trades: dict, account: int = -1):
         rows_to_insert.append(
             {"account": account,
              "ticker": ticker,
-             "cash": order["cash"],
-             "price": order["price"],
-             "shares": order["shares"],
+             "cash": order.cash,
+             "price": order.price,
+             "shares": order.shares,
              "updated": recommended_timestamp}
         )
     client = bigquery.Client()

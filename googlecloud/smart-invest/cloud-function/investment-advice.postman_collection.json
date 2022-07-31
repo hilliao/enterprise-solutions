@@ -1,0 +1,386 @@
+{
+	"info": {
+		"_postman_id": "9015febb-4dc8-458e-914d-95cb3a28e8ae",
+		"name": "investment advice",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"item": [
+		{
+			"name": "stock_quotes",
+			"request": {
+				"auth": {
+					"type": "bearer",
+					"bearer": [
+						{
+							"key": "token",
+							"value": "{{access_token}}",
+							"type": "string"
+						}
+					]
+				},
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "{{url}}/?tickers=GOOGL,IVV,QQQ,DAL,MSFT,UAL,NVDA",
+					"host": [
+						"{{url}}"
+					],
+					"path": [
+						""
+					],
+					"query": [
+						{
+							"key": "tickers",
+							"value": "GOOGL,IVV,QQQ,DAL,MSFT,UAL,NVDA"
+						}
+					]
+				},
+				"description": "set {{access_token}} to be the ID_TOKEN=$(gcloud auth print-identity-token) && echo $ID_TOKEN"
+			},
+			"response": []
+		},
+		{
+			"name": "execute_trade",
+			"request": {
+				"auth": {
+					"type": "bearer",
+					"bearer": [
+						{
+							"key": "token",
+							"value": "{{access_token}}",
+							"type": "string"
+						}
+					]
+				},
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"type": "text",
+						"value": "application/json"
+					},
+					{
+						"key": "bq_table",
+						"type": "text",
+						"value": "",
+						"disabled": true
+					},
+					{
+						"key": "",
+						"type": "text",
+						"value": "",
+						"disabled": true
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"orders\": {\n        \"QQQ\": 2000,\n        \"VHT\": 1000,\n        \"DAL\": 99\n    },\n    \"amplify\": 1,\n    \"bq_table\": \"{{bq_table}}\",\n    \"limit_order_off\": 0.1,\n    \"account\": \"{{account}}\"\n}"
+				},
+				"url": {
+					"raw": "{{url-execute-trade}}",
+					"host": [
+						"{{url-execute-trade}}"
+					]
+				},
+				"description": "set {{access_token}} to be ID_TOKEN=$(gcloud auth print-identity-token) && echo $ID_TOKEN"
+			},
+			"response": []
+		},
+		{
+			"name": "save stock_quotes",
+			"request": {
+				"auth": {
+					"type": "bearer",
+					"bearer": [
+						{
+							"key": "token",
+							"value": "{{access_token}}",
+							"type": "string"
+						}
+					]
+				},
+				"method": "POST",
+				"header": [],
+				"url": {
+					"raw": "{{url}}/?tickers=TSLA,NIO,WMT,CSCO,TGT,COST,INTC,CCL,UAL,AAL",
+					"host": [
+						"{{url}}"
+					],
+					"path": [
+						""
+					],
+					"query": [
+						{
+							"key": "tickers",
+							"value": "TSLA,NIO,WMT,CSCO,TGT,COST,INTC,CCL,UAL,AAL"
+						}
+					]
+				},
+				"description": "store stock quotes to Google cloud storage. gcloud scheduler jobs create http get-quotes --schedule=\"0 15 * * 1-5\" --location us-west1 --uri=\"https://$FUNC_URL/?tickers=QQQ,ONEQ,IVV,VOO,JETS,VHT,VDE,VFH,VTWO,BRK-B,ACN,AMD,GOOGL,AMZN,MSFT,MRVL,FB,QCOM,CRM,SNAP,TSM,BHP,RIO,EXPE,BKNG,HD,NIO,NVDA\" --http-method=POST --oidc-service-account-email=smart-invest-func-invoker@$PROJECT_ID.iam.gserviceaccount.com --oidc-token-audience=https://$FUNC_URL &"
+			},
+			"response": []
+		},
+		{
+			"name": "get authorization code test",
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "{{url-auth}}/?code={{code}}&state=prod",
+					"host": [
+						"{{url-auth}}"
+					],
+					"path": [
+						""
+					],
+					"query": [
+						{
+							"key": "code",
+							"value": "{{code}}"
+						},
+						{
+							"key": "state",
+							"value": "prod"
+						}
+					]
+				},
+				"description": "Execute this curl when Pycharm is not running locally with an unused Authorization code {{code}}. Execute the request of 'tradeStation authorization code' from Chrome browser. The Chrome page won't show but the URL will have a query string code=***.\nFill {{code}} with the URL code= query string; Start PyCharm debugging. {{code}} is authorization code which can be used only once to generate access and refresh tokens! hitting Send twice will cause tokens to have errors."
+			},
+			"response": []
+		},
+		{
+			"name": "tradeStation authorization code",
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "https://signin.tradestation.com/authorize?response_type=code&client_id={{client_id}}&audience=https://api.tradestation.com&redirect_uri={{redirect_uri}}&scope=openid profile offline_access MarketData ReadAccount Trade Crypto&state=prod",
+					"protocol": "https",
+					"host": [
+						"signin",
+						"tradestation",
+						"com"
+					],
+					"path": [
+						"authorize"
+					],
+					"query": [
+						{
+							"key": "response_type",
+							"value": "code"
+						},
+						{
+							"key": "client_id",
+							"value": "{{client_id}}"
+						},
+						{
+							"key": "audience",
+							"value": "https://api.tradestation.com"
+						},
+						{
+							"key": "redirect_uri",
+							"value": "{{redirect_uri}}"
+						},
+						{
+							"key": "scope",
+							"value": "openid profile offline_access MarketData ReadAccount Trade Crypto"
+						},
+						{
+							"key": "state",
+							"value": "prod"
+						}
+					]
+				},
+				"description": "Don't execute this curl but copy paste the curl's url to Chrome browser to cause trade station sign-in to get the authorization code per https://api.tradestation.com/docs/fundamentals/authentication/auth-code/"
+			},
+			"response": []
+		},
+		{
+			"name": "get access,refresh token",
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "content-type",
+						"value": "application/x-www-form-urlencoded"
+					}
+				],
+				"body": {
+					"mode": "urlencoded",
+					"urlencoded": [
+						{
+							"key": "grant_type",
+							"value": "authorization_code",
+							"type": "text"
+						},
+						{
+							"key": "client_id",
+							"value": "{{client_id}}",
+							"type": "text"
+						},
+						{
+							"key": "client_secret",
+							"value": "{{client_secret}}",
+							"type": "text"
+						},
+						{
+							"key": "code",
+							"value": "{{code}}",
+							"type": "text"
+						},
+						{
+							"key": "redirect_uri",
+							"value": "http://localhost:8080",
+							"type": "text"
+						}
+					]
+				},
+				"url": {
+					"raw": "{{url-trade-station-token}}",
+					"host": [
+						"{{url-trade-station-token}}"
+					]
+				},
+				"description": "response contains access_token, refresh_token, expires_in. {{code}} is authorization code which can be used only once to generate access and refresh tokens!"
+			},
+			"response": []
+		},
+		{
+			"name": "refresh access token",
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "content-type",
+						"value": "application/x-www-form-urlencoded"
+					}
+				],
+				"body": {
+					"mode": "urlencoded",
+					"urlencoded": [
+						{
+							"key": "grant_type",
+							"value": "refresh_token",
+							"type": "text"
+						},
+						{
+							"key": "client_id",
+							"value": "{{client_id}}",
+							"type": "text"
+						},
+						{
+							"key": "client_secret",
+							"value": "{{client_secret}}",
+							"type": "text"
+						},
+						{
+							"key": "refresh_token",
+							"value": "{{refresh_token}}",
+							"type": "text"
+						}
+					]
+				},
+				"url": {
+					"raw": "{{url-trade-station-token}}",
+					"host": [
+						"{{url-trade-station-token}}"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "Get Stock bar of GOOGL",
+			"request": {
+				"method": "GET",
+				"header": [
+					{
+						"key": "Authorization",
+						"value": "Bearer {{access_token}}"
+					}
+				],
+				"url": {
+					"raw": "https://api.tradestation.com/v3/marketdata/barcharts/GOOGL",
+					"protocol": "https",
+					"host": [
+						"api",
+						"tradestation",
+						"com"
+					],
+					"path": [
+						"v3",
+						"marketdata",
+						"barcharts",
+						"GOOGL"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "Get Stock quote of VIX",
+			"request": {
+				"method": "GET",
+				"header": [
+					{
+						"key": "Authorization",
+						"value": "Bearer {{access_token}}"
+					}
+				],
+				"url": {
+					"raw": "https://api.tradestation.com/v3/marketdata/stream/quotes/$VIX.X",
+					"protocol": "https",
+					"host": [
+						"api",
+						"tradestation",
+						"com"
+					],
+					"path": [
+						"v3",
+						"marketdata",
+						"stream",
+						"quotes",
+						"$VIX.X"
+					]
+				},
+				"description": "Hitting send will stream content without seeing the response. Copy paste the curl command from the Code button."
+			},
+			"response": []
+		},
+		{
+			"name": "recommend_trade",
+			"request": {
+				"auth": {
+					"type": "bearer",
+					"bearer": [
+						{
+							"key": "token",
+							"value": "{{access_token}}",
+							"type": "string"
+						}
+					]
+				},
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json",
+						"type": "text"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"orders\": {\n        \"NVDA\": 1000,\n        \"QQQ\": 5000,\n        \"VHT\": 3000,\n        \"DAL\": 99\n    },\n    \"amplify\": 1,\n    \"bq_table\": \"{{bq_table}}\",\n    \"limit_order_off\": 0.1 \n}"
+				},
+				"url": {
+					"raw": "{{url-execute-trade}}",
+					"host": [
+						"{{url-execute-trade}}"
+					]
+				},
+				"description": "set {{access_token}} to be ID_TOKEN=$(gcloud auth print-identity-token) && echo $ID_TOKEN"
+			},
+			"response": []
+		}
+	]
+}
