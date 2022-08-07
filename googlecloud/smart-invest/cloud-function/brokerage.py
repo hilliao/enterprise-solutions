@@ -158,6 +158,7 @@ def get_cached_or_realtime_quotes(bucket, tickers):
 
 
 def execute_trade_order(trade_orders: dict, account_id: str, limit_order_off: float = 0.01):
+    # API doc: https://api.tradestation.com/docs/specification/#operation/ConfirmGroupOrder
     trade_station_order_api = "{}/orderexecution/ordergroups".format(trade_station_url)
 
     orders = []
