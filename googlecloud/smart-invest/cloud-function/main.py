@@ -104,9 +104,10 @@ def execute_trade(http_request):
             request_json = http_request.get_json(silent=True)
             header_params = ['orders', 'amplify', 'bq_table']
             if request_json and all(item in request_json for item in header_params):
-                orders = request_json['orders']  # GOOGL: 5000,IVV: 12000
-                amplify = request_json['amplify']  # 1.1
-                bq_table = request_json['bq_table']  # project_id.dataset.table
+                #TODO: change orders to investment_allocation
+                orders = request_json['orders']  # {GOOGL: 5000,IVV: 12000}
+                amplify = request_json['amplify']  # 1.1 means buy 10% more shares
+                bq_table = request_json['bq_table']  # project_id.dataset.table for recording trade recommendations
                 bucket = os.environ.get('BUCKET')
 
                 if orders and type(orders) is dict:
