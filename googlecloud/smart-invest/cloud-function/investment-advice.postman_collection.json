@@ -102,7 +102,7 @@
 				"method": "POST",
 				"header": [],
 				"url": {
-					"raw": "{{url}}/?tickers=TSLA,NIO,WMT,CSCO,TGT,COST,INTC,CCL,UAL,AAL",
+					"raw": "{{url}}/?tickers=QQQ,ONEQ,IVV,VOO,JETS,VHT,VDE,VFH,VTWO,BRK-B,ACN,AMD,GOOGL,AMZN,MSFT,MRVL,META,QCOM,CRM,SNAP,TSM,BHP,RIO,EXPE,BKNG,HD,NIO,NVDA",
 					"host": [
 						"{{url}}"
 					],
@@ -112,11 +112,11 @@
 					"query": [
 						{
 							"key": "tickers",
-							"value": "TSLA,NIO,WMT,CSCO,TGT,COST,INTC,CCL,UAL,AAL"
+							"value": "QQQ,ONEQ,IVV,VOO,JETS,VHT,VDE,VFH,VTWO,BRK-B,ACN,AMD,GOOGL,AMZN,MSFT,MRVL,META,QCOM,CRM,SNAP,TSM,BHP,RIO,EXPE,BKNG,HD,NIO,NVDA"
 						}
 					]
 				},
-				"description": "store stock quotes to Google cloud storage. gcloud scheduler jobs create http get-quotes --schedule=\"0 15 * * 1-5\" --location us-west1 --uri=\"https://$FUNC_URL/?tickers=QQQ,ONEQ,IVV,VOO,JETS,VHT,VDE,VFH,VTWO,BRK-B,ACN,AMD,GOOGL,AMZN,MSFT,MRVL,FB,QCOM,CRM,SNAP,TSM,BHP,RIO,EXPE,BKNG,HD,NIO,NVDA\" --http-method=POST --oidc-service-account-email=smart-invest-func-invoker@$PROJECT_ID.iam.gserviceaccount.com --oidc-token-audience=https://$FUNC_URL &"
+				"description": "set {{access_token}} to be ID_TOKEN=$(gcloud auth print-identity-token) && echo $ID_TOKEN"
 			},
 			"response": []
 		},
