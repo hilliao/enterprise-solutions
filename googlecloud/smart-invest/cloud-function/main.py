@@ -51,18 +51,17 @@ def stock_quotes(http_request):
         yh_finance_res = brokerage.yh_finance_get_quotes(tickers)
         storage_client = storage.Client()
         bucket = storage_client.get_bucket(os.environ.get('BUCKET'))
+        quote_response = yh_finance_res.json()['quoteResponse']['result']
 
-        counter = 0
         saved_quotes = {}
-
-        for ticker in tickers.split(','):
+        for yh_quote in quote_response:
+            ticker = yh_quote['symbol']
             gcs_file = bucket.blob('{0}/{1}.json'.format(os.environ.get('FOLDER'), ticker))
-            raw_str = str(yh_finance_res.json()['quoteResponse']['result'][counter])
+            raw_str = str(yh_quote)
             # Yahoo finance returns single quotes, upper cases in certain contents
             replaced_str = raw_str.replace("'", '"').replace('True', 'true').replace('False', 'false')
             gcs_file.upload_from_string(replaced_str)
             saved_quotes[ticker] = gcs_file.media_link
-            counter += 1
 
         return saved_quotes
 
@@ -104,7 +103,7 @@ def execute_trade(http_request):
             request_json = http_request.get_json(silent=True)
             header_params = ['orders', 'amplify', 'bq_table']
             if request_json and all(item in request_json for item in header_params):
-                #TODO: change orders to investment_allocation
+                # TODO: change orders to investment_allocation
                 orders = request_json['orders']  # {GOOGL: 5000,IVV: 12000}
                 amplify = request_json['amplify']  # 1.1 means buy 10% more shares
                 bq_table = request_json['bq_table']  # project_id.dataset.table for recording trade recommendations
