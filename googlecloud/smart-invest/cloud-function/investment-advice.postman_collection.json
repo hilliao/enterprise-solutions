@@ -74,7 +74,7 @@
 				],
 				"body": {
 					"mode": "raw",
-					"raw": "{\n    \"orders\": {\n        \"QQQ\": 2000,\n        \"VHT\": 1000,\n        \"DAL\": 99\n    },\n    \"amplify\": 1,\n    \"bq_table\": \"{{bq_table}}\",\n    \"limit_order_off\": 0.1,\n    \"account\": \"{{account}}\"\n}"
+					"raw": "{\n    \"intended_allocation\": {\n        \"QQQ\": 1800.0,\n        \"VHT\": 800.0,\n        \"DAL\": 99.9\n    },\n    \"amplify\": 1.3,\n    \"bq_table\": \"{{bq_table}}\",\n    \"limit_order_off\": 0.2,\n    \"account\": {{account}}\n}"
 				},
 				"url": {
 					"raw": "{{url-execute-trade}}",

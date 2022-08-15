@@ -94,6 +94,51 @@ def serialize_exceptions(dict_maybe_some_val_ex):
     return dict_maybe_some_val_ex, http_status
 
 
+class TradeOrder:
+    keys = ['intended_allocation', 'amplify', 'bq_table']
+
+    def __init__(self, order_body: dict):
+        if not all(item in order_body for item in self.keys):
+            raise Exception("Malformed order body dict does not have keys: {}".format(self.keys))
+
+        # 1.1 means buy 10% more shares
+        if 'amplify' in order_body and isinstance(order_body['amplify'], float):
+            self.amplify = order_body['amplify']
+        else:
+            raise Exception("order body dictionary key amplify does not have value of type float")
+
+        # project_id.dataset.table for recording trade recommendations
+        if 'bq_table' in order_body and isinstance(order_body['bq_table'], str):
+            self.bq_table = order_body['bq_table']
+        else:
+            raise Exception("order body dictionary key bq_table does not have value of type str")
+
+        # {GOOGL: 5000,IVV: 12000}
+        if 'intended_allocation' in order_body and isinstance(order_body['intended_allocation'], dict):
+            self.intended_allocation = order_body['intended_allocation']
+        else:
+            raise Exception("order body dictionary key intended_allocation does not have value of type dict")
+
+        # check key is ticker string, value is float for allocation cash amount
+        for k, v in self.intended_allocation.items():
+            if not isinstance(k, str):
+                raise Exception("intended_allocation dictionary does not have key of type str")
+            if not isinstance(v, float):
+                raise Exception("intended_allocation dictionary does not have value of type float")
+
+        # accept optional account number. Trade station's account number is of type str
+        if 'account' in order_body:
+            self.account = str(order_body['account'])
+        else:
+            self.account = None
+
+        # accept optional limit_order_off variable which sets the buy limit order's price off from the current price
+        if 'limit_order_off' in order_body and isinstance(order_body['limit_order_off'], float):
+            self.limit_order_off = order_body['limit_order_off']
+        else:
+            self.limit_order_off = None
+
+
 # curl -X POST https://cloud-func-slnskhfzsa-uw.a.run.app -H 'Content-Type: application/json' -H 'Accept: application/json' -d '{"orders": {"GOOGL": 5000,"QQQ": 15000,"DAL": 800},"amplify": 1,"bq_table": "test-vpc-341000.datalake.recommended_trades","account":"12345","limit_order_off":0.02}' -i
 # curl -X POST http://localhost:8080 -H 'Content-Type: application/json' -H 'Accept: application/json' -d '{"orders": {"GOOGL": 5000,"QQQ": 15000,"DAL": 800},"amplify": 1,"bq_table": "test-vpc-341000.datalake.recommended_trades"}' -i
 @functions_framework.http
@@ -101,45 +146,36 @@ def execute_trade(http_request):
     if http_request.method == 'POST':
         if 'content-type' in http_request.headers and http_request.headers['content-type'] == 'application/json':
             request_json = http_request.get_json(silent=True)
-            header_params = ['orders', 'amplify', 'bq_table']
-            if request_json and all(item in request_json for item in header_params):
-                # TODO: change orders to investment_allocation
-                orders = request_json['orders']  # {GOOGL: 5000,IVV: 12000}
-                amplify = request_json['amplify']  # 1.1 means buy 10% more shares
-                bq_table = request_json['bq_table']  # project_id.dataset.table for recording trade recommendations
+            if request_json:
+                trade_order = TradeOrder(request_json)
                 bucket = os.environ.get('BUCKET')
+                list_tickers = trade_order.intended_allocation
+                quotes = brokerage.get_cached_or_realtime_quotes(bucket, list_tickers)
+                trades = algo_trade.recommend(trade_order.amplify, trade_order.intended_allocation, quotes)
+                sum_cash = 0
+                [sum_cash := sum_cash + order.cash for order in trades.values() if not isinstance(order, Exception)]
 
-                if orders and type(orders) is dict:
-                    list_tickers = orders.keys()
-                    quotes = brokerage.get_cached_or_realtime_quotes(bucket, list_tickers)
-                    trades = algo_trade.recommend(amplify, orders, quotes)
-                    sum_cash = 0
-                    [sum_cash := sum_cash + order.cash for order in trades.values() if not isinstance(order, Exception)]
-
-                    # save to a BigQuery table
-                    if 'account' in request_json:
-                        errors = cloud_native.insert_to_bq(bq_table, trades, int(request_json['account']))
-                    else:
-                        errors = cloud_native.insert_to_bq(bq_table, trades)
-
-                    cloud_native.log(text='Inserting to BigQuery has errors: {}'.format(errors),
-                                     severity=cloud_native.LOG_SEVERITY_DEBUG)
-
-                    # execute trades if trade station account number is provided
-                    if 'account' in request_json:
-                        if 'limit_order_off' in request_json:
-                            brokerage.execute_trade_order(trades, request_json['account'],
-                                                          float(request_json['limit_order_off']))
-                        else:
-                            brokerage.execute_trade_order(trades, request_json['account'])
-
-                    serialized_trades = serialize_exceptions(trades)
-                    # returned tuple's 2nd item is the HTTPStatus code
-                    return {"trades": serialized_trades[0], "sum_cash": sum_cash}, serialized_trades[1]
+                # save to a BigQuery table
+                if trade_order.account:
+                    errors = cloud_native.insert_to_bq(trade_order.bq_table, trades, int(trade_order.account))
                 else:
-                    return "missing orders dictionary in request body; e,g, orders: {GOOGL: 3000, QQQ: 5000}", HTTPStatus.BAD_REQUEST
+                    errors = cloud_native.insert_to_bq(trade_order.bq_table, trades)
+
+                cloud_native.log(text='Inserting to BigQuery has errors: {}'.format(errors),
+                                 severity=cloud_native.LOG_SEVERITY_DEBUG)
+
+                # execute trades if trade station account number is provided
+                if trade_order.account:
+                    if trade_order.limit_order_off:
+                        brokerage.execute_trade_order(trades, trade_order.account, float(trade_order.limit_order_off))
+                    else:
+                        brokerage.execute_trade_order(trades, trade_order.account)
+
+                serialized_trades = serialize_exceptions(trades)
+                # returned tuple's 2nd item is the HTTPStatus code
+                return {"trades": serialized_trades[0], "sum_cash": sum_cash}, serialized_trades[1]
             else:
-                return "JSON is invalid, or missing headers of {0}".format(header_params), HTTPStatus.BAD_REQUEST
+                return "Request body JSON is Null", HTTPStatus.BAD_REQUEST
         else:
             return "content_type != 'application/json", HTTPStatus.BAD_REQUEST
     else:

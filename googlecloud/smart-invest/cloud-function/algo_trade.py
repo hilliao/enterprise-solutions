@@ -8,7 +8,7 @@ class Order:
         return {"shares": self.shares, "cash": self.cash, "price": self.price}
 
 
-def recommend(amplify, orders, quotes):
+def recommend(amplify: float, intended_allocation: dict, quotes: dict):
     trades = {}
 
     for ticker in quotes:
@@ -20,7 +20,7 @@ def recommend(amplify, orders, quotes):
             trades[ticker] = Exception("Failed to get fiftyDayAverage or twoHundredDayAverage from cached quotes")
             continue
 
-        cash = float(orders[ticker])
+        cash = float(intended_allocation[ticker])
 
         # average of the moving averages minus the current stock price
         average_price_diff = -1 * quotes[ticker].diff_price_average()
