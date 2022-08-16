@@ -99,44 +99,50 @@ class TradeOrder:
 
     def __init__(self, order_body: dict):
         if not all(item in order_body for item in self.keys):
-            raise Exception("Malformed order body dict does not have keys: {}".format(self.keys))
+            raise Exception("Malformed order request body dict does not have keys: {}".format(self.keys))
 
         # 1.1 means buy 10% more shares
         if 'amplify' in order_body and isinstance(order_body['amplify'], float):
             self.amplify = order_body['amplify']
         else:
-            raise Exception("order body dictionary key amplify does not have value of type float")
+            raise Exception("order request body dictionary key amplify does not have value of type float")
 
         # project_id.dataset.table for recording trade recommendations
         if 'bq_table' in order_body and isinstance(order_body['bq_table'], str):
             self.bq_table = order_body['bq_table']
         else:
-            raise Exception("order body dictionary key bq_table does not have value of type str")
+            raise Exception("order request body dictionary key bq_table does not have value of type str")
 
         # {GOOGL: 5000,IVV: 12000}
         if 'intended_allocation' in order_body and isinstance(order_body['intended_allocation'], dict):
             self.intended_allocation = order_body['intended_allocation']
         else:
-            raise Exception("order body dictionary key intended_allocation does not have value of type dict")
+            raise Exception("order request body dictionary key intended_allocation does not have value of type dict")
 
         # check key is ticker string, value is float for allocation cash amount
         for k, v in self.intended_allocation.items():
             if not isinstance(k, str):
-                raise Exception("intended_allocation dictionary does not have key of type str")
+                raise Exception("request body intended_allocation dictionary does not have key of type str")
             if not isinstance(v, float):
-                raise Exception("intended_allocation dictionary does not have value of type float")
+                raise Exception("request body intended_allocation dictionary does not have value of type float")
 
         # accept optional account number. Trade station's account number is of type str
         if 'account' in order_body:
             self.account = str(order_body['account'])
+            # Expand TimeInForce.duration parameter at https://api.tradestation.com/docs/specification/#operation/PlaceOrder
+            # to see available enumerations
+            if 'duration' in order_body and isinstance(order_body['duration'], str):
+                self.duration = order_body['duration']
+            else:
+                raise Exception("request body dictionary key account is given but not duration of type str")
+
+            # limit_order_off parameter which sets the buy limit order's price off from the current price
+            if 'limit_order_off' in order_body and isinstance(order_body['limit_order_off'], float):
+                self.limit_order_off = order_body['limit_order_off']
+            else:
+                raise Exception("request body dictionary key account is given but not limit_order_off of type float")
         else:
             self.account = None
-
-        # accept optional limit_order_off variable which sets the buy limit order's price off from the current price
-        if 'limit_order_off' in order_body and isinstance(order_body['limit_order_off'], float):
-            self.limit_order_off = order_body['limit_order_off']
-        else:
-            self.limit_order_off = None
 
 
 # curl -X POST https://cloud-func-slnskhfzsa-uw.a.run.app -H 'Content-Type: application/json' -H 'Accept: application/json' -d '{"orders": {"GOOGL": 5000,"QQQ": 15000,"DAL": 800},"amplify": 1,"bq_table": "test-vpc-341000.datalake.recommended_trades","account":"12345","limit_order_off":0.02}' -i
@@ -147,7 +153,10 @@ def execute_trade(http_request):
         if 'content-type' in http_request.headers and http_request.headers['content-type'] == 'application/json':
             request_json = http_request.get_json(silent=True)
             if request_json:
-                trade_order = TradeOrder(request_json)
+                try:
+                    trade_order = TradeOrder(request_json)
+                except Exception as ex:
+                    return str(ex), HTTPStatus.BAD_REQUEST
                 bucket = os.environ.get('BUCKET')
                 list_tickers = trade_order.intended_allocation
                 quotes = brokerage.get_cached_or_realtime_quotes(bucket, list_tickers)
@@ -167,7 +176,10 @@ def execute_trade(http_request):
                 # execute trades if trade station account number is provided
                 if trade_order.account:
                     if trade_order.limit_order_off:
-                        brokerage.execute_trade_order(trades, trade_order.account, float(trade_order.limit_order_off))
+                        brokerage.execute_trade_order(trades,
+                                                      trade_order.account,
+                                                      duration=trade_order.duration,
+                                                      limit_order_off=float(trade_order.limit_order_off))
                     else:
                         brokerage.execute_trade_order(trades, trade_order.account)
 

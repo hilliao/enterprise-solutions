@@ -157,7 +157,7 @@ def get_cached_or_realtime_quotes(bucket, tickers):
     return thread_results
 
 
-def execute_trade_order(trade_orders: dict, account_id: str, limit_order_off: float = 0.01):
+def execute_trade_order(trade_orders: dict, account_id: str, duration: str = 'GTC', limit_order_off: float = 0.01):
     # API doc: https://api.tradestation.com/docs/specification/#operation/ConfirmGroupOrder
     trade_station_order_api = "{}/orderexecution/ordergroups".format(trade_station_url)
 
@@ -175,8 +175,9 @@ def execute_trade_order(trade_orders: dict, account_id: str, limit_order_off: fl
             # 100 is for rounding to 2 decimals
             "LimitPrice": str(math.floor(order.price * (1 - limit_order_off) * 100) / 100.0),
             "TradeAction": "BUY",
-            # TODO: make TimeInForce a parameter, GTC means good til cancel
-            "TimeInForce": {"Duration": "GTC"},
+            # Expand TimeInForce.duration parameter at https://api.tradestation.com/docs/specification/#operation/PlaceOrder
+            # to see available enumerations
+            "TimeInForce": {"Duration": duration},
             "Route": "Intelligent"
         })
 
