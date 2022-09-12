@@ -2,6 +2,7 @@
 set -e # exit the script when execution hits any error
 set -x # print the executing lines
 
+# [mandatory variables]
 PROJECT_ID=[***REQUIRED***]
 REGION=us-west1
 
@@ -24,7 +25,7 @@ gcloud iam service-accounts create smart-invest-func-invoker \
     --display-name="Grant cloud function invoker role to functions, cloud run invoker to function's cloud run service" \
     --project $PROJECT_ID
 
-# create secrets
+# create secrets. after secrets are created, manually add versions to each secret
 for secret_name in X-RapidAPI-Key TradeStation_RefreshToken TradeStation_Client_ID_Secret
 do
   gcloud secrets create $secret_name \

@@ -1,6 +1,10 @@
+#!/bin/bash
+set -e # exit the script when execution hits any error
+set -x # print the executing lines
+
+# [mandatory variables]
 FUNCTION_DIR=/home/hil/git/enterprise-solutions/googlecloud/smart-invest/cloud-function
 PROJECT_ID=[***REQUIRED***]
-
 SA="smart-invest@$PROJECT_ID.iam.gserviceaccount.com"
 REGION=us-west1
 
