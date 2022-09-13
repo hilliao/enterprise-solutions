@@ -30,7 +30,9 @@ steps:
         echo "killing docker container at remote ..." && \
         (ssh -i $$SSH_PRIVATE_KEY_PATH -o StrictHostKeyChecking=no $_SSH_WEB_SERVER docker rm -f $$CONTAINER || \
         echo "Remote container $$CONTAINER not running!") && echo "running docker image $_IMAGE at remote ..." && \
-        ssh -i $$SSH_PRIVATE_KEY_PATH -o StrictHostKeyChecking=no $_SSH_WEB_SERVER docker run --name $$CONTAINER --restart unless-stopped -d -p 80:80 \
-        ${_LOCATION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/${_IMAGE}
+        (ssh -i $$SSH_PRIVATE_KEY_PATH -o StrictHostKeyChecking=no $_SSH_WEB_SERVER docker run --name $$CONTAINER \
+        --restart unless-stopped -d -p 80:80 ${_LOCATION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/${_IMAGE} || \
+        echo "Executing the docker run command on the server manually: \
+        docker run --name $$CONTAINER --restart unless-stopped -d -p 80:80 ${_LOCATION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/${_IMAGE}" )
 images:
   - '${_LOCATION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/${_IMAGE}'
