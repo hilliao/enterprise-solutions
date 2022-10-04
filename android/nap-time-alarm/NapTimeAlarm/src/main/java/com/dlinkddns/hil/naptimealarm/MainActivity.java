@@ -84,12 +84,13 @@ public class MainActivity extends AppCompatActivity {
         alarmSwitch.setOnCheckedChangeListener((buttonView, isChecked) -> {
             // app crash if not have Do Not Disturb access: java.lang.SecurityException: Not allowed to change Do Not Disturb state
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                // if user has not granted app access to do not disturb, show the UI for user to grant permissions
                 if (!notificationManager.isNotificationPolicyAccessGranted()) {
                     alarmSwitch.setChecked(false);
                     Intent intent = new Intent(android.provider.Settings.ACTION_NOTIFICATION_POLICY_ACCESS_SETTINGS);
                     startActivity(intent);
                 } else {
-                    // switch alarm timer on or off where timer-on turns on Do Not Disturb
+                    // switch alarm timer on or off; on activates Do Not Disturb
                     alarmSwitchLogic(isChecked, alarmSwitch);
                 }
             } else {
@@ -348,7 +349,7 @@ public class MainActivity extends AppCompatActivity {
             // requires android.permission.ACCESS_NOTIFICATION_POLICY to silence everything
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
                 NotificationManager notificationManager = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
-                notificationManager.setInterruptionFilter(NotificationManager.INTERRUPTION_FILTER_NONE);
+                notificationManager.setInterruptionFilter(NotificationManager.INTERRUPTION_FILTER_ALARMS);
             } else {
                 audioManager.setRingerMode(AudioManager.RINGER_MODE_SILENT);
             }
