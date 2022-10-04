@@ -181,7 +181,7 @@ public class MainActivity extends AppCompatActivity {
         }
 
         Intent intent = new Intent(this, PlayRingtoneReceiver.class);
-        playRingtoneIntent = PendingIntent.getBroadcast(this, 0, intent, 0);
+        playRingtoneIntent = PendingIntent.getBroadcast(this, 0, intent, PendingIntent.FLAG_MUTABLE);
     }
 
     @Override
@@ -399,7 +399,7 @@ public class MainActivity extends AppCompatActivity {
     @Override
     public boolean onOptionsItemSelected(MenuItem item) {
         if (item.getItemId() == R.id.viewGitSource) {
-            Uri uri = Uri.parse(getString(R.string.gitsource));
+            Uri uri = Uri.parse(getString(R.string.git));
             startActivity(new Intent(Intent.ACTION_VIEW, uri));
             return true;
         }

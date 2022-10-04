@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?><!-- key tool command https://developers.google.com/android/guides/client-auth -->
-<manifest xmlns:android="http://schemas.android.com/apk/res/android"
-    package="com.dlinkddns.hil.naptimealarm">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
     <uses-permission android:name="android.permission.ACCESS_NOTIFICATION_POLICY" />
+    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
 
     <!-- make the app appear in chromebooks without touch enabled -->
     <uses-feature
@@ -20,7 +20,8 @@
             android:name=".MainActivity"
             android:configChanges="orientation|keyboardHidden|screenSize"
             android:label="@string/app_name"
-            android:theme="@style/AppTheme.NoActionBar">
+            android:theme="@style/AppTheme.NoActionBar"
+            android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
