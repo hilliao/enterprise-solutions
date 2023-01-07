@@ -1,17 +1,16 @@
 #!/usr/bin/python3
+# Python variables to change: LOG_FILENAME, parentdir, week
+# Bash variables to change: $WORKING_DIR: the directory where files and folders are deleted, STDOUT_TXT: .txt output of what's deleted
 #
-# crontab does not support $HOME
-# replace $_HOME with /root, $WORKING_DIR with the directory to auto delete
-# Copy autodelete.py to $_HOME/bin
-# chmod a+x $_HOME/bin/autodelete.py
+# Copy autodelete.py to /usr/local/bin/
+# chmod a+x /usr/local/bin/autodelete.py
 #
 # Example crontab
-# 0 3 * * * $_HOME/bin/autodelete.py > $_HOME/bin/autodelete.txt 2>&1 && echo "Finding and deleting empty directories..." >> $_HOME/bin/autodelete.txt && find $WORKING_DIR -type d -empty -delete -print >> $_HOME/bin/autodelete.txt 2>&1
-# (date && df -h && tail $_HOME/bin/autodelete.txt $_HOME/bin/autodelete.log) | txt2html > /var/www/html/autodelete.html # make the html writeable for the current user and txt2html is installed
+# 0 3 * * * STDOUT_TXT=/var/log/autodelete.txt && WORKING_DIR=/mnt/disk_dir/ftp/autodelete && /usr/local/bin/autodelete.py > $STDOUT_TXT 2>&1 && echo "Finding and deleting empty directories..." >> $STDOUT_TXT && find $WORKING_DIR -type d -empty -delete -print >> $STDOUT_TXT 2>&1 && mkdir -p $WORKING_DIR
 import time, glob, os, logging
 
 # fresh start of log file
-LOG_FILENAME = '$_HOME/bin/autodelete.log'
+LOG_FILENAME = '/var/log/autodelete.log'
 if os.path.isfile(LOG_FILENAME):
     os.remove(LOG_FILENAME)
 logging.basicConfig(filename=LOG_FILENAME, level=logging.DEBUG)
