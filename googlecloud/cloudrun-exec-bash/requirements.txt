@@ -1,0 +1,6 @@
+# Copyright 2021 GoogleCloud.fr. This software is provided as-is, without warranty
+# or representation for any use or purpose. Your use of it is subject to your agreement with GoogleCloud.fr
+
+Flask==2.0.1
+gunicorn==20.1.0
+google-api-python-client==1.9.3
