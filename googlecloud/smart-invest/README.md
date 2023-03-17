@@ -24,12 +24,24 @@ Cloud Run service.
 # Deployment Handbook
 setup.sh creates the infrastructure required to run the microservices. deploy.sh executes commands to deploy
 the cloud functions. Replace mandatory variables in setup.sh such as PROJECT_ID and region in the scripts.
+
 ## setup.sh
 Cloud functions are regional project scoped resources.
 Execute each command sequentially and make sure the current commands succeed. Some commands have dependencies
 causing simultaneous execution or execution out of order problematic. After all commands in setup.sh succeeds, there
 are some manual steps such as adding secrets required for cloud functions to return success.
+
 ## cloud-function/deploy.sh
 The gcloud commands to deploy functions gen2 can be executed in parallel. FUNCTION_DIR is the absolute path to
 cloud-function. There are some hard coded strings such as smart-invest that depends on the service account
 creation command in setup.sh.
+
+## Debugging cloud function locally
+Create a Python virtual environment in Pycharm. Install the packages in requirements.txt.
+Refer to [the guide](https://github.com/GoogleCloudPlatform/functions-framework-python)
+to configure executing functions-framework locally to debug in PyCharm community edition. I've succeeded
+in stepping through the code. Refer to the screenshot of PyCharm's run,debug configurations in `python-debug-functions-framework.png`. 
+Basically, in run,debug configuration, under configuration, change from script path to module name. Click on the
+3 dots to locate the functions-framework module. You'd need to type it to check if it exists. Enter the parameters:
+--target stock_quotes --port 8081 --debug where stock_quotes is the function name and 8081 is an unused port on local.
+Set the working directory to the directory of the function's filename.
