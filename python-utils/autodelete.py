@@ -6,7 +6,7 @@
 # chmod a+x /usr/local/bin/autodelete.py
 #
 # Example crontab
-# 0 3 * * * STDOUT_TXT=/var/log/autodelete.txt && WORKING_DIR=/mnt/disk_dir/ftp/autodelete && /usr/local/bin/autodelete.py > $STDOUT_TXT 2>&1 && echo "Finding and deleting empty directories..." >> $STDOUT_TXT && find $WORKING_DIR -type d -empty -delete -print >> $STDOUT_TXT 2>&1 && mkdir -p $WORKING_DIR
+# 0 3 * * * STDOUT_TXT=/var/log/autodelete.txt && WORKING_DIR=/mnt/disk_dir/ftp/autodelete && IPCAM_USER=ipcam && /usr/local/bin/autodelete.py > $STDOUT_TXT 2>&1 && echo "Finding and deleting empty directories..." >> $STDOUT_TXT && find $WORKING_DIR -type d -empty -delete -print >> $STDOUT_TXT 2>&1 && mkdir -p $WORKING_DIR && chown $IPCAM_USER:$IPCAM_USER $WORKING_DIR
 import time, glob, os, logging
 
 # fresh start of log file
