@@ -1,0 +1,25 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: cloud-console-sa-view
+subjects:
+  - kind: ServiceAccount
+    name: cloud-console-sa
+    namespace: default
+roleRef:
+  kind: ClusterRole
+  name: view
+  apiGroup: rbac.authorization.k8s.io
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: cloud-console-sa-read
+subjects:
+  - kind: ServiceAccount
+    name: cloud-console-sa
+    namespace: default
+roleRef:
+  kind: ClusterRole
+  name: cloud-console-reader
+  apiGroup: rbac.authorization.k8s.io
