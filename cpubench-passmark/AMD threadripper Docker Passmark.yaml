@@ -1,0 +1,45 @@
+BaselineInfo:
+  WebDBID: -1
+  TimeStamp: 20230425230852
+Version:
+  Major: 10
+  Minor: 2
+  Build: 1002
+  SpecialBuildName: ""
+  ptArchitecture: x86_64_linux
+Results:
+  Results Complete: true
+  NumTestProcesses: 24
+  CPU_INTEGER_MATH: 15857.092666666671
+  CPU_FLOATINGPOINT_MATH: 9008.7839135014947
+  CPU_PRIME: 26.546624360654135
+  CPU_SORTING: 0
+  CPU_ENCRYPTION: 5465.7904874711085
+  CPU_COMPRESSION: 80428.910400515917
+  CPU_SINGLETHREAD: 2676.5368618084131
+  CPU_PHYSICS: 0
+  CPU_MATRIX_MULT_SSE: 4862.2750485384295
+  CPU_mm: 476.11308107900862
+  CPU_sse: 2181.0554754493596
+  CPU_fma: 6936.3564039774355
+  CPU_avx: 5469.4132661884951
+  CPU_avx512: 0
+  m_CPU_enc_SHA: 7635385602.2269716
+  m_CPU_enc_AES: 5474155663.7226439
+  m_CPU_enc_ECDSA: 4084348912.621902
+  ME_ALLOC_S: 0
+  ME_READ_S: 0
+  ME_READ_L: 0
+  ME_WRITE: 0
+  ME_LARGE: 0
+  ME_LATENCY: 0
+  ME_THREADED: 0
+  SUMM_CPU: 0
+  SUMM_ME: 0
+SystemInformation:
+  OSName: Debian GNU/Linux 11 (bullseye)
+  Kernel: 5.19.0-38-generic
+  Device: ""
+  Processor: AMD Ryzen Threadripper PRO 3945WX 12-Cores
+  NumSockets: 1
+  Manufacturer: AuthenticAMD
