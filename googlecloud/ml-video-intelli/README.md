@@ -43,7 +43,8 @@ Clone the code; create a Python virtual environment to install the dependencies;
 and functional. Read the comments in the following code block to install and test the Python dependencies.
 ```commandline
 git clone https://github.com/hilliao/enterprise-solutions.git && \
-mkdir $HOME/staging && cd $HOME/staging \
+mkdir $HOME/staging && cd $HOME/staging
+
 python3 -m venv gcp && \
 . gcp/bin/activate # this enters into Python's virtual environment
 
@@ -72,20 +73,20 @@ gcloud auth activate-service-account --key-file=$HOME/keyfile.json # https://clo
 
 # Verify if the service account is activated. Expect to see the service account in the output
 gcloud auth list
-export GOOGLE_APPLICATION_CREDENTIALS=$HOME/keyfile.json # https://cloud.google.com/docs/authentication/application-default-credentials#GAC
-
-# Verify the environment variable is set to the file path
-echo $GOOGLE_APPLICATION_CREDENTIALS
 ```
 
 ### BASH Environment Variables
 Set the following environment variables
 ```commandline
-PROJECT_ID=***???*** # execute `gcloud config list` to find out or choose a Google cloud project ID 
-BASE_DIR=$HOME/Videos # is where you want to watch for incoming video files
-GCS_URI_VIDEOS=gs://$PROJECT_ID-vertex-ai/machine-learning/location-0 # the bucket you created in the GCP project to store video files
+head $HOME/enterprise-solutions/googlecloud/ml-video-intelli/upload.sh # inspect environment variables to set
+
+export BASE_DIR=$HOME/Videos # is where you want to watch for incoming video files
+export PROJECT_ID=***???*** # execute `gcloud config list` to find out or choose a Google cloud project ID 
+export GCS_FOLDER_PATH=gs://$PROJECT_ID-vertex-ai/machine-learning/location-0 # the bucket you created in the GCP project to store video files
+export STAGING_DIR=$HOME/staging # video files are copied here before sent to the bucket
+export GOOGLE_APPLICATION_CREDENTIALS=$HOME/keyfile.json # https://cloud.google.com/docs/authentication/application-default-credentials#GAC
 ```
-BASE_DIR is the directory where the video files are uploaded via FTP or SSH. It's recommended to implement a cron job
+BASE_DIR is the directory where the video files are dumped via FTP or SSH. It's recommended to implement a cron job
 that deletes files older than a few weeks such as the [Sample script](https://github.com/hilliao/enterprise-solutions/blob/master/python-utils/autodelete.py)
 in Python running as root or the user.
 
@@ -94,27 +95,20 @@ Configure environment variables in `upload.sh`:
 ```commandline
 # verify gsutil is installed
 gsutil --help
-cp -v $HOME/enterprise-solutions/googlecloud/ml-video-intelli/* $HOME/staging/
-nano $HOME/staging/upload.sh
+cp -v $HOME/enterprise-solutions/googlecloud/ml-video-intelli/* $STAGING_DIR/
 ```
-set the following environment variables
-0. export PROJECT_ID=[Replace with GCP project ID]
-1. STAGING_DIR=$HOME/staging
-2. GCS_FOLDER_PATH=gs://$PROJECT_ID-vertex-ai/machine-learning/location-0 # exact same as $GCS_URI_VIDEOS
-3. export GOOGLE_APPLICATION_CREDENTIALS=$HOME/keyfile.json
-
 The following command watches for file events of rename and write on files ending with .mkv or .mp4 under the $BASE_DIR
 recursively. The command returns immediately and runs in the background. Don't quit the command line but keep it open.
 To test if the file is working properly, move a .mp4|.mkv file to $BASE_DIR or a sub path under it.
 
 ```commandline
 # make sure the script exists first
-ls $HOME/staging/upload.sh
+ls $STAGING_DIR/upload.sh
 
-iwatch -r -t "^.*\.(mkv|mp4)$" -e moved_to,close_write -c "$HOME/staging/upload.sh -p %f -g $GCS_URI_VIDEOS" $BASE_DIR &
-# command above returns immediately. keep the terminal open for checking standard output.
+# command returns immediately. keep the terminal open for checking standard output.
+iwatch -r -t "(\.mkv|\.mp4)$" -e moved_to,close_write -c "$STAGING_DIR/upload.sh -p %f -g $GCS_FOLDER_PATH" $BASE_DIR &
 ```
-`-t` is the argument to set regular expression `^.*\.(mkv|mp4)$` for files ending with .mkv or .mp4.
+`-t` is the argument to set regular expression `(\.mkv|\.mp4)$` for files ending with .mkv or .mp4.
 As videos files come, you may see errors from the command standard output and need to debug accordingly.
 
 If no errors observed, open a separate terminal window and execute the following command to check the output from

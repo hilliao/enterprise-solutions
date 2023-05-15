@@ -1,13 +1,15 @@
 #!/bin/bash
 set -e # exit the script when execution hits any error
 
-# BASE_DIR=/mnt/1tb/ftp/ipcam/autodelete && GCS_URI_VIDEOS=gs://$PROJECT_ID-vertex-ai/machine-learning/us-home
-# iwatch -r -t "^.*\.(mkv|mp4)$" -e moved_to,close_write -c "/mnt/1tb/ftp/hil/upload.sh -p %f -g $GCS_URI_VIDEOS" $BASE_DIR &
+# The following environment variables are required:
+#
+# export BASE_DIR=/mnt/1tb/ftp/ipcam/autodelete
+# export PROJECT_ID=test-vpc-341
+# export GCS_FOLDER_PATH=gs://$PROJECT_ID-vertex-ai/machine-learning/us-home
+# export STAGING_DIR=/mnt/1tb/ftp/ipcam/staging
+# export GOOGLE_APPLICATION_CREDENTIALS=$HOME/secrets/keyfile.json
+# iwatch -r -t "(\.mkv|\.mp4)$" -e moved_to,close_write -c "/mnt/1tb/ftp/hil/upload.sh -p %f -g $GCS_FOLDER_PATH" $BASE_DIR &
 
-export PROJECT_ID=[Replace with GCP project ID]
-STAGING_DIR=/mnt/1tb/ftp/ipcam/staging
-GCS_FOLDER_PATH=gs://$PROJECT_ID-vertex-ai/machine-learning/us-home
-export GOOGLE_APPLICATION_CREDENTIALS=/home/ipcam/secrets/[Replace with GCP project ID].json
 
 while getopts 'p:g:h' opt; do
   case "$opt" in
