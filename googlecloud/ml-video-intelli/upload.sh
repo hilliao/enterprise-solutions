@@ -7,7 +7,7 @@ set -e # exit the script when execution hits any error
 export PROJECT_ID=[Replace with GCP project ID]
 STAGING_DIR=/mnt/1tb/ftp/ipcam/staging
 GCS_FOLDER_PATH=gs://$PROJECT_ID-vertex-ai/machine-learning/us-home
-export GOOGLE_APPLICATION_CREDENTIALS=/home/ipcam/secrets/[Replace with GCP project ID]-cf98165b60e3.json
+export GOOGLE_APPLICATION_CREDENTIALS=/home/ipcam/secrets/[Replace with GCP project ID].json
 
 while getopts 'p:g:h' opt; do
   case "$opt" in
@@ -47,7 +47,7 @@ if [[ $FILE_PATH == *.mp4 ]] || [[ $FILE_PATH == *.mkv ]]; then
   BASE_FILENAME=$(basename $RENAMED_FILE)
   cp -v $FILE_PATH $STAGING_DIR/$BASE_FILENAME
 else
-  echo "Filename does not end with .mp4: '$FILE_PATH' so abort"
+  echo "Filename does not end with .mp4 or .mkv: '$FILE_PATH' so abort"
   exit 0
 fi
 
