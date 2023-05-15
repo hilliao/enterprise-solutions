@@ -168,6 +168,7 @@ def main():
             logger.log_struct({
                 'is_alarm_armed': is_alarm_armed,
                 'human_detection_outcome': results,
+                'file': gcs_uri,
             }, severity=LOG_SEVERITY_NOTICE)
 
 
