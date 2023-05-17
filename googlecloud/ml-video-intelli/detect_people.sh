@@ -8,8 +8,7 @@ set -e # exit the script when execution hits any error
 # export GCS_FOLDER_PATH=gs://$PROJECT_ID-vertex-ai/machine-learning/us-home
 # export STAGING_DIR=/mnt/1tb/ftp/ipcam/staging
 # export GOOGLE_APPLICATION_CREDENTIALS=$HOME/secrets/keyfile.json
-# iwatch -r -t "(\.mkv|\.mp4)$" -e moved_to,close_write -c "/mnt/1tb/ftp/hil/upload.sh -p %f -g $GCS_FOLDER_PATH" $BASE_DIR &
-
+# iwatch -r -t "\.mp4$|\.mkv$" -e moved_to,close_write -c "$STAGING_DIR/detect_people.sh -p %f -g $GCS_FOLDER_PATH" $BASE_DIR &
 
 while getopts 'p:g:h' opt; do
   case "$opt" in
@@ -57,4 +56,4 @@ gsutil mv $STAGING_DIR/$BASE_FILENAME $GCS_URI/
 
 nohup $STAGING_DIR/gcp/bin/python3 $STAGING_DIR/detect_people.py \
   --gcs_uri "$GCS_FOLDER_PATH/$BASE_FILENAME" --alarm_status disarmed \
-  &> $STAGING_DIR/detect_people.txt &
+  &>$STAGING_DIR/${BASE_FILENAME}_detect_people.txt &

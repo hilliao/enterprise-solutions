@@ -15,7 +15,7 @@ The development environment was Ubuntu Linux 22.10 with default Desktop environm
 Default software packages like Python 3.10 were installed
 
 ### iWatch
-`iwatch` is used to detect file moved_to and close_write events and execute `upload.sh`. To install `iwatch`, execute the
+`iwatch` is used to detect file moved_to and close_write events and execute `detect_people.sh`. To install `iwatch`, execute the
 following commands:
 
 ```commandline
@@ -78,7 +78,7 @@ gcloud auth list
 ### BASH Environment Variables
 Set the following environment variables
 ```commandline
-head $HOME/enterprise-solutions/googlecloud/ml-video-intelli/upload.sh # inspect environment variables to set
+head $HOME/enterprise-solutions/googlecloud/ml-video-intelli/detect_people.sh # inspect environment variables to set
 
 export BASE_DIR=$HOME/Videos # is where you want to watch for incoming video files
 export PROJECT_ID=***???*** # execute `gcloud config list` to find out or choose a Google cloud project ID 
@@ -91,7 +91,7 @@ that deletes files older than a few weeks such as the [Sample script](https://gi
 in Python running as root or the user.
 
 ### Execute the iwatch command
-Configure environment variables in `upload.sh`: 
+Configure environment variables in `detect_people.sh`: 
 ```commandline
 # verify gsutil is installed
 gsutil --help
@@ -103,21 +103,20 @@ To test if the file is working properly, move a .mp4|.mkv file to $BASE_DIR or a
 
 ```commandline
 # make sure the script exists first
-ls $STAGING_DIR/upload.sh
+ls $STAGING_DIR/detect_people.sh
 
 # command returns immediately. keep the terminal open for checking standard output.
-iwatch -r -t "(\.mkv|\.mp4)$" -e moved_to,close_write -c "$STAGING_DIR/upload.sh -p %f -g $GCS_FOLDER_PATH" $BASE_DIR &
+iwatch -r -t "\.mp4$|\.mkv$" -e moved_to,close_write -c "$STAGING_DIR/detect_people.sh -p %f -g $GCS_FOLDER_PATH" $BASE_DIR &
 ```
 `-t` is the argument to set regular expression `(\.mkv|\.mp4)$` for files ending with .mkv or .mp4.
 As videos files come, you may see errors from the command standard output and need to debug accordingly.
-
+Grab a .mp4 or .mkv file and copy it to the `$BASE_DIR` as a test.
 If no errors observed, open a separate terminal window and execute the following command to check the output from
-executing detect_people.py. Every execution overwrites the standard output saved in the file.
+executing detect_people.py.
 
 ```commandline
-watch cat $HOME/staging/detect_people.txt
+ls $HOME/staging/*_detect_people.txt
 ```
-
 #### If no humans are detected, expect to see the following content:
 
 ```editorconfig
@@ -177,11 +176,25 @@ Attribute name, value at confidence:
 	LowerCloth:ShortPants at confidence 0.03609020635485649
 ...
 ```
+## Edit the code to include other video filename extensions
+The following code block in `detect_people.py` filters on the .mp4 and .mkv file extensions. You can add more file
+extensions in the if statement to include more filename extensions. This is in addition to the `iwatch` `-t` regular
+expression filter.
+```python
+if [[ $FILE_PATH == *.mp4 ]] || [[ $FILE_PATH == *.mkv ]]; then
+  RENAMED_FILE=$(echo $FILE_PATH | sed 's/\[/_/g' | sed 's/\]/_/g')
+  BASE_FILENAME=$(basename $RENAMED_FILE)
+  cp -v $FILE_PATH $STAGING_DIR/$BASE_FILENAME
+else
+  echo "Filename does not end with .mp4 or .mkv: '$FILE_PATH' so abort"
+  exit 0
+fi
+```
 
 ## Verify and tune the detection results
 The script defaults to `--alarm_status disarmed`
 ```commandline
-tail  $HOME/staging/upload.sh 
+tail $HOME/staging/detect_people.sh 
 
 else
   echo "Filename does not end with .mp4 or .mkv: '$FILE_PATH' so abort"
@@ -199,10 +212,23 @@ to find the logs:
 ```jql
 jsonPayload.is_alarm_armed="false"
 ```
-The severity is `Notice`. If you edit upload.sh and set `--alarm_status armed`, the logs can be found with filter:
+The severity is `Notice`. If you edit detect_people.sh and set `--alarm_status armed`, the logs can be found with filter:
 ```jql
 jsonPayload.is_alarm_armed="true"
 severity=WARNING
 ```
 You can create [log based alerts](https://cloud.google.com/logging/docs/alerting/log-based-alerts) to notify those who
 may care such as the hired security guards.
+
+## Known issues
+1. Amcrest video file moved_to event is ignored: the `iwatch` command would not capture Amcrest IP camera's move 
+file event from *.mp4_ to *.mp4 after certain depth of directories and after certain number of hours.
+Execute a cron job to move *.mp4 files to higher levels of directories to circumvent the problem.
+For example, the directory for the Amcrest cameras are /mnt/640g/ftp/ipcam/autodelete/amcrest/office/AMC057C6_8F4709/
+Execute the following command to move *.mp4 to /mnt/640g/ftp/ipcam/autodelete/amcrest/office/
+```shell
+$ find /mnt/640g/ftp/ipcam/autodelete/amcrest/office/AMC057C6_8F4709/ -name *.mp4 -exec mv -v {} /mnt/640g/ftp/ipcam/autodelete/amcrest/office/ \;
+$ find /mnt/640g/ftp/ipcam/autodelete/amcrest/entrance/AMC057C8_943B45/ -name *.mp4 -exec mv -v {} /mnt/640g/ftp/ipcam/autodelete/amcrest/entrance/ \;
+```
+   
+2. resolve [Duplicated filename extension filtering logic](https://github.com/hilliao/enterprise-solutions/issues/26)

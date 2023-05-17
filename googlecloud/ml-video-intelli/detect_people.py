@@ -153,23 +153,22 @@ def main():
     results = detect_people(gcs_uri=gcs_uri, timeout=timeout)
 
     print('human detection returned results:')
+    results_dict = {
+        'is_alarm_armed': is_alarm_armed,
+        'human_detection_outcome': results,
+        'file': gcs_uri,
+    }
+    log_severity = LOG_SEVERITY_NOTICE
     if not results:
         msg = "No humans detected"
         print(msg)
-        logger.log_text(msg, severity=LOG_SEVERITY_NOTICE)
+        results_dict['message'] = msg
     else:
         print(results)
         if is_alarm_armed:
-            logger.log_struct({
-                'is_alarm_armed': is_alarm_armed,
-                'human_detection_outcome': results,
-            }, severity=LOG_SEVERITY_WARNING)
-        else:
-            logger.log_struct({
-                'is_alarm_armed': is_alarm_armed,
-                'human_detection_outcome': results,
-                'file': gcs_uri,
-            }, severity=LOG_SEVERITY_NOTICE)
+            log_severity = LOG_SEVERITY_WARNING
+
+    logger.log_struct(results_dict, severity=log_severity)
 
 
 if __name__ == "__main__":
