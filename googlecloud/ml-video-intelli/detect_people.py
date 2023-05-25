@@ -1,4 +1,4 @@
-# https://cloud.google.com/video-intelligence/docs/people-detection
+# A sample implementation of https://cloud.google.com/video-intelligence/docs/people-detection
 import os
 from google.cloud import videointelligence_v1 as videointelligence
 from google.cloud import logging
@@ -166,6 +166,7 @@ def main():
     else:
         print(results)
         if is_alarm_armed:
+            # Log warning only if alarm is armed and humans are detected
             log_severity = LOG_SEVERITY_WARNING
 
     logger.log_struct(results_dict, severity=log_severity)

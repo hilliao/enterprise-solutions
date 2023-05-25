@@ -192,21 +192,9 @@ fi
 ```
 
 ## Verify and tune the detection results
-The script defaults to `--alarm_status disarmed`
-```commandline
-tail $HOME/staging/detect_people.sh 
+`detect_people.sh` passed to iwatch command defaults to `--alarm_status disarmed` if `-a` is not passed. Execute
+`detect_people.sh -h` to see usage.
 
-else
-  echo "Filename does not end with .mp4 or .mkv: '$FILE_PATH' so abort"
-  exit 0
-fi
-
-gsutil mv $STAGING_DIR/$BASE_FILENAME $GCS_URI/
-
-nohup $STAGING_DIR/gcp/bin/python3 $STAGING_DIR/detect_people.py \
-  --gcs_uri "$GCS_FOLDER_PATH/$BASE_FILENAME" --alarm_status disarmed \
-  &> $STAGING_DIR/detect_people.txt &
-```
 If any humans were detected, Google Cloud Console logging page would show the logged entries. Use the following filter
 to find the logs:
 ```jql
@@ -217,6 +205,10 @@ The severity is `Notice`. If you edit detect_people.sh and set `--alarm_status a
 jsonPayload.is_alarm_armed="true"
 severity=WARNING
 ```
+Otherwise, use the following filter to find logs:
+```jql
+human_detection_outcome
+```
 You can create [log based alerts](https://cloud.google.com/logging/docs/alerting/log-based-alerts) to notify those who
 may care such as the hired security guards.
 
@@ -224,11 +216,11 @@ may care such as the hired security guards.
 1. Amcrest video file moved_to event is ignored: the `iwatch` command would not capture Amcrest IP camera's move 
 file event from *.mp4_ to *.mp4 after certain depth of directories and after certain number of hours.
 Execute a cron job to move *.mp4 files to higher levels of directories to circumvent the problem.
-For example, the directory for the Amcrest cameras are /mnt/640g/ftp/ipcam/autodelete/amcrest/office/AMC057C6_8F4709/
-Execute the following command to move *.mp4 to /mnt/640g/ftp/ipcam/autodelete/amcrest/office/
+For example, the directories for 2 Amcrest cameras are 
+`/mnt/640g/ftp/ipcam/autodelete/amcrest/office/AMC057C6_8F4709/[date]/[hour]/mp4` and
+`/mnt/640g/ftp/ipcam/autodelete/amcrest/entrance/AMC057C8_943B45/[date]/[hour]/mp4`,
+execute the following commands to move *.mp4 to their higher level directories.
 ```shell
 $ find /mnt/640g/ftp/ipcam/autodelete/amcrest/office/AMC057C6_8F4709/ -name *.mp4 -exec mv -v {} /mnt/640g/ftp/ipcam/autodelete/amcrest/office/ \;
 $ find /mnt/640g/ftp/ipcam/autodelete/amcrest/entrance/AMC057C8_943B45/ -name *.mp4 -exec mv -v {} /mnt/640g/ftp/ipcam/autodelete/amcrest/entrance/ \;
 ```
-   
-2. resolve [Duplicated filename extension filtering logic](https://github.com/hilliao/enterprise-solutions/issues/26)
