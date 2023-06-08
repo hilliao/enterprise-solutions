@@ -2,7 +2,9 @@
 	"info": {
 		"_postman_id": "9015febb-4dc8-458e-914d-95cb3a28e8ae",
 		"name": "investment advice",
-		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+		"description": "set {{access_token}} to be: ID_TOKEN=$(gcloud auth print-identity-token) && echo $ID_TOKEN",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+		"_exporter_id": "52459"
 	},
 	"item": [
 		{
@@ -21,9 +23,9 @@
 				"method": "GET",
 				"header": [],
 				"url": {
-					"raw": "{{url}}/?tickers=GOOGL,IVV,QQQ,DAL,MSFT,UAL,NVDA",
+					"raw": "{{url-quotes}}/?tickers=VHT,IVV,VTV",
 					"host": [
-						"{{url}}"
+						"{{url-quotes}}"
 					],
 					"path": [
 						""
@@ -31,13 +33,67 @@
 					"query": [
 						{
 							"key": "tickers",
-							"value": "GOOGL,IVV,QQQ,DAL,MSFT,UAL,NVDA"
+							"value": "VHT,IVV,VTV"
 						}
 					]
 				},
 				"description": "set {{access_token}} to be the ID_TOKEN=$(gcloud auth print-identity-token) && echo $ID_TOKEN"
 			},
-			"response": []
+			"response": [
+				{
+					"name": "example response for get quotes",
+					"originalRequest": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{url-quotes}}/?tickers=VHT,IVV,wmt",
+							"host": [
+								"{{url-quotes}}"
+							],
+							"path": [
+								""
+							],
+							"query": [
+								{
+									"key": "tickers",
+									"value": "VHT,IVV,wmt"
+								}
+							]
+						}
+					},
+					"status": "OK",
+					"code": 200,
+					"_postman_previewlanguage": "json",
+					"header": [
+						{
+							"key": "content-type",
+							"value": "application/json"
+						},
+						{
+							"key": "X-Cloud-Trace-Context",
+							"value": "acdf0610e931d2e5034b4503458cbbb9;o=1"
+						},
+						{
+							"key": "Date",
+							"value": "Sun, 04 Jun 2023 05:30:03 GMT"
+						},
+						{
+							"key": "Server",
+							"value": "Google Frontend"
+						},
+						{
+							"key": "Content-Length",
+							"value": "6791"
+						},
+						{
+							"key": "Alt-Svc",
+							"value": "h3=\":443\"; ma=2592000,h3-29=\":443\"; ma=2592000"
+						}
+					],
+					"cookie": [],
+					"body": "{\n    \"IVV\": {\n        \"Ask\": \"430.02\",\n        \"AskSize\": \"300\",\n        \"Bid\": \"428\",\n        \"BidSize\": \"300\",\n        \"Close\": \"429.79001\",\n        \"DailyOpenInterest\": \"0\",\n        \"High\": \"430.67001\",\n        \"High52Week\": \"434.03\",\n        \"High52WeekTimestamp\": \"2022-08-16T00:00:00Z\",\n        \"Last\": \"429.79\",\n        \"LastSize\": \"0\",\n        \"LastVenue\": \"ARCX\",\n        \"Low\": \"425.88\",\n        \"Low52Week\": \"349.53\",\n        \"Low52WeekTimestamp\": \"2022-10-13T00:00:00Z\",\n        \"MarketFlags\": {\n            \"IsBats\": false,\n            \"IsDelayed\": false,\n            \"IsHalted\": false,\n            \"IsHardToBorrow\": false\n        },\n        \"NetChange\": \"6.04\",\n        \"NetChangePct\": \"0.0143\",\n        \"Open\": \"426.37\",\n        \"PreviousClose\": \"423.75\",\n        \"PreviousVolume\": \"3786339\",\n        \"Symbol\": \"IVV\",\n        \"TickSizeTier\": \"0\",\n        \"TradeTime\": \"2023-06-03T00:00:00Z\",\n        \"VWAP\": \"429.057\",\n        \"Volume\": \"4525708\",\n        \"ask\": 430.58,\n        \"askSize\": 8,\n        \"averageDailyVolume10Day\": 3741450,\n        \"averageDailyVolume3Month\": 3986638,\n        \"beta\": 1,\n        \"bid\": 429.8,\n        \"bidSize\": 8,\n        \"bookValue\": 430.883,\n        \"components\": [\n            \"^ETFCOMPNTR\",\n            \"^ETFCOMP\",\n            \"^ETI\",\n            \"^ETIN\"\n        ],\n        \"cryptoTradeable\": false,\n        \"currency\": \"USD\",\n        \"customPriceAlertConfidence\": \"HIGH\",\n        \"dividendYield\": 1.57,\n        \"epsTrailingTwelveMonths\": 19.93327,\n        \"esgPopulated\": false,\n        \"exchange\": \"PCX\",\n        \"exchangeDataDelayedBy\": 0,\n        \"exchangeTimezoneName\": \"America/New_York\",\n        \"exchangeTimezoneShortName\": \"EDT\",\n        \"fiftyDayAverage\": 412.2584,\n        \"fiftyDayAverageChange\": 17.531616,\n        \"fiftyDayAverageChangePercent\": 0.042525794,\n        \"fiftyTwoWeekHigh\": 434.03,\n        \"fiftyTwoWeekHighChange\": -4.23999,\n        \"fiftyTwoWeekHighChangePercent\": -0.009768887,\n        \"fiftyTwoWeekLow\": 349.53,\n        \"fiftyTwoWeekLowChange\": 80.26001,\n        \"fiftyTwoWeekLowChangePercent\": 0.22962266,\n        \"fiftyTwoWeekRange\": \"349.53 - 434.03\",\n        \"firstTradeDateMilliseconds\": 958743000000,\n        \"fullExchangeName\": \"NYSEArca\",\n        \"gmtOffSetMilliseconds\": -14400000,\n        \"inceptionDate\": 958348800,\n        \"language\": \"en-US\",\n        \"longName\": \"iShares Core S&P 500 ETF\",\n        \"market\": \"us_market\",\n        \"marketCap\": 267135991808,\n        \"marketState\": \"POST\",\n        \"messageBoardId\": \"finmb_8797798\",\n        \"netAssets\": 311714382000,\n        \"netExpenseRatio\": 0.03,\n        \"pageViews\": {\n            \"longTermTrend\": \"UP\",\n            \"midTermTrend\": \"UP\",\n            \"shortTermTrend\": \"NEUTRAL\"\n        },\n        \"postMarketChange\": -0.5,\n        \"postMarketChangePercent\": -0.116335884,\n        \"postMarketPrice\": 429.29,\n        \"postMarketTime\": 1685742808,\n        \"preMarketChange\": 2.64999,\n        \"preMarketChangePercent\": 0.625367,\n        \"preMarketPrice\": 426.4,\n        \"preMarketTime\": 1685712597,\n        \"priceHint\": 2,\n        \"priceToBook\": 0.9974634,\n        \"quoteSourceName\": \"Nasdaq Real Time Price\",\n        \"quoteSummary\": {\n            \"errorResult\": {\n                \"code\": \"Not Found\",\n                \"description\": \"No fundamentals data found for any of the summaryTypes=earnings\"\n            }\n        },\n        \"quoteType\": \"ETF\",\n        \"region\": \"US\",\n        \"regularMarketChange\": 6.0400085,\n        \"regularMarketChangePercent\": 1.4253708,\n        \"regularMarketDayHigh\": 430.67,\n        \"regularMarketDayLow\": 425.88,\n        \"regularMarketDayRange\": \"425.88 - 430.67\",\n        \"regularMarketOpen\": 426.37,\n        \"regularMarketPreviousClose\": 423.75,\n        \"regularMarketPrice\": 429.79,\n        \"regularMarketTime\": 1685736000,\n        \"regularMarketVolume\": 4513347,\n        \"sharesOutstanding\": 621550016,\n        \"shortName\": \"iShares Core S&P 500 ETF\",\n        \"sourceInterval\": 15,\n        \"symbol\": \"IVV\",\n        \"tradeable\": false,\n        \"trailingAnnualDividendRate\": 5.688,\n        \"trailingAnnualDividendYield\": 0.01342301,\n        \"trailingPE\": 21.561441,\n        \"triggerable\": true,\n        \"twoHundredDayAverage\": 398.44836,\n        \"twoHundredDayAverageChange\": 31.341644,\n        \"twoHundredDayAverageChangePercent\": 0.07865924,\n        \"typeDisp\": \"ETF\",\n        \"yield\": 1.57,\n        \"ytdReturn\": 10.75156\n    },\n    \"VHT\": {\n        \"Ask\": \"242.42\",\n        \"AskSize\": \"100\",\n        \"Bid\": \"235\",\n        \"BidSize\": \"100\",\n        \"Close\": \"241.14\",\n        \"DailyOpenInterest\": \"0\",\n        \"High\": \"241.36\",\n        \"High52Week\": \"259.04001\",\n        \"High52WeekTimestamp\": \"2022-12-13T00:00:00Z\",\n        \"Last\": \"241.14\",\n        \"LastSize\": \"0\",\n        \"LastVenue\": \"ARCX\",\n        \"Low\": \"238.5715\",\n        \"Low52Week\": \"217.12\",\n        \"Low52WeekTimestamp\": \"2022-06-16T00:00:00Z\",\n        \"MarketFlags\": {\n            \"IsBats\": false,\n            \"IsDelayed\": false,\n            \"IsHalted\": false,\n            \"IsHardToBorrow\": false\n        },\n        \"NetChange\": \"3.36\",\n        \"NetChangePct\": \"0.0141\",\n        \"Open\": \"239.05\",\n        \"PreviousClose\": \"237.78\",\n        \"PreviousVolume\": \"188318\",\n        \"Symbol\": \"VHT\",\n        \"TickSizeTier\": \"0\",\n        \"TradeTime\": \"2023-06-03T00:00:00Z\",\n        \"VWAP\": \"240.62\",\n        \"Volume\": \"225511\",\n        \"ask\": 242.18,\n        \"askSize\": 9,\n        \"averageDailyVolume10Day\": 158940,\n        \"averageDailyVolume3Month\": 186785,\n        \"beta\": 0.68,\n        \"bid\": 240.83,\n        \"bidSize\": 8,\n        \"bookValue\": 228.287,\n        \"components\": [\n            \"^ETFCOMP\",\n            \"^ETFCOMPNTR\"\n        ],\n        \"cryptoTradeable\": false,\n        \"currency\": \"USD\",\n        \"customPriceAlertConfidence\": \"HIGH\",\n        \"dividendYield\": 1.36,\n        \"epsTrailingTwelveMonths\": 11.026845,\n        \"esgPopulated\": false,\n        \"exchange\": \"PCX\",\n        \"exchangeDataDelayedBy\": 0,\n        \"exchangeTimezoneName\": \"America/New_York\",\n        \"exchangeTimezoneShortName\": \"EDT\",\n        \"fiftyDayAverage\": 242.0912,\n        \"fiftyDayAverageChange\": -0.9512024,\n        \"fiftyDayAverageChangePercent\": -0.0039291074,\n        \"fiftyTwoWeekHigh\": 259.04,\n        \"fiftyTwoWeekHighChange\": -17.90001,\n        \"fiftyTwoWeekHighChangePercent\": -0.06910133,\n        \"fiftyTwoWeekLow\": 217.12,\n        \"fiftyTwoWeekLowChange\": 24.020004,\n        \"fiftyTwoWeekLowChangePercent\": 0.11063009,\n        \"fiftyTwoWeekRange\": \"217.12 - 259.04\",\n        \"firstTradeDateMilliseconds\": 1075473000000,\n        \"fullExchangeName\": \"NYSEArca\",\n        \"gmtOffSetMilliseconds\": -14400000,\n        \"inceptionDate\": 1075075200,\n        \"language\": \"en-US\",\n        \"longName\": \"Vanguard Health Care Index Fund\",\n        \"market\": \"us_market\",\n        \"marketCap\": 13094360064,\n        \"marketState\": \"POST\",\n        \"messageBoardId\": \"finmb_22939088\",\n        \"netAssets\": 20160325600,\n        \"netExpenseRatio\": 0.1,\n        \"pageViews\": {\n            \"longTermTrend\": \"UP\",\n            \"midTermTrend\": \"UP\",\n            \"shortTermTrend\": \"UP\"\n        },\n        \"postMarketChange\": 1.03999,\n        \"postMarketChangePercent\": 0.431282,\n        \"postMarketPrice\": 242.18,\n        \"postMarketTime\": 1685741551,\n        \"preMarketChange\": 0,\n        \"preMarketChangePercent\": 0,\n        \"preMarketPrice\": 237.78,\n        \"preMarketTime\": 1685710024,\n        \"priceHint\": 2,\n        \"priceToBook\": 1.056302,\n        \"quoteSourceName\": \"Nasdaq Real Time Price\",\n        \"quoteSummary\": {\n            \"errorResult\": {\n                \"code\": \"Not Found\",\n                \"description\": \"No fundamentals data found for any of the summaryTypes=earnings\"\n            }\n        },\n        \"quoteType\": \"ETF\",\n        \"region\": \"US\",\n        \"regularMarketChange\": 3.3600006,\n        \"regularMarketChangePercent\": 1.4130712,\n        \"regularMarketDayHigh\": 241.36,\n        \"regularMarketDayLow\": 238.5715,\n        \"regularMarketDayRange\": \"238.5715 - 241.36\",\n        \"regularMarketOpen\": 239.05,\n        \"regularMarketPreviousClose\": 237.78,\n        \"regularMarketPrice\": 241.14,\n        \"regularMarketTime\": 1685736000,\n        \"regularMarketVolume\": 225490,\n        \"sharesOutstanding\": 54301900,\n        \"shortName\": \"Vanguard Health Care ETF\",\n        \"sourceInterval\": 15,\n        \"symbol\": \"VHT\",\n        \"tradeable\": false,\n        \"trailingAnnualDividendRate\": 2.846,\n        \"trailingAnnualDividendYield\": 0.011969047,\n        \"trailingPE\": 21.86845,\n        \"triggerable\": true,\n        \"twoHundredDayAverage\": 240.96895,\n        \"twoHundredDayAverageChange\": 0.17105103,\n        \"twoHundredDayAverageChangePercent\": 0.00070984673,\n        \"typeDisp\": \"ETF\",\n        \"yield\": 1.36,\n        \"ytdReturn\": -3.82937\n    },\n    \"wmt\": {\n        \"Ask\": \"148.94\",\n        \"AskSize\": \"300\",\n        \"Bid\": \"148.58\",\n        \"BidSize\": \"100\",\n        \"Close\": \"148.82001\",\n        \"DailyOpenInterest\": \"0\",\n        \"High\": \"149.015\",\n        \"High52Week\": \"154.64\",\n        \"High52WeekTimestamp\": \"2022-11-28T00:00:00Z\",\n        \"Last\": \"148.58\",\n        \"LastSize\": \"200\",\n        \"LastVenue\": \"NASDAQ\",\n        \"Low\": \"147.10001\",\n        \"Low52Week\": \"117.903\",\n        \"Low52WeekTimestamp\": \"2022-06-15T00:00:00Z\",\n        \"MarketFlags\": {\n            \"IsBats\": false,\n            \"IsDelayed\": false,\n            \"IsHalted\": false,\n            \"IsHardToBorrow\": false\n        },\n        \"NetChange\": \"1.17\",\n        \"NetChangePct\": \"0.0079\",\n        \"Open\": \"147.22\",\n        \"PreviousClose\": \"147.41\",\n        \"PreviousVolume\": \"6746393\",\n        \"Symbol\": \"WMT\",\n        \"TickSizeTier\": \"0\",\n        \"TradeTime\": \"2023-06-02T23:57:26Z\",\n        \"VWAP\": \"148.608\",\n        \"Volume\": \"6392748\"\n    }\n}"
+				}
+			]
 		},
 		{
 			"name": "execute_trade",
@@ -74,7 +130,7 @@
 				],
 				"body": {
 					"mode": "raw",
-					"raw": "{\n    \"intended_allocation\": {\n        \"QQQ\": 1800.0,\n        \"VHT\": 800.0,\n        \"VTV\": 888.8\n    },\n    \"amplify\": 1.3,\n    \"bq_table\": \"{{bq_table}}\",\n    \"limit_order_off\": 0.2,\n    \"account\": {{account}},\n    \"duration\": \"GTC\"\n}"
+					"raw": "{\n    \"intended_allocation\": {\n        \"VHT\": 500.0,\n        \"IPAC\": 120.0\n    },\n    \"amplify\": 0.9,\n    \"bq_table\": \"{{bq_table}}\",\n    \"limit_order_off\": 0.005,\n    \"account\": {{account}},\n    \"duration\": \"GTC\"\n}"
 				},
 				"url": {
 					"raw": "{{url-execute-trade}}",
@@ -82,9 +138,76 @@
 						"{{url-execute-trade}}"
 					]
 				},
-				"description": "set {{access_token}} to be ID_TOKEN=$(gcloud auth print-identity-token) && echo $ID_TOKEN"
+				"description": "set {{access_token}} to be ID_TOKEN=$(gcloud auth print-identity-token) && echo $ID_TOKEN\n\nlimit_order_off means how much less than the current stock price you'd like to place the limit order at. For example, if the stock price is $100.00, setting limit_order_off to 0.01 would place a limit order at $99.0.\n\namplify is the floating point number to tell how much more or less of shares to buy. Setting it to 1.0 means no adjustments."
 			},
-			"response": []
+			"response": [
+				{
+					"name": "executed_trades",
+					"originalRequest": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"type": "text",
+								"value": "application/json"
+							},
+							{
+								"key": "bq_table",
+								"type": "text",
+								"value": "",
+								"disabled": true
+							},
+							{
+								"key": "",
+								"type": "text",
+								"value": "",
+								"disabled": true
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"intended_allocation\": {\n        \"VHT\": 500.0,\n        \"IPAC\": 120.0\n    },\n    \"amplify\": 0.9,\n    \"bq_table\": \"{{bq_table}}\",\n    \"limit_order_off\": 0.005,\n    \"account\": {{account}},\n    \"duration\": \"GTC\"\n}"
+						},
+						"url": {
+							"raw": "{{url-execute-trade}}",
+							"host": [
+								"{{url-execute-trade}}"
+							]
+						}
+					},
+					"status": "OK",
+					"code": 200,
+					"_postman_previewlanguage": "json",
+					"header": [
+						{
+							"key": "content-type",
+							"value": "application/json"
+						},
+						{
+							"key": "X-Cloud-Trace-Context",
+							"value": "a9d30b93e3f95bae71dec83d127ae6bf;o=1"
+						},
+						{
+							"key": "Date",
+							"value": "Thu, 08 Jun 2023 15:16:42 GMT"
+						},
+						{
+							"key": "Server",
+							"value": "Google Frontend"
+						},
+						{
+							"key": "Content-Length",
+							"value": "435"
+						},
+						{
+							"key": "Alt-Svc",
+							"value": "h3=\":443\"; ma=2592000,h3-29=\":443\"; ma=2592000"
+						}
+					],
+					"cookie": [],
+					"body": "{\n    \"sum_cash\": 559.209103,\n    \"trades\": {\n        \"IPAC\": {\n            \"cash\": 105.35546500000001,\n            \"price\": 56.9489,\n            \"shares\": 1.85\n        },\n        \"VHT\": {\n            \"cash\": 453.853638,\n            \"price\": 240.1342,\n            \"shares\": 1.89\n        },\n        \"executions\": {\n            \"reason\": \"OK\",\n            \"results\": {\n                \"Orders\": [\n                    {\n                        \"Message\": \"Sent order: Buy 1 VHT @ 238.93 Limit\",\n                        \"OrderID\": \"968009271\"\n                    },\n                    {\n                        \"Message\": \"Sent order: Buy 1 IPAC @ 56.66 Limit\",\n                        \"OrderID\": \"968009272\"\n                    }\n                ]\n            },\n            \"status\": 200,\n            \"url\": \"https://api.tradestation.com/v3/orderexecution/ordergroups\"\n        }\n    }\n}"
+				}
+			]
 		},
 		{
 			"name": "save stock_quotes",
@@ -102,9 +225,9 @@
 				"method": "POST",
 				"header": [],
 				"url": {
-					"raw": "{{url}}/?tickers=QQQ,ONEQ,IVV,VOO,JETS,VHT,VDE,VFH,VTWO,BRK-B,ACN,AMD,GOOGL,AMZN,MSFT,MRVL,META,QCOM,CRM,SNAP,TSM,BHP,RIO,EXPE,BKNG,HD,NIO,NVDA",
+					"raw": "{{url-quotes}}/?tickers=QQQ,ONEQ,IVV,VOO,JETS,VHT,VDE,VFH,VTWO,BRK-B,ACN,AMD,GOOGL,AMZN,MSFT,MRVL,META,QCOM,CRM,SNAP,TSM,BHP,RIO,EXPE,BKNG,HD,NIO,NVDA",
 					"host": [
-						"{{url}}"
+						"{{url-quotes}}"
 					],
 					"path": [
 						""
@@ -144,7 +267,7 @@
 						}
 					]
 				},
-				"description": "Execute this curl when Pycharm is not running locally with an unused Authorization code {{code}}. Execute the request of 'tradeStation authorization code' from Chrome browser. The Chrome page won't show but the URL will have a query string code=***.\nFill {{code}} with the URL code= query string; Start PyCharm debugging. {{code}} is authorization code which can be used only once to generate access and refresh tokens! hitting Send twice will cause tokens to have errors."
+				"description": "Execute this curl when Pycharm is not running locally with an unused Authorization code {{code}}. To get {{code}}, execute the request of 'tradeStation authorization code' from Chrome browser. When the redirect_uri is localhost, the Chrome page won't show but the URL will have a query string code=***. Fill {{code}} with the URL code= query string; Start PyCharm debugging. {{code}} is authorization code which can be used only once to generate access and refresh tokens! hitting Send twice will cause tokens to have errors. If get_authorization_code method in cloud function or PyCharm is executed, {{code}} is used to generate refresh token thus can't be used again."
 			},
 			"response": []
 		},
@@ -191,7 +314,7 @@
 						}
 					]
 				},
-				"description": "Don't execute this curl but copy paste the curl's url to Chrome browser to cause trade station sign-in to get the authorization code per https://api.tradestation.com/docs/fundamentals/authentication/auth-code/"
+				"description": "Don't execute this curl but copy paste the curl's url to Chrome browser to cause trade station sign-in to get the authorization code per https://api.tradestation.com/docs/fundamentals/authentication/auth-code/\nSet {{redirect_uri}} to any Trade Station account registered redirect_uri. Contact ClientService@tradestation.com to register."
 			},
 			"response": []
 		},

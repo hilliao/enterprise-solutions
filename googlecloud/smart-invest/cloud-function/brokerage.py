@@ -53,9 +53,11 @@ class Quote:
             return None
 
 
+# try to get the cached Yahoo Finance quotes first. If no cached quotes, return the trade station quotes.
+# If both quotes exist, the keys in trade station quotes would override the key,value items from Yahoo Finance quotes.
 def get_cached_or_realtime_quote(bucket, ticker):
     storage_client = storage.Client()
-    bucket = storage_client.get_bucket(bucket)
+    bucket = storage_client.bucket(bucket)
     gcs_path = "{0}/{1}.json".format(os.environ.get('FOLDER'), ticker)
     blob = bucket.blob(gcs_path)
     try:
@@ -139,6 +141,8 @@ def refresh_access_token():
 MAX_WORKERS = 10
 
 
+# Cached quotes are from Yahoo Finance where twoHundredDayAverage and fiftyDayAverage keys exist.
+# Real time quotes from trade station don't have those averages.
 def get_cached_or_realtime_quotes(bucket, tickers):
     thread_results = {}
     with ThreadPoolExecutor(max_workers=int(MAX_WORKERS)) as executor:
@@ -157,11 +161,14 @@ def get_cached_or_realtime_quotes(bucket, tickers):
     return thread_results
 
 
+# limit_order_off is how much less than the quoted price for a limit trade order. 0.1 means for a quoted stock that's
+# $100, the limit order is set at $90. Generally, you'd want to set the price to be less than the quoted price.
 def execute_trade_order(trade_orders: dict, account_id: str, duration: str = 'GTC', limit_order_off: float = 0.01):
     # API doc: https://api.tradestation.com/docs/specification/#operation/ConfirmGroupOrder
     trade_station_order_api = "{}/orderexecution/ordergroups".format(trade_station_url)
 
     orders = []
+    # trade_orders dict may have values of Exceptions where recommendations failed
     for ticker, order in trade_orders.items():
         if isinstance(order, Exception):
             continue
@@ -209,8 +216,11 @@ def execute_trade_order(trade_orders: dict, account_id: str, duration: str = 'GT
 
 def yh_finance_get_quotes(tickers):
     yh_finance_url = "https://yh-finance.p.rapidapi.com/market/v2/get-quotes"
-    querystring = {"region": "US",
-                   "symbols": tickers}  # "QQQ,ONEQ,IVV,VOO,JETS,VHT,VDE,VFH,VTWO,BRK-B,ACN,AMD,GOOGL,AMZN,MSFT,MRVL,FB,QCOM,CRM,SNAP,TSM,BHP,RIO,EXPE,BKNG,HD"
+    # example: "QQQ,ONEQ,IVV,VOO,JETS,VHT,VDE,VFH,VTWO,BRK-B,ACN,AMD,GOOGL,AMZN,MSFT,MRVL,FB,QCOM,CRM,SNAP,TSM,BHP,RIO,EXPE,BKNG,HD"
+    querystring = {
+        "region": "US",
+        "symbols": tickers
+    }
     env_var_secret_name = 'SECRET_NAME_YH_API_KEY'
     YH_API_key = get_secret_value(env_var_secret_name)
     headers = {

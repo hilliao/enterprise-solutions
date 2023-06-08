@@ -14,7 +14,9 @@ gcloud iam service-accounts create smart-invest \
     --description="Run cloud function" \
     --display-name="BigQuery Admin, Cloud Debugger Agent, Cloud Trace Agent, Logs Writer, Storage Admin" --project $PROJECT_ID
 
-for role in roles/bigquery.admin roles/clouddebugger.agent roles/cloudtrace.agent roles/logging.logWriter roles/storage.admin
+# Granting Storage Object Admin IAM role at the project level to allow object level access in any bucket.
+# For better security, grant the role at the bucket level where BUCKET environment variable is specified in the Cloud Function.
+for role in roles/bigquery.admin roles/clouddebugger.agent roles/cloudtrace.agent roles/logging.logWriter roles/storage.objectAdmin
 do
   gcloud projects add-iam-policy-binding $PROJECT_ID \
     --member="serviceAccount:smart-invest@$PROJECT_ID.iam.gserviceaccount.com" \

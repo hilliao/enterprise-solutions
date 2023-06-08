@@ -12,9 +12,7 @@ import brokerage
 import cloud_native
 
 
-# https://stock-quotes-slnskhfzsa-uw.a.run.app/?tickers=GOOGL,IVV,AMZN
-# curl -X POST http://127.0.0.1:8080/?tickers=AAPL,TSLA -i
-# http://127.0.0.1:8080/?tickers=AMD,GOOGL,UBER
+# see exported postman .json file for how to invoke.
 @functions_framework.http
 def stock_quotes(http_request):
     # read stock quotes
@@ -34,7 +32,7 @@ def stock_quotes(http_request):
             bucket = gs_uri.split('/')[2]
             object_name = "/".join(gs_uri.split("/")[3:])
             storage_client = storage.Client()
-            bucket = storage_client.get_bucket(bucket)
+            bucket = storage_client.bucket(bucket)
             blob = bucket.blob(object_name)
             json_str = blob.download_as_string().decode()
 
@@ -50,7 +48,7 @@ def stock_quotes(http_request):
 
         yh_finance_res = brokerage.yh_finance_get_quotes(tickers)
         storage_client = storage.Client()
-        bucket = storage_client.get_bucket(os.environ.get('BUCKET'))
+        bucket = storage_client.bucket(os.environ.get('BUCKET'))
         quote_response = yh_finance_res.json()['quoteResponse']['result']
 
         saved_quotes = {}
@@ -145,8 +143,8 @@ class TradeOrder:
             self.account = None
 
 
-# curl -X POST https://cloud-func-slnskhfzsa-uw.a.run.app -H 'Content-Type: application/json' -H 'Accept: application/json' -d '{"orders": {"GOOGL": 5000,"QQQ": 15000,"DAL": 800},"amplify": 1,"bq_table": "test-vpc-341000.datalake.recommended_trades","account":"12345","limit_order_off":0.02}' -i
-# curl -X POST http://localhost:8080 -H 'Content-Type: application/json' -H 'Accept: application/json' -d '{"orders": {"GOOGL": 5000,"QQQ": 15000,"DAL": 800},"amplify": 1,"bq_table": "test-vpc-341000.datalake.recommended_trades"}' -i
+# see exported postman .json file for how to invoke.
+# if the account number isn't in the request body, don't execute trades but provide trade recommendations.
 @functions_framework.http
 def execute_trade(http_request):
     if http_request.method == 'POST':
@@ -160,6 +158,8 @@ def execute_trade(http_request):
                 bucket = os.environ.get('BUCKET')
                 list_tickers = trade_order.intended_allocation
                 quotes = brokerage.get_cached_or_realtime_quotes(bucket, list_tickers)
+
+                # returned dict may have values of type Exception where recommendations failed
                 trades = algo_trade.recommend(trade_order.amplify, trade_order.intended_allocation, quotes)
                 sum_cash = 0
                 [sum_cash := sum_cash + order.cash for order in trades.values() if not isinstance(order, Exception)]

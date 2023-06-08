@@ -16,7 +16,10 @@ def recommend(amplify: float, intended_allocation: dict, quotes: dict):
             # assign the Exception to trade dictionary's value for later processing
             trades[ticker] = quotes[ticker]
             continue
+        # Only the Yahoo Finance cached quotes have 50 and 200 day moving averages
+        # If the cloud scheduler execution does not contain the stock ticker, the method would return None
         if not quotes[ticker].diff_price_average():
+            # Make the return dict have values of Exceptions for later HTTP response
             trades[ticker] = Exception("Failed to get fiftyDayAverage or twoHundredDayAverage from cached quotes")
             continue
 
