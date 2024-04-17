@@ -2,5 +2,5 @@
 # or representation for any use or purpose. Your use of it is subject to your agreement with GoogleCloud.fr
 
 Flask==2.3.2
-gunicorn==20.1.0
+gunicorn==22.0.0
 google-api-python-client==1.9.3
