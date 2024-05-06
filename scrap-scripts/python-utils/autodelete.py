@@ -6,7 +6,7 @@
 # chmod a+x /usr/local/bin/autodelete.py
 #
 # Example crontab
-# 0 3 * * * STDOUT_TXT=/var/log/autodelete.txt && WORKING_DIR=/mnt/disk_dir/ftp/autodelete && IPCAM_USER=ipcam && /usr/local/bin/autodelete.py > $STDOUT_TXT 2>&1 && echo "Finding and deleting empty directories..." >> $STDOUT_TXT && find $WORKING_DIR -type d -empty -delete -print >> $STDOUT_TXT 2>&1 && mkdir -p $WORKING_DIR && chown $IPCAM_USER:$IPCAM_USER $WORKING_DIR
+# 0 3 * * * WORKING_DIR=/mnt/disk_dir/ftp/autodelete && STDOUT_TXT="$WORKING_DIR/autodelete.txt" && /usr/local/bin/autodelete.py > $STDOUT_TXT 2>&1 && echo "Finding and deleting empty directories..." >> $STDOUT_TXT && find $WORKING_DIR/can-be-deleted -type d -empty -delete -print >> $STDOUT_TXT 2>&1
 import time, glob, os, logging
 
 # fresh start of log file
@@ -32,10 +32,10 @@ for filename in glob.glob(os.path.join(parentdir, '**'), recursive=True):
             if os.path.isfile(filename):
                 print('deleting ' + filename)
                 os.remove(filename)
-            # delete directories without files in them
+            # report directories without files in them
             if os.path.isdir(filename):
                 if not os.listdir(filename):
-                    print('deleting ' + filename)
-                    os.rmdir(filename)
+                    print('empty dir: ' + filename)
+                    # os.rmdir(filename)
         except OSError as err:
             print("OS error deleting " + filename + ": {0}".format(err))
