@@ -121,8 +121,8 @@ class TradeOrder:
         for k, v in self.intended_allocation.items():
             if not isinstance(k, str):
                 raise Exception("request body intended_allocation dictionary does not have key of type str")
-            if not isinstance(v, float):
-                raise Exception("request body intended_allocation dictionary does not have value of type float")
+            if not (isinstance(v, float) or isinstance(v, int)):
+                raise Exception("request body intended_allocation dictionary does not have value of type float or int")
 
         # accept optional account number. Trade station's account number is of type str
         if 'account' in order_body:

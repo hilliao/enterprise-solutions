@@ -19,9 +19,9 @@ gcloud beta functions deploy stock-quotes \
   --set-env-vars SECRET_NAME_REFRESH_TOKEN=TradeStation_RefreshToken,SECRET_NAME_CLIENT_ID_SECRET=TradeStation_Client_ID_Secret \
   --set-env-vars FOLDER=quotes,PROJECT_ID=$PROJECT_ID --quiet --project $PROJECT_ID &
 
-gcloud beta functions deploy execute-trade \
+gcloud functions deploy execute-trade \
   --gen2 --region $REGION \
-  --runtime python39 \
+  --runtime python312 \
   --trigger-http --quiet \
   --entry-point execute_trade \
   --source $FUNCTION_DIR \

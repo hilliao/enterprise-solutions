@@ -23,7 +23,7 @@
 				"method": "GET",
 				"header": [],
 				"url": {
-					"raw": "{{url-quotes}}/?tickers=VHT,IVV,VTV",
+					"raw": "{{url-quotes}}/?tickers=NVDA,IPAC,IWM",
 					"host": [
 						"{{url-quotes}}"
 					],
@@ -33,7 +33,7 @@
 					"query": [
 						{
 							"key": "tickers",
-							"value": "VHT,IVV,VTV"
+							"value": "NVDA,IPAC,IWM"
 						}
 					]
 				},
@@ -130,7 +130,7 @@
 				],
 				"body": {
 					"mode": "raw",
-					"raw": "{\n    \"intended_allocation\": {\n        \"VHT\": 500.0,\n        \"IPAC\": 120.0\n    },\n    \"amplify\": 0.9,\n    \"bq_table\": \"{{bq_table}}\",\n    \"limit_order_off\": 0.005,\n    \"account\": {{account}},\n    \"duration\": \"GTC\"\n}"
+					"raw": "{\n    \"intended_allocation\": {\n        \"IEUR\": 68.1,\n        \"IPAC\": 67\n    },\n    \"amplify\": 1.0,\n    \"bq_table\": \"{{bq_table}}\",\n    \"limit_order_off\": 0.005,\n    \"account\": {{account}},\n    \"duration\": \"GTC\"\n}"
 				},
 				"url": {
 					"raw": "{{url-execute-trade}}",
