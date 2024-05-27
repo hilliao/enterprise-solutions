@@ -16,27 +16,26 @@ def recommend(amplify: float, intended_allocation: dict, quotes: dict):
             # assign the Exception to trade dictionary's value for later processing
             trades[ticker] = quotes[ticker]
             continue
-        # Only the Yahoo Finance cached quotes have 50 and 200 day moving averages
-        # If the cloud scheduler execution does not contain the stock ticker, the method would return None
-        if not quotes[ticker].diff_price_average():
-            # Make the return dict have values of Exceptions for later HTTP response
-            trades[ticker] = Exception("Failed to get fiftyDayAverage or twoHundredDayAverage from cached quotes")
-            continue
 
         cash = float(intended_allocation[ticker])
-
-        # average of the moving averages minus the current stock price
-        average_price_diff = -1 * quotes[ticker].diff_price_average()
-        # how much more or less does the trader want to buy
         latest_ticker_price = quotes[ticker].latest_ticker_price()
-        buy_adjust = average_price_diff / latest_ticker_price
+
+        # Only the Yahoo Finance cached quotes have 50 and 200 day moving averages
+        # If the cloud scheduler execution does not contain the stock ticker, don't adjust how many shares to buy
+        if quotes[ticker].diff_price_moving_averages():
+            # average of the 50,200 moving averages minus the current stock price
+            average_price_diff = -1 * quotes[ticker].diff_price_moving_averages()
+            # buy more shares if the moving averages are less than the current stock price
+            buying_shares_adjust = average_price_diff / latest_ticker_price
+        else:
+            buying_shares_adjust = 0
+
         # how much cash does thr trader want to use
-        adjusted_cash = (buy_adjust + 1) * cash
+        adjusted_cash = (buying_shares_adjust + 1) * cash
         # how many shares to buy
         buy_share_count = adjusted_cash / latest_ticker_price
         # 2 decimals max
         shares_count = round(max(buy_share_count * amplify, 0), 2)
-
         trades[ticker] = Order(shares=shares_count, cash=shares_count * latest_ticker_price, price=latest_ticker_price)
 
     return trades

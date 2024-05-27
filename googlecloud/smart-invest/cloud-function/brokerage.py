@@ -38,7 +38,7 @@ class Quote:
             self.cached_price = json_quote['regularMarketPrice']
         self.raw_dict = json_quote
 
-    def diff_price_average(self):
+    def diff_price_moving_averages(self):
         if hasattr(self, 'average200days') and hasattr(self, 'average50days') and self.latest_ticker_price():
             return self.latest_ticker_price() - (self.average200days + self.average50days) / 2
         else:

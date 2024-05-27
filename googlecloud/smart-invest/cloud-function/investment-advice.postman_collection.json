@@ -2,7 +2,7 @@
 	"info": {
 		"_postman_id": "9015febb-4dc8-458e-914d-95cb3a28e8ae",
 		"name": "investment advice",
-		"description": "set {{access_token}} to be: ID_TOKEN=$(gcloud auth print-identity-token) && echo $ID_TOKEN",
+		"description": "set access_token environmental variable to be: ID_TOKEN=$(gcloud auth print-identity-token) && echo $ID_TOKEN",
 		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
 		"_exporter_id": "52459"
 	},
@@ -130,7 +130,7 @@
 				],
 				"body": {
 					"mode": "raw",
-					"raw": "{\n    \"intended_allocation\": {\n        \"IEUR\": 68.1,\n        \"IPAC\": 67\n    },\n    \"amplify\": 1.0,\n    \"bq_table\": \"{{bq_table}}\",\n    \"limit_order_off\": 0.005,\n    \"account\": {{account}},\n    \"duration\": \"GTC\"\n}"
+					"raw": "{\n    \"intended_allocation\": {\n        \"ACHR\": 20,\n        \"ADT\": 30\n    },\n    \"amplify\": 1.0,\n    \"bq_table\": \"{{bq_table}}\",\n    \"limit_order_off\": 0.005,\n    \"account\": {{account}},\n    \"duration\": \"GTC\"\n}"
 				},
 				"url": {
 					"raw": "{{url-execute-trade}}",
@@ -166,13 +166,10 @@
 						],
 						"body": {
 							"mode": "raw",
-							"raw": "{\n    \"intended_allocation\": {\n        \"VHT\": 500.0,\n        \"IPAC\": 120.0\n    },\n    \"amplify\": 0.9,\n    \"bq_table\": \"{{bq_table}}\",\n    \"limit_order_off\": 0.005,\n    \"account\": {{account}},\n    \"duration\": \"GTC\"\n}"
+							"raw": "{\n    \"intended_allocation\": {\n        \"VHT\": 500.0,\n        \"IPAC\": 120.0\n    },\n    \"amplify\": 0.9,\n    \"bq_table\": \"\",\n    \"limit_order_off\": 0.005,\n    \"account\": ,\n    \"duration\": \"GTC\"\n}"
 						},
 						"url": {
-							"raw": "{{url-execute-trade}}",
-							"host": [
-								"{{url-execute-trade}}"
-							]
+							"raw": ""
 						}
 					},
 					"status": "OK",
@@ -493,7 +490,7 @@
 				],
 				"body": {
 					"mode": "raw",
-					"raw": "{\n    \"orders\": {\n        \"NVDA\": 1000,\n        \"QQQ\": 5000,\n        \"VHT\": 3000,\n        \"DAL\": 99\n    },\n    \"amplify\": 1,\n    \"bq_table\": \"{{bq_table}}\",\n    \"limit_order_off\": 0.1 \n}"
+					"raw": "{\n    \"intended_allocation\": {\n        \"NVDA\": 1000,\n        \"QQQ\": 5000,\n        \"VHT\": 3000,\n        \"DAL\": 999\n    },\n    \"amplify\": 1.0,\n    \"bq_table\": \"{{bq_table}}\",\n    \"limit_order_off\": 0.1 \n}"
 				},
 				"url": {
 					"raw": "{{url-execute-trade}}",
@@ -501,9 +498,60 @@
 						"{{url-execute-trade}}"
 					]
 				},
-				"description": "set {{access_token}} to be ID_TOKEN=$(gcloud auth print-identity-token) && echo $ID_TOKEN"
+				"description": "set access_token environmental variable to be ID_TOKEN=$(gcloud auth print-identity-token) && echo $ID_TOKEN"
 			},
-			"response": []
+			"response": [
+				{
+					"name": "recommend_trade",
+					"originalRequest": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"intended_allocation\": {\n        \"NVDA\": 1000,\n        \"QQQ\": 5000,\n        \"VHT\": 3000,\n        \"DAL\": 999\n    },\n    \"amplify\": 1.0,\n    \"bq_table\": \"{{bq_table}}\",\n    \"limit_order_off\": 0.1 \n}"
+						},
+						"url": {
+							"raw": "{{url-execute-trade}}",
+							"host": [
+								"{{url-execute-trade}}"
+							]
+						}
+					},
+					"status": "OK",
+					"code": 200,
+					"_postman_previewlanguage": "json",
+					"header": [
+						{
+							"key": "Server",
+							"value": "Werkzeug/3.0.3 Python/3.12.3"
+						},
+						{
+							"key": "Date",
+							"value": "Mon, 27 May 2024 06:44:45 GMT"
+						},
+						{
+							"key": "Content-Type",
+							"value": "application/json"
+						},
+						{
+							"key": "Content-Length",
+							"value": "433"
+						},
+						{
+							"key": "Connection",
+							"value": "close"
+						}
+					],
+					"cookie": [],
+					"body": "{\n    \"sum_cash\": 9216.600274,\n    \"trades\": {\n        \"DAL\": {\n            \"cash\": 998.8216740000001,\n            \"price\": 51.8599,\n            \"shares\": 19.26\n        },\n        \"NVDA\": {\n            \"cash\": 705.5400000000001,\n            \"price\": 1069,\n            \"shares\": 0.66\n        },\n        \"QQQ\": {\n            \"cash\": 4597.817999999999,\n            \"price\": 457.95,\n            \"shares\": 10.04\n        },\n        \"VHT\": {\n            \"cash\": 2914.4206,\n            \"price\": 263.51,\n            \"shares\": 11.06\n        }\n    }\n}"
+				}
+			]
 		}
 	]
 }
