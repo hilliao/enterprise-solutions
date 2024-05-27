@@ -51,7 +51,7 @@ gcloud services enable cloudscheduler.googleapis.com --project $PROJECT_ID
 # Create Cloud Scheduler job
 FUNC_URL=https://stock-quotes-[***REQUIRED_URL***]-uw.a.run.app
 gcloud scheduler jobs create http after-market-stock-quotes --schedule="0 15 * * 1-5" --location $REGION \
---uri="$FUNC_URL/?tickers=QQQ,ONEQ,IVV,VOO,JETS,VHT,VDE,VFH,VTWO,BRK-B,ACN,AMD,GOOGL,AMZN,MSFT,MRVL,META,QCOM,CRM,SNAP,TSM,BHP,RIO,EXPE,BKNG,HD,NIO,NVDA,VTV" \
+--uri="$FUNC_URL/?tickers=QQQ,ONEQ,IVV,VOO,JETS,VHT,VDE,VFH,VTWO,BRK-B,ACN,AMD,GOOGL,AMZN,MSFT,MRVL,META,QCOM,CRM,SNAP,TSM,BHP,RIO,EXPE,BKNG,HD,NIO,NVDA,VTV,VT,IEUR,IPAC" \
 --http-method=POST --oidc-service-account-email=smart-invest-func-invoker@$PROJECT_ID.iam.gserviceaccount.com \
 --time-zone="America/Los_Angeles" \
 --description="get quotes from Yahoo Finance and save to cloud storage" \
