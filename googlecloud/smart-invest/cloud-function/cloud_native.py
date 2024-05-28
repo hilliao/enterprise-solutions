@@ -25,7 +25,6 @@ def get_secret_value(env_var_secret_name):
     sm_client = secretmanager.SecretManagerServiceClient()
     secret_path_latest = sm_client.secret_path(os.environ.get('SECRET_MANAGER_PROJECT_ID'),
                                                os.environ.get(env_var_secret_name)) + "/versions/latest"
-    # TODO: check if the secret exists
     secret_latest_version = sm_client.access_secret_version(request={"name": secret_path_latest})
     log('read secret value for secret name {}'.format(os.environ.get(env_var_secret_name)), LOG_SEVERITY_NOTICE)
     secret_value = secret_latest_version.payload.data.decode("UTF-8")
@@ -33,7 +32,7 @@ def get_secret_value(env_var_secret_name):
 
 
 def insert_to_bq(bq_table: str, trades: dict, account: int = -1):
-    recommended_timestamp = str(datetime.datetime.utcnow())
+    recommended_timestamp = str(datetime.datetime.now())
     rows_to_insert = []
     for ticker, order in trades.items():
         if isinstance(order, Exception):
@@ -58,6 +57,6 @@ def insert_to_bq(bq_table: str, trades: dict, account: int = -1):
             return errors
     except Exception as ex:
         log("Encountered errors while inserting rows to BigQuery table "
-            "{}: {}".format(bq_table, ex),
+            "{}: type {} => {}".format(bq_table, type(ex), ex),
             severity=LOG_SEVERITY_ERROR)
         return ex
