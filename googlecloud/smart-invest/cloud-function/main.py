@@ -154,7 +154,7 @@ def execute_trade(http_request):
                 try:
                     trade_order = TradeOrder(request_json)
                 except Exception as ex:
-                    return str(ex), HTTPStatus.BAD_REQUEST
+                    return "Exception type {} => {}".format(type(ex), str(ex)), HTTPStatus.BAD_REQUEST
                 bucket = os.environ.get('BUCKET')
                 list_tickers = trade_order.intended_allocation
                 quotes = brokerage.get_cached_or_realtime_quotes(bucket, list_tickers)

@@ -37,7 +37,7 @@
 						}
 					]
 				},
-				"description": "set {{access_token}} to be the ID_TOKEN=$(gcloud auth print-identity-token) && echo $ID_TOKEN"
+				"description": "set access_token environmental variable to be the ID_TOKEN=$(gcloud auth print-identity-token) && echo $ID_TOKEN"
 			},
 			"response": [
 				{
@@ -46,10 +46,7 @@
 						"method": "GET",
 						"header": [],
 						"url": {
-							"raw": "{{url-quotes}}/?tickers=VHT,IVV,wmt",
-							"host": [
-								"{{url-quotes}}"
-							],
+							"raw": "/?tickers=VHT,IVV,wmt",
 							"path": [
 								""
 							],
@@ -514,13 +511,10 @@
 						],
 						"body": {
 							"mode": "raw",
-							"raw": "{\n    \"intended_allocation\": {\n        \"NVDA\": 1000,\n        \"QQQ\": 5000,\n        \"VHT\": 3000,\n        \"DAL\": 999\n    },\n    \"amplify\": 1.0,\n    \"bq_table\": \"{{bq_table}}\",\n    \"limit_order_off\": 0.1 \n}"
+							"raw": "{\n    \"intended_allocation\": {\n        \"NVDA\": 1000,\n        \"QQQ\": 5000,\n        \"VHT\": 3000,\n        \"DAL\": 999\n    },\n    \"amplify\": 1.0,\n    \"bq_table\": \"\",\n    \"limit_order_off\": 0.1 \n}"
 						},
 						"url": {
-							"raw": "{{url-execute-trade}}",
-							"host": [
-								"{{url-execute-trade}}"
-							]
+							"raw": ""
 						}
 					},
 					"status": "OK",

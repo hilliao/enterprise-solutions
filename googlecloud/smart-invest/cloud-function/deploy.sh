@@ -16,7 +16,7 @@ gcloud beta functions deploy stock-quotes \
   --source $FUNCTION_DIR \
   --service-account=$SA \
   --set-env-vars SECRET_MANAGER_PROJECT_ID=$PROJECT_ID,SECRET_NAME_YH_API_KEY=X-RapidAPI-Key,BUCKET=$PROJECT_ID-smart-invest \
-  --set-env-vars SECRET_NAME_REFRESH_TOKEN=TradeStation_RefreshToken,SECRET_NAME_CLIENT_ID_SECRET=TradeStation_Client_ID_Secret \
+  --set-env-vars SECRET_NAME_TradeStation_OAuth0=TradeStation_OAuth0 \
   --set-env-vars FOLDER=quotes,PROJECT_ID=$PROJECT_ID --quiet --project $PROJECT_ID &
 
 gcloud functions deploy execute-trade \
@@ -27,7 +27,7 @@ gcloud functions deploy execute-trade \
   --source $FUNCTION_DIR \
   --service-account=$SA \
   --set-env-vars BUCKET=$PROJECT_ID-smart-invest,FOLDER=quotes,PROJECT_ID=$PROJECT_ID,SECRET_MANAGER_PROJECT_ID=$PROJECT_ID \
-  --set-env-vars SECRET_NAME_REFRESH_TOKEN=TradeStation_RefreshToken,SECRET_NAME_CLIENT_ID_SECRET=TradeStation_Client_ID_Secret \
+  --set-env-vars SECRET_NAME_TradeStation_OAuth0=TradeStation_OAuth0 \
   --project $PROJECT_ID &
 
 gcloud beta functions deploy get-authorization-code \

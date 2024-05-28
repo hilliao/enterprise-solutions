@@ -15,11 +15,8 @@ from cloud_native import LOG_SEVERITY_WARNING
 from cloud_native import get_secret_value
 from cloud_native import log
 
-access_token = {
-    'token': None,
-    'last_modified': None
-}
-# Trade station has access token keep_alive=20 minutes
+access_token = None
+# Trade station has access token keep_alive=20 minutes per https://api.tradestation.com/docs/fundamentals/authentication/refresh-tokens/
 trade_station_access_token_keep_alive = datetime.timedelta(minutes=19)
 trade_station_url = 'https://api.tradestation.com/v3'
 trade_station_market_data = '/marketdata/stream/quotes/{symbols}'
@@ -72,70 +69,125 @@ def get_cached_or_realtime_quote(bucket, ticker):
     # attempt to call Trade Station API to get real time price quote
     refresh_global_access_token()
 
-    if 'token' in access_token:
-        trade_station_quote = '{}{}'.format(trade_station_url, trade_station_market_data.format(symbols=ticker))
-        headers = {
-            'Authorization': 'Bearer {}'.format(access_token['token'])
-        }
-        with requests.request("GET", trade_station_quote, headers=headers, stream=True) as quote_response:
-            if quote_response.status_code == HTTPStatus.OK:
-                for chunk in quote_response.iter_content(1024 * 10, decode_unicode=True):
-                    ts_quote = json.loads(chunk)
-                    break
+    for key, value in access_token.items():
+        if 'token' in value:
+            trade_station_quote = '{}{}'.format(trade_station_url, trade_station_market_data.format(symbols=ticker))
+            headers = {
+                'Authorization': 'Bearer {}'.format(value['token'])
+            }
+            with requests.request("GET", trade_station_quote, headers=headers, stream=True) as quote_response:
+                if quote_response.status_code == HTTPStatus.OK:
+                    for chunk in quote_response.iter_content(1024 * 10, decode_unicode=True):
+                        ts_quote = json.loads(chunk)
+                        break
 
-                json_quote.update(ts_quote)
-                log(text='TradeStation get quote of {} succeeded: {}'.format(ticker, quote_response.text),
-                    severity=LOG_SEVERITY_DEBUG)
-            else:
-                error_text = 'TradeStation get quote of {} failed with {}: {}'.format(ticker,
-                                                                                      quote_response.status_code,
-                                                                                      quote_response.text)
-                log(text=error_text, severity=LOG_SEVERITY_ERROR)
-                return Exception(error_text)
-    else:
-        error_text = 'Failed to get TradeStation access token from refresh token in secret {}'.format(
-            os.environ.get('SECRET_NAME_REFRESH_TOKEN'))
-        log(text=error_text, severity=LOG_SEVERITY_ERROR)
-        return Exception(error_text)
+                    json_quote.update(ts_quote)
+                    log(text='TradeStation get quote of {} succeeded: {}'.format(ticker, quote_response.text),
+                        severity=LOG_SEVERITY_DEBUG)
+                    # after using the 1st account's access token, no need to get quotes as other accounts
+                    break
+                else:
+                    error_text = 'TradeStation get quote of {} failed with {}: {}'.format(ticker,
+                                                                                          quote_response.status_code,
+                                                                                          quote_response.text)
+                    log(text=error_text, severity=LOG_SEVERITY_ERROR)
+                    return Exception(error_text)
+        else:
+            error_text = 'Failed to get TradeStation access token from refresh token in secret {}'.format(
+                os.environ.get('SECRET_NAME_TradeStation_OAuth0'))
+            log(text=error_text, severity=LOG_SEVERITY_ERROR)
+            return Exception(error_text)
 
     quote = Quote(json_quote)
     return quote
 
 
-# refresh access token if the last refresh time gets close to 20 minutes ago
 def refresh_global_access_token():
+    """
+    refresh access token if the last refresh time gets close to 20 minutes ago
+    20 minutes subject to change per https://api.tradestation.com/docs/fundamentals/authentication/refresh-tokens/
+    :return:
+    """
     global access_token
-    if not access_token['last_modified'] or \
-            datetime.datetime.utcnow() - access_token['last_modified'] > trade_station_access_token_keep_alive:
+
+    if access_token is None:
         access_token = refresh_access_token()
+    else:
+        do_refresh_access_token = False
+        for key, value in access_token.items():
+            if not value['last_modified'] or \
+                    datetime.datetime.now() - value['last_modified'] > trade_station_access_token_keep_alive:
+                do_refresh_access_token = True
+                break
+        if do_refresh_access_token:
+            access_token = refresh_access_token()
+
+    return access_token
 
 
 def refresh_access_token():
-    client_id_secret = get_secret_value('SECRET_NAME_CLIENT_ID_SECRET')
-    if len(client_id_secret.split(',')) != 2:
-        raise Exception("Failed to get TradeStation client ID and client secret")
-
-    client_id = client_id_secret.split(',')[0]
-    client_secret = client_id_secret.split(',')[1]
-    refresh_token = get_secret_value('SECRET_NAME_REFRESH_TOKEN')
-    payload = 'grant_type=refresh_token&client_id={}&client_secret={}&refresh_token={}'.format(
-        client_id, client_secret, refresh_token
-    )
-    headers = {
-        'content-type': 'application/x-www-form-urlencoded'
+    """
+    secret is in the format of:
+    {
+      "account_number_0":
+      {
+        "client_id": "123",
+        "client_secret": "bbb",
+        "refresh_token": "ccc"
+      },
+      "account_number_1":
+      {
+        "client_id": "234",
+        "client_secret": "jjj",
+        "refresh_token": "zzz"
+      }
     }
-    token_response = requests.request("POST", trade_station_token_url, headers=headers, data=payload)
-    if token_response.status_code == HTTPStatus.OK:
-        local_access_token = token_response.json()['access_token']
-        last_modified = datetime.datetime.utcnow()
-        local_access_token = {
-            'token': local_access_token,
-            'last_modified': last_modified
-        }
-    else:
-        token_response.raise_for_status()
+    :return:
+    {
+      "account_number_0":
+      {
+        "token": "aaa",
+        "last_modified": datetime.datetime
+      },
+      "account_number_1":
+      {
+        "token": "hhh",
+        "last_modified": datetime.datetime
+      }
+    }
+    """
+    TradeStation_OAuth0 = get_secret_value('SECRET_NAME_TradeStation_OAuth0')
+    TradeStation_OAuth0_dict = json.loads(TradeStation_OAuth0)
+    access_token_dict = {}
 
-    return local_access_token
+    for key, inner_dict in TradeStation_OAuth0_dict.items():
+        client_id = inner_dict['client_id']
+        client_secret = inner_dict['client_secret']
+        refresh_token = inner_dict['refresh_token']
+
+        # building the payload for trade station OAuth API
+        payload = 'grant_type=refresh_token&client_id={}&client_secret={}&refresh_token={}'.format(
+            client_id, client_secret, refresh_token
+        )
+        headers = {
+            'content-type': 'application/x-www-form-urlencoded'
+        }
+
+        # invoke trade station OAuth API
+        token_response = requests.request("POST", trade_station_token_url, headers=headers, data=payload)
+
+        if token_response.status_code == HTTPStatus.OK:
+            local_access_token = token_response.json()['access_token']
+            last_modified = datetime.datetime.now()
+            local_access_token = {
+                'token': local_access_token,
+                'last_modified': last_modified
+            }
+            access_token_dict[key] = local_access_token
+        else:
+            token_response.raise_for_status()
+
+    return access_token_dict
 
 
 MAX_WORKERS = 10
@@ -156,7 +208,7 @@ def get_cached_or_realtime_quotes(bucket, tickers):
         try:
             thread_results[ticker] = thread_results[ticker].result()
         except Exception as ex:
-            thread_results[ticker] = ex
+            thread_results[ticker] = 'Exception type {} happened: {}'.format(type(ex), ex)
 
     return thread_results
 
@@ -195,7 +247,7 @@ def execute_trade_order(trade_orders: dict, account_id: str, duration: str = 'GT
     refresh_global_access_token()
     headers = {
         "content-type": "application/json",
-        "Authorization": "Bearer {}".format(access_token['token'])
+        "Authorization": "Bearer {}".format(access_token[account_id]['token'])
     }
 
     order_exec_response = requests.request("POST", trade_station_order_api, json=payload, headers=headers)
