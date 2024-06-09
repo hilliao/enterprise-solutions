@@ -6,6 +6,7 @@ import functions_framework
 import requests
 from flask import abort
 from google.cloud import storage
+from cloud_native import get_secret_value
 
 import algo_trade
 import brokerage
@@ -194,23 +195,21 @@ def execute_trade(http_request):
         return abort(404)
 
 
-# curl "http://cloud-func-url?code=test_auth_code&state=test_state_value"
+
+# doc: https://api.tradestation.com/docs/fundamentals/authentication/auth-code/
 @functions_framework.http
 def get_authorization_code(http_request):
     if http_request.method == 'GET':
-        # get authorization code redirected 302 from https://api.tradestation.com/docs/fundamentals/authentication/auth-code/
         authorization_code = http_request.args.get('code')
-        state = http_request.args.get('state')
+        account_number = http_request.args.get('state')
         redirect_uri = http_request.base_url
-        redirect_uri = redirect_uri.replace('http://', 'https://')
 
-        # get access and refresh token
-        client_id_secret = brokerage.get_secret_value('SECRET_NAME_CLIENT_ID_SECRET')
-        if len(client_id_secret.split(',')) != 2:
-            raise Exception("Failed to get TradeStation client ID and client secret")
+        # get client id and client secret from Google secret manager
+        TradeStation_OAuth0 = get_secret_value('SECRET_NAME_TradeStation_OAuth0')
+        TradeStation_OAuth0_dict = json.loads(TradeStation_OAuth0)
 
-        client_id = client_id_secret.split(',')[0]
-        client_secret = client_id_secret.split(',')[1]
+        client_id = TradeStation_OAuth0_dict[account_number]['client_id']
+        client_secret = TradeStation_OAuth0_dict[account_number]['client_secret']
         payload = 'grant_type=authorization_code&client_id={}&client_secret={}&code={}&redirect_uri={}'.format(
             client_id, client_secret, authorization_code, redirect_uri)
         headers = {
@@ -221,7 +220,7 @@ def get_authorization_code(http_request):
 
         return {
             'authorization_code': authorization_code,
-            'state': state,
+            'state': account_number,
             'tokens': tokens.json()
         }
     else:

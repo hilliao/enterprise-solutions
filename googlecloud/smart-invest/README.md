@@ -51,6 +51,14 @@ Set the working directory to the directory of the function's filename.
 * FOLDER=[GSC bucket's folder to store quote .json files]
 * PROJECT_ID=[Google Cloud Project ID]
 * SECRET_MANAGER_PROJECT_ID=[Project ID for secret manager]
-* SECRET_NAME_CLIENT_ID_SECRET=[Secret manager's secret name that stores Trade Station's client ID and secret separated by ,]
-* SECRET_NAME_REFRESH_TOKEN=[Secret manager's secret name that stores Trade Station's refresh token]
+* TradeStation_OAuth0=[Secret manager's secret name that stores Trade Station's client ID and secret in json]. Example format:
+```json
+{
+  "account_number": {
+    "client_id": "...",
+    "client_secret": "...",
+    "refresh_token": "..."
+  }
+}
+```
 * SECRET_NAME_YH_API_KEY=[Secret manager's secret name that stores the Yahoo Finance API key]
