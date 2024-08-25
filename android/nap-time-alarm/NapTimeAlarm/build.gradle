@@ -1,14 +1,13 @@
 apply plugin: 'com.android.application'
 
 android {
-    compileSdkVersion 32
-
     defaultConfig {
         applicationId "com.dlinkddns.hil.naptimealarm"
         minSdkVersion 21
-        targetSdkVersion 32
-        versionCode 20
-        versionName "0.5.6"
+        compileSdk 34
+        targetSdkVersion 34
+        versionCode 22
+        versionName "0.5.8"
     }
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_1_8
