@@ -22,11 +22,11 @@ def recommend(amplify: float, intended_allocation: dict, quotes: dict):
 
         # Only the Yahoo Finance cached quotes have 50 and 200 day moving averages
         # If the cloud scheduler execution does not contain the stock ticker, don't adjust how many shares to buy
-        if quotes[ticker].diff_price_moving_averages():
-            # average of the 50,200 moving averages minus the current stock price
-            average_price_diff = -1 * quotes[ticker].diff_price_moving_averages()
-            # buy more shares if the moving averages are less than the current stock price
-            buying_shares_adjust = average_price_diff / latest_ticker_price
+        if quotes[ticker].diff_price_moving_average():
+            # last ticker price - 50 day moving average
+            price_minus_average_diff = quotes[ticker].diff_price_moving_average()
+            # buy more shares if the moving averages are more than the last ticker price
+            buying_shares_adjust = price_minus_average_diff / latest_ticker_price
         else:
             buying_shares_adjust = 0
 
