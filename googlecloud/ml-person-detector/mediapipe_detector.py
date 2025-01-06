@@ -27,7 +27,7 @@ Then download an off-the-shelf model. Check out the [MediaPipe documentation](ht
 
 wget  -O efficientdet.tflite -q https://storage.googleapis.com/mediapipe-models/object_detector/efficientdet_lite0/int8/1/efficientdet_lite0.tflite
 wget  -O efficientdet.tflite  https://storage.googleapis.com/mediapipe-models/object_detector/efficientdet_lite0/float32/latest/efficientdet_lite0.tflite
-# more accurate than the above
+# this is a  more accurate model than the above
 wget  -O efficientdet_lite2.tflite  https://storage.googleapis.com/mediapipe-models/object_detector/efficientdet_lite2/float32/latest/efficientdet_lite2.tflite
 
 """
@@ -36,6 +36,9 @@ wget  -O efficientdet_lite2.tflite  https://storage.googleapis.com/mediapipe-mod
 # Parameters must be set for each environment
 """
 import os, sys
+import cv2
+import numpy as np
+
 RTSP_URL = os.environ.get("RTSP_URL")
 if not RTSP_URL:
     sys.stderr.write("Error: RTSP_URL environment variable is not set.\n")  # Print to stderr
@@ -43,14 +46,11 @@ if not RTSP_URL:
 TFLITE_MODEL_PATH = "/home/hil/git/enterprise-solutions/googlecloud/ml-person-detector/efficientdet_lite2.tflite"
 MAX_WORKERS = 20
 OUTPUT_IMAGE_DIR = "/mnt/1tb/ftp/ipcam/autodelete/person-detector"
-# when the number is too low, execution of the program will cause significant lag for image detection.
-SKIP_X_FRAMES = 3
+SKIP_X_FRAMES = 3  # when the number is too low, execution of the program will cause significant lag for image detection.
 OBJ_DETECT_CONFIDENCE_SCORE = 0.4
 PERSON_DETECT_CONFIDENCE_SCORE = 0.5
 
-import cv2
-import numpy as np
-
+# Visualization parameters (group them together)
 MARGIN = 10  # pixels
 ROW_SIZE = 10  # pixels
 FONT_SIZE = 1
@@ -101,54 +101,56 @@ import mediapipe as mp
 from mediapipe.tasks import python
 from mediapipe.tasks.python import vision
 
-# STEP 2: Create an ObjectDetector object.
-base_options = python.BaseOptions(model_asset_path=TFLITE_MODEL_PATH)
-options = vision.ObjectDetectorOptions(base_options=base_options, score_threshold=OBJ_DETECT_CONFIDENCE_SCORE)
-detector = vision.ObjectDetector.create_from_options(options)
-
-# STEP 3: Load the input video.
-video_capture = cv2.VideoCapture(RTSP_URL)
-
-# Allow user to press q to
+# Allow user to press q to quit
 import threading
 import sys
 import termios
 import tty
 
-original_terminal_settings = termios.tcgetattr(sys.stdin) # Store the original settings
+
+def is_debugger_attached():
+    return 'pydevd' in sys.modules
+
+if not is_debugger_attached():
+    original_terminal_settings = termios.tcgetattr(sys.stdin)  # Store the original settings
 
 
-def get_key():  # Function to get a single character from the terminal
-    fd = sys.stdin.fileno()
-    old_settings = termios.tcgetattr(fd)
-    try:
-        tty.setraw(sys.stdin.fileno())
-        ch = sys.stdin.read(1)
-    finally:
-        termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
-    return ch
+    def get_key():  # Function to get a single character from the terminal
+        fd = sys.stdin.fileno()
+        old_settings = termios.tcgetattr(fd)
+        try:
+            tty.setraw(sys.stdin.fileno())
+            ch = sys.stdin.read(1)
+        finally:
+            termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
+        return ch
 
 
-key_pressed = None  # Global variable to store key press
+    key_pressed = None  # Global variable to store key press
 
 
-def get_key_thread():
-    global key_pressed
-    while True:  # Keep listening for key presses
-        key_pressed = get_key()
+    def get_key_thread():
+        global key_pressed
+        while True:  # Keep listening for key presses
+            key_pressed = get_key()
 
 
-# Start the keypress listener thread
-key_thread = threading.Thread(target=get_key_thread, daemon=True)
-key_thread.start()
+    # Start the keypress listener thread
+    key_thread = threading.Thread(target=get_key_thread, daemon=True)
+    key_thread.start()
 
 # Implement asynchronous processing for image detection
 import concurrent.futures
 import queue
 
 results_queue = queue.Queue()
-# Executor for asynchronous tasks
+# Executor for asynchronous tasks of image object detection
 executor = concurrent.futures.ThreadPoolExecutor(max_workers=MAX_WORKERS)  # Adjust as needed
+
+# STEP 2: Create an ObjectDetector object.
+base_options = python.BaseOptions(model_asset_path=TFLITE_MODEL_PATH)
+options = vision.ObjectDetectorOptions(base_options=base_options, score_threshold=OBJ_DETECT_CONFIDENCE_SCORE)
+detector = vision.ObjectDetector.create_from_options(options)
 
 
 def detect_and_save_img(image, frame, PERSON_CONFIDENCE_SCORE=0.5):
@@ -161,49 +163,67 @@ def detect_and_save_img(image, frame, PERSON_CONFIDENCE_SCORE=0.5):
             break  # No need to check further if a person is found
 
     if person_detected:  # Save image only if a person is detected
-        annotated_frame = visualize(frame, detection_result) # Only visualize if saving
+        annotated_frame = visualize(frame, detection_result)  # Only visualize if saving
         filename = f"annotated_frame_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S_%f')}.png"
         cv2.imwrite(f"{OUTPUT_IMAGE_DIR}/{filename}", annotated_frame)
-        results_queue.put((detection_result, filename))  # Put results in queue for processing. Only if a person is found
+        results_queue.put(
+            (detection_result, filename))  # Put results in queue for processing. Only if a person is found
     else:
-       results_queue.put((None, None)) #Signal that no person detected, helps prevent queue buildup
+        results_queue.put((None, None))  # Signal that no person detected, helps prevent queue buildup
 
 
+# STEP 3: Load the input video.
 # STEP 4: Detect objects in the input image.
-frames_to_skip = SKIP_X_FRAMES  # Skip every X frames
-frame_count = 0
 
 if __name__ == "__main__":
-    while True:
-        ret, frame = video_capture.read()
-        if not ret:
-            break
+    frames_to_skip = SKIP_X_FRAMES  # Skip every X frames
+    frame_count = 0
+    video_capture = None
 
-        frame_count += 1
-        if frame_count % (frames_to_skip + 1) == 0:  # Process only every (frames_to_skip + 1)th frame
-            image = mp.Image(image_format=mp.ImageFormat.SRGB, data=frame)
-            # Detect objects in the current frame.
-            # Submit detection and saving task to the executor
-            executor.submit(detect_and_save_img, image, frame.copy(), PERSON_DETECT_CONFIDENCE_SCORE)  # .copy() important to prevent data corruption
+    try:
+        video_capture = cv2.VideoCapture(RTSP_URL)
+        while True:
+            ret, frame = video_capture.read()
+            if not ret:
+                sys.stderr.write(
+                    f"An error occurred opening the video input source at {RTSP_URL} in the main execution")
+                break
 
-        # Process results from the queue (non-blocking)
-        try:
-            detection_result, filename = results_queue.get_nowait()
-            if detection_result:  # This is where you print. You'll only get here if a person was detected
-                print(f"{detection_result} at filename {filename}")
-        except queue.Empty:
-            pass  # No new results yet
+            frame_count += 1
+            if frame_count % (frames_to_skip + 1) == 0:  # Process only every (frames_to_skip + 1)th frame
+                image = mp.Image(image_format=mp.ImageFormat.SRGB, data=frame)
+                # Detect objects in the current frame.
+                # Submit detection and saving task to the executor
+                executor.submit(detect_and_save_img, image, frame.copy(),
+                                PERSON_DETECT_CONFIDENCE_SCORE)  # .copy() important to prevent data corruption
 
-        if key_pressed:  # Check if any key was pressed
-            if key_pressed == 'q':
-                termios.tcsetattr(sys.stdin, termios.TCSADRAIN, original_terminal_settings)
-                break  # Exit if 'q' is pressed
-            else:
-                print(f"Key pressed: {key_pressed}")  # Or handle other keypresses if needed.
-                # You might want to reset key_pressed here if you only want to react to new keypresses.
-                key_pressed = None  # Reset key_pressed
-                # ... potentially handle other key presses
+            # Process results from the queue (non-blocking)
+            try:
+                detection_result, filename = results_queue.get_nowait()
+                if detection_result:  # This is where you print. You'll only get here if a person was detected
+                    print(f"{detection_result} at filename {filename}")
+            except queue.Empty:
+                pass  # No new results yet
 
-    # Release the video capture and destroy windows.
-    video_capture.release()
-    cv2.destroyAllWindows()
+            if not is_debugger_attached():
+                if key_pressed:  # Check if any key was pressed
+                    if key_pressed == 'q':
+                        termios.tcsetattr(sys.stdin, termios.TCSADRAIN, original_terminal_settings)
+                        break  # Exit if 'q' is pressed
+                    else:
+                        print(f"Key pressed: {key_pressed}")  # Or handle other keypresses if needed.
+                        # You might want to reset key_pressed here if you only want to react to new keypresses.
+                        key_pressed = None  # Reset key_pressed
+                        # ... potentially handle other key presses
+
+    except (Exception, KeyboardInterrupt) as e:
+        sys.stderr.write(f"An error occurred in the main execution or program interrupted: {e}\n")
+    finally:  # Restore terminal settings
+        if not is_debugger_attached():
+            termios.tcsetattr(sys.stdin, termios.TCSADRAIN, original_terminal_settings)
+
+        cv2.destroyAllWindows()
+        # Release the video capture and destroy windows.
+        if video_capture:
+            video_capture.release()
+        print("main execution exiting...")  # Indicate clean exit
