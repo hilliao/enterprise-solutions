@@ -43,11 +43,14 @@ wget  -O efficientdet_lite2.tflite  https://storage.googleapis.com/mediapipe-mod
 ```
 """
 
-import os, sys
-import cv2
-import numpy as np
+import os
+import sys
 import time
-from gcp_utils import gcs_upload_blob, gcs_path_to_http_url  # Import the functions
+
+import cv2
+# Import the functions
+from image_utils import visualize
+from gcp_utils import gcs_upload_blob, gcs_path_to_http_url
 
 # Parameters must be set for each environment variable
 parameters = ["RTSP_URL", "TFLITE_MODEL_PATH", "MAX_WORKERS", "OUTPUT_IMAGE_DIR", "SKIP_X_FRAMES",
@@ -71,95 +74,17 @@ PERSON_DETECT_CONFIDENCE_SCORE = float(os.environ.get("PERSON_DETECT_CONFIDENCE_
 GCS_BUCKET = os.environ.get("GCS_BUCKET")
 GCS_FOLDER = os.environ.get("GCS_FOLDER")
 
-# Visualization parameters (group them together)
-MARGIN = 10  # pixels
-ROW_SIZE = 10  # pixels
-FONT_SIZE = 1
-FONT_THICKNESS = 1
-TEXT_COLOR = (255, 0, 0)  # red
-
-
-# functions to visualize the object detection results
-def visualize(
-        image,
-        detection_result
-) -> np.ndarray:
-    """Draws bounding boxes on the input image and return it.
-    Args:
-      image: The input RGB image.
-      detection_result: The list of all "Detection" entities to be visualized.
-    Returns:
-      Image with bounding boxes.
-    """
-    for detection in detection_result.detections:
-        # Draw bounding_box
-        bbox = detection.bounding_box
-        start_point = bbox.origin_x, bbox.origin_y
-        end_point = bbox.origin_x + bbox.width, bbox.origin_y + bbox.height
-        cv2.rectangle(image, start_point, end_point, TEXT_COLOR, 3)
-
-        # Draw label and score
-        category = detection.categories[0]
-        category_name = category.category_name
-        probability = round(category.score, 2)
-        result_text = category_name + ' (' + str(probability) + ')'
-        text_location = (MARGIN + bbox.origin_x,
-                         MARGIN + ROW_SIZE + bbox.origin_y)
-        cv2.putText(image, result_text, text_location, cv2.FONT_HERSHEY_PLAIN,
-                    FONT_SIZE, TEXT_COLOR, FONT_THICKNESS)
-
-    return image
-
-
 """## Running inference and visualizing the results
 Here are the steps to run object detection using MediaPipe.
 Check out the [MediaPipe documentation](https://developers.google.com/mediapipe/solutions/vision/object_detector/python) to learn more about configuration options that this solution supports.
 """
 
-# STEP 1: Import the necessary modules.
 import datetime
 import mediapipe as mp
 from mediapipe.tasks import python
 from mediapipe.tasks.python import vision
-
-# Allow user to press q to quit
 import threading
 import sys
-import termios
-import tty
-
-
-def is_debugger_attached():
-    return 'pydevd' in sys.modules
-
-
-if not is_debugger_attached():
-    original_terminal_settings = termios.tcgetattr(sys.stdin)  # Store the original settings
-
-
-    def get_key():  # Function to get a single character from the terminal
-        fd = sys.stdin.fileno()
-        old_settings = termios.tcgetattr(fd)
-        try:
-            tty.setraw(sys.stdin.fileno())
-            ch = sys.stdin.read(1)
-        finally:
-            termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
-        return ch
-
-
-    key_pressed = None  # Global variable to store key press
-
-
-    def get_key_thread():
-        global key_pressed
-        while True:  # Keep listening for key presses
-            key_pressed = get_key()
-
-
-    # Start the keypress listener thread
-    key_thread = threading.Thread(target=get_key_thread, daemon=True)
-    key_thread.start()
 
 # Implement asynchronous processing for image detection
 import concurrent.futures
@@ -171,7 +96,6 @@ results_queue = queue.Queue()
 gcs_executor = concurrent.futures.ThreadPoolExecutor(max_workers=math.ceil(MAX_WORKERS))
 
 
-# STEP 2: Create an ObjectDetector object.
 def detector_callback(detection_result: vision.ObjectDetectorResult,
                       output_image: mp.Image, timestamp_ms: int):
     person_detect_confidence_score = PERSON_DETECT_CONFIDENCE_SCORE
@@ -187,25 +111,25 @@ def detector_callback(detection_result: vision.ObjectDetectorResult,
         print(f"Person detected: {detection_result}")
         annotated_frame = visualize(output_image.numpy_view().copy(), detection_result)  # Only visualize if saving
         formatted_datetime = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S.%f")
-        filename = f"annotated_frame_{formatted_datetime}.png"
-        if not cv2.imwrite(f"{OUTPUT_IMAGE_DIR}/{filename}", annotated_frame):  # check for successful write
-            sys.stderr.write(f"Error: Could not write image to {OUTPUT_IMAGE_DIR}/{filename}!\n")
-            # Handle the error appropriately (e.g., log, retry, skip)
-        else:
-            print(f"Annotated frame saved to file at {OUTPUT_IMAGE_DIR}/{filename}")
+        filename = f"annotated_{formatted_datetime}.png"
+        file_path = f"{OUTPUT_IMAGE_DIR}/{filename}"
 
-        results_queue.put(
-            (detection_result, filename))  # Put results in queue for processing. Only if a person is found
+        if cv2.imwrite(f"{file_path}", annotated_frame):  # check for successful write
+            print(f"Annotated frame saved to file at {file_path}")
+        else:
+            sys.stderr.write(f"Error: Could not write image to {file_path}!\n")
+            filename = None
+
+        # Put results in queue for processing. Only if a person is found
+        results_queue.put((detection_result, filename, formatted_datetime))
     else:
-        results_queue.put((None, None))  # Signal that no person detected, helps prevent queue buildup
+        results_queue.put((None, None, None))  # Signal that no person detected, helps prevent queue buildup
 
 
 base_options = python.BaseOptions(model_asset_path=TFLITE_MODEL_PATH)
 options = vision.ObjectDetectorOptions(base_options=base_options, running_mode=vision.RunningMode.LIVE_STREAM,
                                        score_threshold=OBJ_DETECT_CONFIDENCE_SCORE, result_callback=detector_callback)
 detector = vision.ObjectDetector.create_from_options(options)
-
-# STEP 3: Load the input video, Detect objects in the input image.
 
 if __name__ == "__main__":
     frames_to_skip = SKIP_X_FRAMES  # Skip every X frames
@@ -228,19 +152,15 @@ if __name__ == "__main__":
                 detector.detect_async(image, int(time.time_ns() / 1000000))
 
             # Process results from the queue (non-blocking)
-            if is_debugger_attached():
-                print(f"Active thread count for tasks like "
-                      f"image detection and uploading to Google cloud storage: {threading.active_count()}", end="\r")
+            print(f"Active thread count: {threading.active_count()}", end="\r")
             try:
-                detection_result, filename = results_queue.get_nowait()
-                if detection_result:  # Execution gets here if a person was detected
-                    # Submit GCS upload to the executor
-                    formatted_datetime = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S.%f")
+                detection_result, filename, formatted_datetime = results_queue.get_nowait()
+                if filename:  # Execution gets here if a person was detected and annotated image saved to a file
+                    # upload the file to Google cloud storage bucket asynchronously
                     gcs_folder_date_hour = (f"{formatted_datetime.split('_')[0]}/"
                                             f"{formatted_datetime.split('_')[1].split('-')[0]}")
                     blob_name = f"{GCS_FOLDER}/{gcs_folder_date_hour}/{filename}"
-                    gcs_executor.submit(gcs_upload_blob, GCS_BUCKET, f"{OUTPUT_IMAGE_DIR}/{filename}",
-                                        blob_name)
+                    gcs_executor.submit(gcs_upload_blob, GCS_BUCKET, f"{OUTPUT_IMAGE_DIR}/{filename}", blob_name)
                     expected_gcs_path = f"gs://{GCS_BUCKET}/{blob_name}"
                     print(
                         f"Started asynchronous upload of {filename} to {blob_name} in bucket {GCS_BUCKET};"
@@ -248,22 +168,10 @@ if __name__ == "__main__":
             except queue.Empty:
                 pass  # No new results yet
 
-            if not is_debugger_attached():
-                if key_pressed:  # Check if any key was pressed
-                    if key_pressed == 'q':
-                        termios.tcsetattr(sys.stdin, termios.TCSADRAIN, original_terminal_settings)
-                        break  # Exit if 'q' is pressed
-                    else:
-                        print(f"Key pressed: {key_pressed}")  # Or handle other keypresses if needed.
-                        # You might want to reset key_pressed here if you only want to react to new keypresses.
-                        key_pressed = None  # Reset key_pressed
-                        # ... potentially handle other key presses
 
-    except (Exception, KeyboardInterrupt) as e:
-        sys.stderr.write(f"An error occurred in the main execution or program interrupted: {e}\n")
+    except KeyboardInterrupt as e:
+        sys.stderr.write(f":KeyboardInterrupt caught: {e}\n")
     finally:  # Restore terminal settings
-        if not is_debugger_attached():
-            termios.tcsetattr(sys.stdin, termios.TCSADRAIN, original_terminal_settings)
 
         cv2.destroyAllWindows()
         # Release the video capture and destroy windows.
