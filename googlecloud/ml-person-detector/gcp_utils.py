@@ -1,5 +1,5 @@
-# upload detected images to GCS buckets in a async thread
 from google.cloud import storage
+import sys
 
 
 def gcs_upload_blob(bucket_name, source_file_name, destination_blob_name):
@@ -18,7 +18,7 @@ def gcs_upload_blob(bucket_name, source_file_name, destination_blob_name):
         # Optional: set a generation-match precondition to avoid potential race conditions
         # and data corruptions. The request to upload is aborted if the object's
         # generation number does not match your precondition. For a destination
-        # object that does not yet exist, set the if_generation_match precondition to 0.
+        # object that does not yet exist, set if_generation_match precondition to 0.
         # If the destination object already exists in your bucket, set instead a
         # generation-match precondition using its generation number.
         generation_match_precondition = 0
