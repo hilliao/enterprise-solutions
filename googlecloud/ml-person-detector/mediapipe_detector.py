@@ -125,8 +125,10 @@ def detector_callback(detection_result: vision.ObjectDetectorResult,
     else:
         results_queue.put((None, None, None))  # Signal that no person detected, helps prevent queue buildup
 
-
-base_options = python.BaseOptions(model_asset_path=TFLITE_MODEL_PATH)
+if "IS_GPU" in os.environ:
+    base_options = python.BaseOptions(model_asset_path=TFLITE_MODEL_PATH, delegate=python.BaseOptions.Delegate.GPU)
+else:
+    base_options = python.BaseOptions(model_asset_path=TFLITE_MODEL_PATH)
 options = vision.ObjectDetectorOptions(base_options=base_options, running_mode=vision.RunningMode.LIVE_STREAM,
                                        score_threshold=OBJ_DETECT_CONFIDENCE_SCORE, result_callback=detector_callback)
 detector = vision.ObjectDetector.create_from_options(options)
@@ -153,20 +155,21 @@ if __name__ == "__main__":
 
             # Process results from the queue (non-blocking)
             print(f"Active thread count: {threading.active_count()}", end="\r")
-            try:
-                detection_result, filename, formatted_datetime = results_queue.get_nowait()
-                if filename:  # Execution gets here if a person was detected and annotated image saved to a file
-                    # upload the file to Google cloud storage bucket asynchronously
-                    gcs_folder_date_hour = (f"{formatted_datetime.split('_')[0]}/"
-                                            f"{formatted_datetime.split('_')[1].split('-')[0]}")
-                    blob_name = f"{GCS_FOLDER}/{gcs_folder_date_hour}/{filename}"
-                    gcs_executor.submit(gcs_upload_blob, GCS_BUCKET, f"{OUTPUT_IMAGE_DIR}/{filename}", blob_name)
-                    expected_gcs_path = f"gs://{GCS_BUCKET}/{blob_name}"
-                    print(
-                        f"Started asynchronous upload of {filename} to {blob_name} in bucket {GCS_BUCKET};"
-                        f" expected url: {gcs_path_to_http_url(expected_gcs_path)}")  # Indicate upload start
-            except queue.Empty:
-                pass  # No new results yet
+            if "GOOGLE_APPLICATION_CREDENTIALS" in os.environ:
+                try:
+                    detection_result, filename, formatted_datetime = results_queue.get_nowait()
+                    if filename:  # Execution gets here if a person was detected and annotated image saved to a file
+                        # upload the file to Google cloud storage bucket asynchronously
+                        gcs_folder_date_hour = (f"{formatted_datetime.split('_')[0]}/"
+                                                f"{formatted_datetime.split('_')[1].split('-')[0]}")
+                        blob_name = f"{GCS_FOLDER}/{gcs_folder_date_hour}/{filename}"
+                        gcs_executor.submit(gcs_upload_blob, GCS_BUCKET, f"{OUTPUT_IMAGE_DIR}/{filename}", blob_name)
+                        expected_gcs_path = f"gs://{GCS_BUCKET}/{blob_name}"
+                        print(
+                            f"Started asynchronous upload of {filename} to {blob_name} in bucket {GCS_BUCKET};"
+                            f" expected url: {gcs_path_to_http_url(expected_gcs_path)}")  # Indicate upload start
+                except queue.Empty:
+                    pass  # No new results yet
 
 
     except KeyboardInterrupt as e:
