@@ -6,7 +6,9 @@ set -x # print the executing lines
 export GOOGLE_APPLICATION_CREDENTIALS=confidential/secrets/person-detection-logger@gcp-project-id.iam.gserviceaccount.com
 export RTSP_URL="rtsp://user:password@192.168.111.42:554"
 export TFLITE_MODEL_PATH="$HOME/git/enterprise-solutions/googlecloud/ml-person-detector/efficientdet_lite2.tflite"
-export MAX_WORKERS=128
+# Setting a high number > 64 is risking the router's ability to handle outgoing connections.
+# if the router's simultaneous outgoing connections max out, egress to the Internet would be degraded severely
+export MAX_WORKERS=24
 export OUTPUT_IMAGE_DIR="/mnt/1tb/ftp/ipcam/autodelete/person-detector"
 # WARNING!!!
 # any number less than 3 may cause the main execution thread to hang, thus unable to get latest RTSP frames
