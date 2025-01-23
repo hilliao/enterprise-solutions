@@ -54,8 +54,10 @@ from gcp_utils import gcs_upload_blob, gcs_path_to_http_url
 
 # Parameters must be set for each environment variable
 parameters = ["RTSP_URL", "TFLITE_MODEL_PATH", "MAX_WORKERS", "OUTPUT_IMAGE_DIR", "SKIP_X_FRAMES",
-              "OBJ_DETECT_CONFIDENCE_SCORE", "PERSON_DETECT_CONFIDENCE_SCORE",
-              "GCS_BUCKET", "GCS_FOLDER"]
+              "OBJ_DETECT_CONFIDENCE_SCORE", "PERSON_DETECT_CONFIDENCE_SCORE"]
+
+if "GOOGLE_APPLICATION_CREDENTIALS" in os.environ:
+    parameters.extend(["GCS_BUCKET", "GCS_FOLDER"])
 
 for param in parameters:  # Iterate through the parameters list
     if os.environ.get(param) is None:  # Check if the environment variable is set
@@ -125,7 +127,8 @@ def detector_callback(detection_result: vision.ObjectDetectorResult,
     else:
         results_queue.put((None, None, None))  # Signal that no person detected, helps prevent queue buildup
 
-if "IS_GPU" in os.environ:
+
+if "IS_GPU" in os.environ and os.environ.get("IS_GPU") == "1":
     base_options = python.BaseOptions(model_asset_path=TFLITE_MODEL_PATH, delegate=python.BaseOptions.Delegate.GPU)
 else:
     base_options = python.BaseOptions(model_asset_path=TFLITE_MODEL_PATH)
@@ -151,7 +154,7 @@ if __name__ == "__main__":
             if frame_count % (frames_to_skip + 1) == 0:  # Process only every (frames_to_skip + 1)th frame
                 image = mp.Image(image_format=mp.ImageFormat.SRGB, data=frame)
                 # Detect objects in the current frame.
-                detector.detect_async(image, int(time.time_ns() / 1000000))
+                detector.detect_async(image, int(time.time_ns() / 1000))
 
             # Process results from the queue (non-blocking)
             print(f"Active thread count: {threading.active_count()}", end="\r")
