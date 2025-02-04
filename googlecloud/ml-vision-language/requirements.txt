@@ -1,0 +1,6 @@
+google-cloud-storage
+mediapipe
+transformers
+torch
+Pillow
+requests
