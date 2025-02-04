@@ -19,3 +19,5 @@ export PERSON_DETECT_CONFIDENCE_SCORE=0.5
 export GCS_BUCKET=bucket-name
 export GCS_FOLDER=us-amcrest-cam-0
 export IS_GPU=0
+
+./mediapipe_detector.py
