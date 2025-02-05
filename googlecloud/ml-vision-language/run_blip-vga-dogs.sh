@@ -1,5 +1,6 @@
 #!/bin/bash
-
+set -e
+#set -x
 # Directory containing the images
 image_dir="$HOME/Pictures/dogs"
 
@@ -17,7 +18,7 @@ find "$image_dir" -type f -print0 | while IFS= read -r -d $'\0' image_path; do
   export IMAGE_PATH="$image_path"
 
   # Run the Python script and capture the output
-  output=$(python "$python_script" 2>&1)
+  output=$(python "$python_script")
 
   # Extract the last line of the output
   last_line=$(echo "$output" | tail -n 1)

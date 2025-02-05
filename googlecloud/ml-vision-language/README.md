@@ -46,6 +46,7 @@ If `GOOGLE_APPLICATION_CREDENTIALS`, `GCS_BUCKET`, and `GCS_FOLDER` are set, ann
 
 # Dog Image Detection and Deletion with BLIP VQA
 
+This section provides a comprehensive guide on how to use the provided scripts for dog detection and image deletion. Remember to test the scripts thoroughly and use them responsibly!
 This project uses a combination of a Python script (`blip-vqa-dogs.py`) edited from [the Hugging Face BLIP VQA model](https://huggingface.co/Salesforce/blip-vqa-base) and a Bash script (`process_dog_images.sh`) to detect dogs in images and automatically delete images that do not contain any dogs.
 
 ## Overview
@@ -136,4 +137,60 @@ The system works as follows:
 *   **"Error deleting image":** Make sure the script has the necessary permissions to delete files in the specified directory. Check for any error messages printed to the console.
 *   **"command not found: python":** Ensure that Python 3 is installed and that the `python` command is in your `PATH`. You might need to use `python3` instead of `python` in the Bash script.
 
-This `README.md` file provides a comprehensive guide on how to use the provided scripts for dog detection and image deletion. Remember to test the scripts thoroughly and use them responsibly!
+# Image Processing with LLaVA and Ollama
+
+This Bash script `run_llm-vl-find-dogs.sh` processes images in a specified directory, uses the LLaVA model (via Ollama) to determine if a dog is present in each image, and moves the image to a different directory if no dog is detected.
+
+## Overview
+
+The script performs the following actions for each image:
+
+1.  **Loads images:** specified by the `base_path` environment variable.
+2.  **Queries the LLaVA model:** using `ollama run llava` with a prompt defined in the `PROMPT` environment variable.
+3.  **Checks the model's response:** to determine if it contains `dogs: 1` or `dogs: 0`. If no dogs are detected, the image file is deleted.
+4.  **Moves the image:** if the model's response does not indicate the presence of a dog, the script moves the image to a directory specified by environment variable `dogs_path`.
+5.  **Prints output:** to the console, indicating whether a dog was detected and if the file was moved.
+
+## Prerequisites
+
+*   **Bash:** The script is written in Bash and requires a Bash environment to run.
+*   **Ollama:** You must have Ollama installed and configured on your system. Ollama allows you to run large language models locally.
+    *   **Installation and Setup:** Follow the instructions on the official Ollama website to install and set up Ollama on your specific operating system: [https://ollama.com/](https://ollama.com/)
+    *   **LLaVA Model:** You need to have the LLaVA model installed within Ollama. You can pull it using the following command:
+        ```bash
+        ollama pull llava
+        ```
+    *   **Verification:** Before running the script, ensure that you can successfully run the LLaVA model using the following command in your terminal:
+        ```bash
+        ollama run llava "What's in this image? the image file path: /home/user/Pictures/test-img.png"
+        ```
+        The output should describe the image. Verify that the image is added to the model for analysis.
+*   **jq:** `jq` is a command-line JSON processor, used in the script to parse the output from the `ollama` command. To install `jq`:
+    *   **Debian/Ubuntu:** `sudo apt-get update && sudo apt-get install jq`
+    *   **macOS (not tested, using Homebrew):** `brew install jq`
+    *   **Other systems:** Refer to the jq website for instructions: [https://stedolan.github.io/jq/](https://stedolan.github.io/jq/)
+
+## Environment Variables
+
+The script uses the following environment variables. You'll need to set them according to your needs **before** running the script.
+**Important:** Ensure the `MOVE_TO_DIR` directory exists before running the script. You might need to create it manually: `mkdir "$MOVE_TO_DIR"`
+
+*   **`base_path`:** The directory containing the images you want to process (e.g., `~/Pictures/dogs`).
+*   **`dogs_path`:** The directory where images without dogs will be moved (e.g., `~/Pictures/no_dogs`). **Make sure this directory exists before running the script.**
+*   **`ollama_output`:** The prompt you want to send to the LLaVA model. An example is `"Is there a dog in this image? Answer yes or no."`
+
+## How to Use
+
+1.  **Save the Script:** Save the provided Bash script to a file, for example, `run_llm-vl-find-dogs.sh`.
+
+2.  **Make the Script Executable:**
+    ```bash
+    chmod +x run_llm-vl-find-dogs.sh
+    ```
+
+3.  **Set Environment Variables in the script**
+
+4.  **Run the Script:**
+    ```bash
+    ./run_llm-vl-find-dogs.sh
+    ```
