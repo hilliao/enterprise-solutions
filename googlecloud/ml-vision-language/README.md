@@ -27,8 +27,19 @@ Environment variables are used to configure the script. These are set within the
 ## Running the Detector
 
 1. **Set Environment Variables:**  Edit the `run_detector.sh` script to configure the necessary environment variables.
-2. **Execute the Script:**  Run the script: `./run_detector.sh`
-3. **Monitoring:** The script will print status updates to the console.
+2. **Download the model**
+
+Download an off-the-shelf model. Check out the [MediaPipe documentation](https://ai.google.dev/edge/mediapipe/solutions/vision/object_detector#efficientdet-lite2_model) for more image classification models that you can use.
+
+```bash
+wget  -O efficientdet.tflite https://storage.googleapis.com/mediapipe-models/object_detector/efficientdet_lite0/int8/1/efficientdet_lite0.tflite
+wget  -O efficientdet.tflite https://storage.googleapis.com/mediapipe-models/object_detector/efficientdet_lite0/float32/latest/efficientdet_lite0.tflite
+# this is a  more accurate model than the above
+wget  -O efficientdet_lite2.tflite  https://storage.googleapis.com/mediapipe-models/object_detector/efficientdet_lite2/float32/latest/efficientdet_lite2.tflite
+```
+
+3. **Execute the Script:**  Run the script: `./run_detector.sh`
+4. **Monitoring:** The script will print status updates to the console.
 
 
 
