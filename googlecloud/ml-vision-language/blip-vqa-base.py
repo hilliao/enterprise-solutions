@@ -40,8 +40,8 @@ def process_image_and_question(image_path, question):
     if torch.cuda.is_available():
         inputs = inputs.to("cuda")  # only move inputs to cuda if cuda is available
 
-    out = model.generate(**inputs)
-    print(processor.decode(out[0], skip_special_tokens=True))
+    generated_ids = model.generate(**inputs)
+    return processor.decode(generated_ids[0], skip_special_tokens=True)
 
 
 if __name__ == "__main__":
@@ -58,4 +58,5 @@ if __name__ == "__main__":
         print("Error: QUESTION environment variable not set.", file=sys.stderr)
         sys.exit(1)
 
-    process_image_and_question(image_path, question)
+    answer = process_image_and_question(image_path, question)
+    print(answer)
