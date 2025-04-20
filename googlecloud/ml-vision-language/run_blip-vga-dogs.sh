@@ -8,7 +8,7 @@ image_dir="$HOME/Pictures/dogs"
 export QUESTION="how many dogs are in the picture?"
 
 # Python script name
-python_script="blip-vqa-dogs.py"
+python_script="blip-vqa-base.py"
 
 # Loop through all files in the directory
 find "$image_dir" -type f -print0 | while IFS= read -r -d $'\0' image_path; do
