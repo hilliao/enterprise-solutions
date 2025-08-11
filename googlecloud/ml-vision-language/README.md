@@ -1,7 +1,7 @@
 # Machine learning person detector using Mediapipe library
 
 * **[MediaPipe Models](https://github.com/google-ai-edge/mediapipe-samples/blob/main/examples/object_detection/python/object_detector.ipynb):** Download a TensorFlow Lite [object detection model](https://ai.google.dev/edge/mediapipe/solutions/vision/object_detector).  EfficientDet-Lite models are recommended for their balance of speed and accuracy.  Place the model in your project directory. See `mediapipe_detector.py` for examples.
-* **RTSP Stream:**  You'll need access to an RTSP video stream.  The URL, username, and password are configured in environment variables (see below).
+* **RTSP Stream:**  You'll need access to an RTSP or FFMPEG HTTP/CGI video stream.  The URL, username, and password are configured in environment variables (see below).
 * **Output Directory:**  Ensure the output directory (`OUTPUT_IMAGE_DIR`) for saving annotated images exists and is writable.
 * **(Optional) Google Cloud Storage:** To enable uploads to GCS, you'll need a GCS bucket and appropriate credentials.
 
@@ -9,19 +9,19 @@
 
 Environment variables are used to configure the script. These are set within the `run_detector.sh` script.
 
-| Variable | Description | Example |
-|---|---|---|
-| `GOOGLE_APPLICATION_CREDENTIALS` | Path to your Google Cloud service account credentials file (optional).  Required only for GCS uploads. | `confidential/secrets/person-detection-logger@gcp-project-id.iam.gserviceaccount.com` |
-| `RTSP_URL` | URL of the RTSP video stream. | `rtsp://user:password@192.168.111.42:554` |
-| `TFLITE_MODEL_PATH` | Path to the TensorFlow Lite model file. | `$HOME/git/enterprise-solutions/googlecloud/ml-person-detector/efficientdet_lite2.tflite` |
-| `MAX_WORKERS` | Number of threads for asynchronous GCS uploads (optional, defaults to the number of processors).  Recommended to keep this number reasonably low to avoid overwhelming the router if also used as edge deployment. | `24` |
-| `OUTPUT_IMAGE_DIR` | Path to the directory where annotated images will be saved. | `/mnt/1tb/ftp/ipcam/autodelete/person-detector` |
-| `SKIP_X_FRAMES` | Number of frames to skip between detections. Higher values reduce processing load. | `3` |
-| `OBJ_DETECT_CONFIDENCE_SCORE` | Minimum confidence score for object detection (0.0 - 1.0). | `0.4` |
-| `PERSON_DETECT_CONFIDENCE_SCORE` | Minimum confidence score specifically for person detection (0.0 - 1.0). | `0.5` |
-| `GCS_BUCKET` | Name of your Google Cloud Storage bucket (optional). | `bucket-name` |
-| `GCS_FOLDER` | Folder within the GCS bucket for storing uploaded images (optional). | `us-amcrest-cam-0` |
-| `IS_GPU` | Set to 1 to use GPU delegation (optional). | `1` |
+| Variable | Description                                                                                                                                                                                                        | Example                                                                                   |
+|---|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|-------------------------------------------------------------------------------------------|
+| `GOOGLE_APPLICATION_CREDENTIALS` | Path to your Google Cloud service account credentials file (optional).  Required only for GCS uploads.                                                                                                             | `confidential/secrets/person-detection-logger@gcp-project-id.iam.gserviceaccount.com`     |
+| `RTSP_URL` | URL of the RTSP or FFMPEG HTTP/CGI video stream.                                                                                                                                                                   | `rtsp://user:password@192.168.111.42:554`, http://admin:pass@192.168.123.123:82/video.cgi |
+| `TFLITE_MODEL_PATH` | Path to the TensorFlow Lite model file.                                                                                                                                                                            | `$HOME/git/enterprise-solutions/googlecloud/ml-person-detector/efficientdet_lite2.tflite` |
+| `MAX_WORKERS` | Number of threads for asynchronous GCS uploads (optional, defaults to the number of processors).  Recommended to keep this number reasonably low to avoid overwhelming the router if also used as edge deployment. | `24`                                                                                      |
+| `OUTPUT_IMAGE_DIR` | Path to the directory where annotated images will be saved.                                                                                                                                                        | `/mnt/1tb/ftp/ipcam/autodelete/person-detector`                                           |
+| `SKIP_X_FRAMES` | Number of frames to skip between detections. Higher values reduce processing load.                                                                                                                                 | `3`                                                                                       |
+| `OBJ_DETECT_CONFIDENCE_SCORE` | Minimum confidence score for object detection (0.0 - 1.0).                                                                                                                                                         | `0.4`                                                                                     |
+| `PERSON_DETECT_CONFIDENCE_SCORE` | Minimum confidence score specifically for person detection (0.0 - 1.0).                                                                                                                                            | `0.5`                                                                                     |
+| `GCS_BUCKET` | Name of your Google Cloud Storage bucket (optional).                                                                                                                                                               | `bucket-name`                                                                             |
+| `GCS_FOLDER` | Folder within the GCS bucket for storing uploaded images (optional).                                                                                                                                               | `us-amcrest-cam-0`                                                                        |
+| `IS_GPU` | Set to 1 to use GPU delegation (optional).                                                                                                                                                                         | `1`                                                                                       |
 
 
 ## Running the Detector

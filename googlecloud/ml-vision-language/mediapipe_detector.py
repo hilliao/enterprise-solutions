@@ -46,6 +46,7 @@ wget  -O efficientdet_lite2.tflite  https://storage.googleapis.com/mediapipe-mod
 import os
 import sys
 import time
+from urllib.parse import urlparse
 
 import cv2
 # Import the functions
@@ -66,7 +67,7 @@ for param in parameters:  # Iterate through the parameters list
         exit(1)
 
 # Now you can safely access the environment variables, knowing they are set
-RTSP_URL = os.environ.get("RTSP_URL")
+IP_CAM_URL = os.environ.get("RTSP_URL")
 TFLITE_MODEL_PATH = os.environ.get("TFLITE_MODEL_PATH")
 MAX_WORKERS = int(os.environ.get("MAX_WORKERS"))
 OUTPUT_IMAGE_DIR = os.environ.get("OUTPUT_IMAGE_DIR")
@@ -142,12 +143,20 @@ if __name__ == "__main__":
     video_capture = None
 
     try:
-        video_capture = cv2.VideoCapture(RTSP_URL)
+        parsed_url = urlparse(IP_CAM_URL)
+        # Check if the URL is an HTTP stream from a CGI script, which often requires FFMPEG backend
+        if parsed_url.scheme in ['http', 'https'] and parsed_url.path.endswith('/video.cgi'):
+            print(f"Using FFMPEG backend for HTTP/CGI stream: {IP_CAM_URL}")
+            video_capture = cv2.VideoCapture(IP_CAM_URL, cv2.CAP_FFMPEG)
+        else:
+            print(f"Using default backend for stream: {IP_CAM_URL}")
+            video_capture = cv2.VideoCapture(IP_CAM_URL)
+
         while True:
             ret, frame = video_capture.read()
             if not ret:
                 sys.stderr.write(
-                    f"An error occurred opening the video input source at {RTSP_URL} in the main execution")
+                    f"An error occurred opening the video input source at {IP_CAM_URL} in the main execution")
                 break
 
             frame_count += 1
