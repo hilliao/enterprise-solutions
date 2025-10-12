@@ -45,7 +45,7 @@ This diagram outlines the agent's workflow, designed to provide informed and con
 1.  **Clone the Repository:**
 
     ```bash
-    git clone https://github.com/google/adk-samples.git
+    git clone https://github.com/hilliao/enterprise-solutions/tree/ml-adk/googlecloud/ml-invest-advisory || git clone https://github.com/google/adk-samples.git
     cd adk-samples/python/agents/RAG
     ```
 
