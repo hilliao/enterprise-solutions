@@ -102,6 +102,42 @@ def get_cached_or_realtime_quote(bucket, ticker):
     return quote
 
 
+def get_tradestation_realtime_quotes(tickers: str):
+    # attempt to call Trade Station API to get real time price quote
+    refresh_global_access_token()
+    symbol_quotes = {}
+
+    for key, value in access_token.items():
+        if 'token' in value:
+            trade_station_quote = '{}{}'.format(trade_station_url, trade_station_market_data.format(symbols=tickers))
+            headers = {
+                'Authorization': 'Bearer {}'.format(value['token'])
+            }
+            with requests.get(trade_station_quote, headers=headers, stream=True, timeout=10) as quote_response:
+                if quote_response.status_code == HTTPStatus.OK:
+                    # 3. Iterate over the response line by line as data arrives.
+                    for line in quote_response.iter_lines():
+                        # Filter out keep-alive new lines
+                        if line:
+                            # The line is in bytes, so it needs to be decoded to a string
+                            quote_json = json.loads(line.decode('utf-8'))
+                            symbol_quotes[quote_json['Symbol']] = quote_json
+                            if len(symbol_quotes) == len(tickers.split(',')):
+                                break
+
+                else:
+                    # This will raise an error for bad status codes (4xx or 5xx)
+                    quote_response.raise_for_status()
+            # Quotes have been fetched successfully, no need to try with other accounts.
+            break
+        else:
+            error_text = 'Failed to get TradeStation access token from refresh token in secret {}'.format(
+                os.environ.get('SECRET_NAME_TradeStation_OAuth0'))
+            raise ValueError(error_text)
+
+    return symbol_quotes
+
+
 def refresh_global_access_token():
     """
     refresh access token if the last refresh time gets close to 20 minutes ago
