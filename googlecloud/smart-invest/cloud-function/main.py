@@ -13,6 +13,15 @@ import brokerage
 import cloud_native
 
 
+@functions_framework.http
+def trade_station_realtime_quotes(http_request):
+    if http_request.method == 'GET':
+        tickers = http_request.args.get('tickers')
+        return brokerage.get_tradestation_realtime_quotes(tickers)
+    else:
+        return abort(404)
+
+
 # see exported postman .json file for how to invoke.
 @functions_framework.http
 def stock_quotes(http_request):
@@ -193,7 +202,6 @@ def execute_trade(http_request):
             return "content_type != 'application/json", HTTPStatus.BAD_REQUEST
     else:
         return abort(404)
-
 
 
 # doc: https://api.tradestation.com/docs/fundamentals/authentication/auth-code/
