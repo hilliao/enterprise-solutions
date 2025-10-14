@@ -204,7 +204,7 @@ def main():
     portfolio_holdings = load_portfolio_holding_file(args.portfolio_file)
 
     # The URL of the Cloud Run function
-    cloud_run_base_url = "https://us-west1-hil-financial-services.cloudfunctions.net/stock-quotes"
+    cloud_run_base_url = "https://us-central1-hil-financial-services.cloudfunctions.net/stock-quotes"
     if "STOCK_QUOTES_CLOUD_RUN_URL" in os.environ:
         cloud_run_base_url = os.environ["STOCK_QUOTES_CLOUD_RUN_URL"]
         print(f"Using STOCK_QUOTES_CLOUD_RUN_URL from environment variable: {cloud_run_base_url}")

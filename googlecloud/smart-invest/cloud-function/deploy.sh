@@ -7,18 +7,21 @@ FUNCTION_DIR=/home/hil/git/enterprise-solutions/googlecloud/smart-invest/cloud-f
 PROJECT_ID=[***REQUIRED***]
 SECRET_NAME=TradeStation_OAuth0
 SA="smart-invest@$PROJECT_ID.iam.gserviceaccount.com"
-REGION=us-west1
+REGION=us-central1
 
-gcloud beta functions deploy stock-quotes \
-  --gen2 --region $REGION \
-  --runtime python39 \
+gcloud functions deploy stock-quotes \
+  --gen2 --region=$REGION \
+  --runtime=python313 \
   --trigger-http \
-  --entry-point stock_quotes \
-  --source $FUNCTION_DIR \
+  --timeout=100 \
+  --entry-point=stock_quotes \
+  --source=$FUNCTION_DIR \
   --service-account=$SA \
   --set-env-vars SECRET_MANAGER_PROJECT_ID=$PROJECT_ID,SECRET_NAME_YH_API_KEY=X-RapidAPI-Key,BUCKET=$PROJECT_ID-smart-invest \
   --set-env-vars SECRET_NAME_TradeStation_OAuth0=$SECRET_NAME \
-  --set-env-vars FOLDER=quotes,PROJECT_ID=$PROJECT_ID --quiet --project $PROJECT_ID &
+  --set-env-vars FOLDER=quotes,PROJECT_ID=$PROJECT_ID \
+  --quiet \
+  --no-allow-unauthenticated --project $PROJECT_ID &
 
 gcloud functions deploy execute-trade \
   --gen2 --region $REGION \
