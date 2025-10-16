@@ -80,7 +80,46 @@ def merge_portfolio_dict(portfolio_holdings: dict, stock_quotes: dict) -> dict:
             "VOO": {"shares": 21.22}
         }
 
-        stock_quotes (dict): A dictionary with tickers and detailed quote info.
+        stock_quotes (dict): A dictionary with tickers and detailed quote info.        An example of the expected format is:
+        ```json
+        {
+            "BRK.B": {
+                "Ask": "488.39",
+                "AskSize": "100",
+                "Bid": "488.29",
+                "BidSize": "200",
+                "Close": "488.31",
+                "DailyOpenInterest": "0",
+                "High": "495.99991",
+                "High52Week": "542.07001",
+                "High52WeekTimestamp": "2025-05-02T00:00:00Z",
+                "Last": "488.31",
+                "LastSize": "100",
+                "LastVenue": "ARCX",
+                "Low": "485.79999",
+                "Low52Week": "437.89999",
+                "Low52WeekTimestamp": "2024-11-04T00:00:00Z",
+                "MarketFlags": {
+                    "IsBats": false,
+                    "IsDelayed": false,
+                    "IsHalted": false,
+                    "IsHardToBorrow": false
+                },
+                "NetChange": "-8.08001",
+                "NetChangePct": "-0.0163",
+                "Open": "495.595",
+                "PreviousClose": "496.39001",
+                "PreviousVolume": "3566253",
+                "Symbol": "BRK.B",
+                "TickSizeTier": "0",
+                "TradeTime": "2025-10-16T19:20:42Z",
+                "VWAP": "490.191077224156",
+                "Volume": "2747246"
+            },
+            "QQQ": {
+                "Ask": "597.6",
+                "AskSize": "100",
+                "Bid": "597.
 
     Returns:
         dict: A new dictionary containing the merged data.
@@ -90,13 +129,13 @@ def merge_portfolio_dict(portfolio_holdings: dict, stock_quotes: dict) -> dict:
 
     # Loop through each ticker in the portfolio_units dictionary
     for ticker, share_count in portfolio_holdings.items():
-        # Check if the ticker exists in our merged data
+        # Check if the ticker exists in quotes dict
         if ticker in merged_json:
-            # If it exists, update the nested dictionary with the units data
+            # If it exists, update the nested dictionary with the share counts
             merged_json[ticker].update(share_count)
         else:
             # If a ticker from portfolio_units is not in stock_quotes,
-            # you could add it as a new entry.
+            # you could add it as a new entry. WARNING: this will likely cause error in subsequence data processing!
             merged_json[ticker] = share_count
 
     return merged_json
@@ -138,9 +177,15 @@ def calculate_portfolio_1day_diff(portfolio_data: dict = None) -> dict:
     # Process each ticker in the portfolio
     for ticker, attributes in portfolio_data.items():
         try:
-            share_count = float(attributes.get('shares', 0))
-            last_price = float(attributes.get('Last', 0))
-            previous_close = float(attributes.get('PreviousClose', 0))
+            share_count = float(attributes.get('shares'))
+            if share_count is None:
+                raise ValueError(f"'shares' attribute missing for ticker {ticker}")
+            last_price = float(attributes.get('Last'))
+            if last_price is None:
+                raise ValueError(f"'Last' attribute missing for ticker {ticker}")
+            previous_close = float(attributes.get('PreviousClose'))
+            if previous_close is None:
+                raise ValueError(f"'PreviousClose' attribute missing for ticker {ticker}")
 
             current_value = share_count * last_price
             previous_value = share_count * previous_close
@@ -239,7 +284,7 @@ def main():
         sys.exit(1)
 
     portfolio_holdings_quotes = merge_portfolio_dict(portfolio_holdings, json_response)
-    portfolio_holding_values = calculate_portfolio_1day_diff(        portfolio_holdings_quotes)
+    portfolio_holding_values = calculate_portfolio_1day_diff(portfolio_holdings_quotes)
     num_lines_to_print = 15
     print(f"\n--- Portfolio value change from last trading day (top {num_lines_to_print} lines) ---")
     print('\n'.join(json.dumps(portfolio_holding_values, indent=2).splitlines()[:num_lines_to_print]))
