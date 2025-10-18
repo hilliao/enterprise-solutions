@@ -19,3 +19,6 @@ Highlight what holdings are driving the change in the sum of the current values 
 
 **Volatility & Impact Analysis**
 Identify the holding that was the most significant driver of the portfolio's daily performance, referencing its absolute dollar losses and gains instead of percentage.
+
+**Verbose Analysis of the Portfolio**
+Analyze the investor's investment style and Risk appetite in a detailed report. Identify potential risks and reward for the top few holdings. Tell a story about how a growing economy vs an economy in recession vs a flat economy may affect the portfolio.

@@ -10,6 +10,8 @@ import google.auth.transport.requests
 import requests
 from google.oauth2 import id_token
 
+DEFAULT_OUTPUT_PROMPT_FILE = "prompt.txt"
+
 
 def invoke_cloud_run(base_url: str, url: str) -> str:
     """
@@ -243,7 +245,9 @@ def main():
     parser.add_argument('--portfolio_file', type=str, required=True, help=
     'The path to the portfolio units JSON file. The file should be in the format: {"TICKER": {"Units": <number>}}')
     parser.add_argument('--llm_prompt_template', type=str, required=True, help=
-    'The path to the LLM prompt template text file that contains {{PORTFOLIO_HOLDING_DATA_JSON}}.')
+    'The path to the LLM prompt template text file that contains {{PORTFOLIO_HOLDING_DATA_JSON}}.') 
+    parser.add_argument('--output_prompt', type=str, default=DEFAULT_OUTPUT_PROMPT_FILE, help=
+    f'The output file name for the generated LLM prompt. Defaults to "{DEFAULT_OUTPUT_PROMPT_FILE}".')
     args = parser.parse_args()
 
     portfolio_holdings = load_portfolio_holding_file(args.portfolio_file)
@@ -297,9 +301,11 @@ def main():
     llm_ready_prompt = prompt_template.replace("{{PORTFOLIO_HOLDING_DATA_JSON}}",
                                                json.dumps(portfolio_holding_values, indent=2))
 
-    # Write the final prompt to a file named prompt.txt in the same directory as the template
-    output_file_path = os.path.join(os.path.dirname(args.llm_prompt_template), "prompt.txt")
-    with open(output_file_path, 'w') as f:
+    if args.output_prompt == DEFAULT_OUTPUT_PROMPT_FILE: # Check if the default output file name is used
+        output_file_path = os.path.join(os.path.dirname(args.llm_prompt_template), args.output_prompt)
+    else:
+        output_file_path = args.output_prompt # Use the provided path directly
+    with open(output_file_path, 'w') as f: 
         f.write(llm_ready_prompt)
 
     print(f"\nLLM prompt written to: {output_file_path}")
