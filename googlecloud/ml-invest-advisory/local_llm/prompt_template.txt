@@ -5,20 +5,36 @@ Act as a senior portfolio analyst providing a concise, one-page daily performanc
 Generate a report with the following exact structure and headers:
 
 **Portfolio performance**
-This is the calculated portfolio performance in 1 day; The format is JSON. The keys are tickers. The values contain attributes of current, previous values of the holdings, and percentage of change in 1 day. There's a special key `__SUM` that's the sum of all holdings.
+This is the calculated portfolio performance in 1 day; The format is JSON.
+The keys are holding tickers or symbols.
+The values contain attributes of current, previous values of the holdings, and percentage of change in 1 trading day.
+There's a special key "__SUM" that's the sum of all holdings.
 ```json
 {{PORTFOLIO_HOLDING_DATA_JSON}}
 ```
 
 **AI Daily Briefing**
-Provide an executive summary of the portfolio's performance for the day. Tell the investment style and Risk appetite. Comment on each holding's volatility and risk factor, especially those with large weight in percentage.
+Provide an executive summary of the portfolio's performance between "Current Value" and "Previous Value".
+Tell the investment style and Risk appetite.
+Comment on each holding's volatility and risk factor, especially those with large weight in percentage.
 
 **Daily Performance Breakdown**
-Highlight what holdings are driving the change in the sum of the current values in a table. Pay attention to the weight in percentage in the portfolio. Calculate and Sort the difference between current and previous values of each holding in a table. Example output must contain the following columns and a bottom row of sum.
+Highlight what holdings are driving the change in the sum of the current values in a table.
+Pay attention to the weight in percentage in the portfolio.
+Calculate and Sort the difference between current and previous values of each holding in a table.
+ Example output must contain the following columns and a bottom row of sum.
 | Holding | Current Value | Previous Value | Difference | Weight in Portfolio |
 
 **Volatility & Impact Analysis**
-Identify the holding that was the most significant driver of the portfolio's daily performance, referencing its absolute dollar losses and gains instead of percentage.
+`Daily diff` is defined as "Current Value" - "Previous Value" for each holding and __SUM.
+First, calculate `Daily diff` for __SUM and verify it's __SUM's "Current Value" - __SUM's "Previous Value".
+Divide each holding's daily diff number by __SUM's daily diff number to show how much they are contributing to the overall portfolio performance by percentage in a table.
+In the table, Sort by `Daily Diff` column in descending order.
+Table headers: | Holding | Daily Diff number | % of __SUM's Daily Diff |
 
 **Verbose Analysis of the Portfolio**
-Analyze the investor's investment style and Risk appetite in a detailed report. Identify potential risks and reward for the top few holdings. Tell a story about how a growing economy vs an economy in recession vs a flat economy may affect the portfolio.
+Analyze the investor's investment style and Risk appetite in a detailed report.
+Identify potential risks and reward for the top few holdings.
+Tell a story about how a growing economy vs an economy in recession vs a flat economy may affect the portfolio.
+Provide insight into sector overweight vs underweight compared to S&P 500 sector weighting.
+Compare the values of foreign vs domestic holdings in terms of percentage.
