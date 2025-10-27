@@ -2,8 +2,8 @@
 # https://cloud.google.com/docs/authentication/application-default-credentials
 
 import argparse
-import os
 import json
+import os
 import sys
 
 import google.auth.transport.requests
@@ -226,18 +226,37 @@ def calculate_portfolio_1day_diff(portfolio_data: dict = None) -> dict:
     return result
 
 
-def load_portfolio_holding_file(file_path: str) -> dict:
+def load_portfolio_holding_file(file_path: str) -> tuple[dict, float]:
     """
     Loads portfolio share units from a JSON file.
 
     Args:
-        file_path (str): The path to the JSON file.
-
+        file_path (str): The path to the JSON file.     An example of the expected format is:
+        ```json
+        {
+          "NVDA": {
+            "shares": 2050.0
+          },
+          "BIL": {
+            "shares": 634.0
+          },
+          "__CASH": {
+            "shares": 492.08
+          }
+        }
+       
     Returns:
-        dict: A dictionary containing the portfolio shares.
+        tuple: A tuple containing:
+            - dict: A dictionary containing the portfolio shares (excluding '__CASH').
+            - float: The cash amount if present, otherwise 0.0.
     """
+    portfolio_data = {}
     with open(file_path, 'r') as f:
-        return json.load(f)
+        portfolio_data = json.load(f)
+    
+    cash_amount = portfolio_data.pop('__CASH', {}).get('shares', 0.0)
+    
+    return portfolio_data, cash_amount
 
 
 def main():
@@ -249,8 +268,8 @@ def main():
     parser.add_argument('--output_prompt', type=str, default=DEFAULT_OUTPUT_PROMPT_FILE, help=
     f'The output file name for the generated LLM prompt. Defaults to "{DEFAULT_OUTPUT_PROMPT_FILE}".')
     args = parser.parse_args()
-
-    portfolio_holdings = load_portfolio_holding_file(args.portfolio_file)
+    
+    portfolio_holdings, cash_amount = load_portfolio_holding_file(args.portfolio_file)
 
     # The URL of the Cloud Run function
     cloud_run_base_url = "https://us-central1-hil-financial-services.cloudfunctions.net/trade_station_realtime_quotes"
@@ -292,6 +311,8 @@ def main():
     num_lines_to_print = 15
     print(f"\n--- Portfolio value change from last trading day (top {num_lines_to_print} lines) ---")
     print('\n'.join(json.dumps(portfolio_holding_values, indent=2).splitlines()[:num_lines_to_print]))
+
+    portfolio_holding_values['__CASH'] = cash_amount # Add cash amount to the portfolio data
 
     # Read the prompt template
     with open(args.llm_prompt_template, 'r') as f:

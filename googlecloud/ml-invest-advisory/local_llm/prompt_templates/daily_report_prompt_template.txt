@@ -10,7 +10,8 @@ Generate a report with the following exact structure and headers:
 This is the calculated portfolio performance in 1 day; The format is JSON.
 The keys are holding tickers or symbols.
 The values contain attributes of current, previous values of the holdings, and percentage of change in 1 trading day.
-There's a special key "__SUM" that's the sum of all holdings.
+There's a special JSON key "__SUM" that's the sum of all holdings.
+There's a special JSON key "__CASH" that's the cash amount in the portfolio not invested.
 ```json
 {{PORTFOLIO_HOLDING_DATA_JSON}}
 ```
@@ -28,7 +29,8 @@ Calculate and Sort the difference between current and previous values of each ho
 | Holding | Current Value | Previous Value | Difference | Weight in Portfolio |
 
 **Volatility & Impact Analysis**
-`Daily diff` is defined as "Current Value" - "Previous Value" for each holding and __SUM.
+`Daily diff` is defined as "Current Value" - "Previous Value" for each holding and __SUM, but not for __CASH.
+__CASH has no contribution to Volatility & Impact in the portfolio as its value is constant.
 First, calculate `Daily diff` for __SUM and verify it's __SUM's "Current Value" - __SUM's "Previous Value".
 Divide each holding's daily diff number by __SUM's daily diff number to show how much they are contributing to the overall portfolio performance by percentage in a table.
 In the table, Sort by `Daily Diff` column in descending order.
