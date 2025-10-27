@@ -312,7 +312,15 @@ def main():
     print(f"\n--- Portfolio value change from last trading day (top {num_lines_to_print} lines) ---")
     print('\n'.join(json.dumps(portfolio_holding_values, indent=2).splitlines()[:num_lines_to_print]))
 
-    portfolio_holding_values['__CASH'] = cash_amount # Add cash amount to the portfolio data
+    # Add cash amount to the portfolio data
+    portfolio_holding_values['__CASH'] = cash_amount # Add cash as a separate entry
+    # Add cash amount to the total portfolio value
+    portfolio_holding_values['__SUM']['Current Value'] += cash_amount
+    portfolio_holding_values['__SUM']['Previous Value'] += cash_amount
+
+    portfolio_holding_values['__SUM']['daily performance change in percentage'] = str(
+        round((portfolio_holding_values['__SUM']['Current Value'] - portfolio_holding_values['__SUM']['Previous Value']) /
+              portfolio_holding_values['__SUM']['Previous Value'] * 100, 2)) + '%'
 
     # Read the prompt template
     with open(args.llm_prompt_template, 'r') as f:
