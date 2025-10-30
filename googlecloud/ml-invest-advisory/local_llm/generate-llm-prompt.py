@@ -173,7 +173,7 @@ def calculate_portfolio_1day_diff_and_weight(portfolio_data: dict = None, cash_a
         """
         portfolio_data = json.loads(default_json_string)  # Load default from string if no data provided
 
-    result = {}
+    calculated = {}
     total_current_value = 0.0
     total_previous_value = 0.0
 
@@ -194,7 +194,7 @@ def calculate_portfolio_1day_diff_and_weight(portfolio_data: dict = None, cash_a
             previous_value = share_count * previous_close
 
             # Store results as floating point numbers, rounded to 2 decimal places
-            result[ticker] = {
+            calculated[ticker] = {
                 'Current Value': round(current_value, 2),
                 'Previous Value': round(previous_value, 2),
                 'shares': share_count,
@@ -208,25 +208,29 @@ def calculate_portfolio_1day_diff_and_weight(portfolio_data: dict = None, cash_a
 
         except (ValueError, TypeError) as e:
             print(f"Skipping ticker {ticker} due to a data error: {e}", file=sys.stderr)
-            result[ticker] = None
+            calculated[ticker] = None
 
     # Add the '__SUM' key with the totals
     total_current_value += cash_amount
     total_previous_value += cash_amount
-    result['__SUM'] = {
+    calculated['__SUM'] = {
         'Current Value': round(total_current_value, 2),
         'Previous Value': round(total_previous_value, 2),
         'daily performance change in percentage': str(
             round((total_current_value - total_previous_value) / total_previous_value * 100, 2)) + '%'
     }
+    calculated['__CASH'] = {
+        'shares': cash_amount,
+        'weight in percentage': str(round(cash_amount / calculated['__SUM']['Current Value'] * 100, 2)) + '%'
+    }
 
     # Calculate the weight of each holding
-    for ticker, attributes in result.items():
-        if ticker != '__SUM':
+    for ticker, attributes in calculated.items():
+        if ticker not in ['__SUM', '__CASH']:
             attributes['weight in percentage'] = attributes['weight in percentage'] = str(
-                round(attributes['Current Value'] / result['__SUM']['Current Value'] * 100, 2)) + '%'
+                round(attributes['Current Value'] / calculated['__SUM']['Current Value'] * 100, 2)) + '%'
 
-    return result
+    return calculated
 
 
 def load_portfolio_holding_file(file_path: str) -> tuple[dict, float]:
@@ -277,13 +281,11 @@ def main():
     holding_prices = get_holding_prices(portfolio_holding_shares)
 
     portfolio_holding_share_prices = merge_portfolio_share_prices(portfolio_holding_shares, holding_prices)
-    portfolio_holding_values_and_weights = calculate_portfolio_1day_diff_and_weight(portfolio_holding_share_prices, cash_amount)
+    portfolio_holding_values_and_weights = calculate_portfolio_1day_diff_and_weight(portfolio_holding_share_prices,
+                                                                                    cash_amount)
     num_lines_to_print = 15
     print(f"\n--- Portfolio value change from last trading day (top {num_lines_to_print} lines) ---")
     print('\n'.join(json.dumps(portfolio_holding_values_and_weights, indent=2).splitlines()[:num_lines_to_print]))
-
-    # Add cash amount to the portfolio data
-    portfolio_holding_values_and_weights['__CASH'] = cash_amount  # Add cash as a separate entry
 
     # Read the prompt template
     with open(args.llm_prompt_template, 'r') as f:
