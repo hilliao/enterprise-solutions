@@ -65,7 +65,7 @@ def invoke_cloud_run(base_url: str, url: str) -> str:
         raise
 
 
-def merge_portfolio_dict(portfolio_holdings: dict, stock_quotes: dict) -> dict:
+def merge_portfolio_share_prices(portfolio_holding_shares: dict, holding_prices: dict) -> dict:
     """
     Merges portfolio units into a dictionary of stock quotes.
 
@@ -73,7 +73,7 @@ def merge_portfolio_dict(portfolio_holdings: dict, stock_quotes: dict) -> dict:
     modifying the original data structure.
 
     Args:
-        portfolio_holdings (dict): A dictionary with tickers and their shares.        An example of the expected format is:
+        portfolio_holding_shares (dict): A dictionary with tickers and their shares.        An example of the expected format is:
         {
             "AAAU": {"shares": 31.90},
             "QQQ": {"shares": 19.41},
@@ -82,7 +82,7 @@ def merge_portfolio_dict(portfolio_holdings: dict, stock_quotes: dict) -> dict:
             "VOO": {"shares": 21.22}
         }
 
-        stock_quotes (dict): A dictionary with tickers and detailed quote info.        An example of the expected format is:
+        holding_prices (dict): A dictionary with tickers and detailed quote info.        An example of the expected format is:
         ```json
         {
             "BRK.B": {
@@ -127,10 +127,10 @@ def merge_portfolio_dict(portfolio_holdings: dict, stock_quotes: dict) -> dict:
         dict: A new dictionary containing the merged data.
     """
     # Create a deep copy of the quotes to avoid changing the original dict
-    merged_json = json.loads(json.dumps(stock_quotes))
+    merged_json = json.loads(json.dumps(holding_prices))
 
     # Loop through each ticker in the portfolio_units dictionary
-    for ticker, share_count in portfolio_holdings.items():
+    for ticker, share_count in portfolio_holding_shares.items():
         # Check if the ticker exists in quotes dict
         if ticker in merged_json:
             # If it exists, update the nested dictionary with the share counts
@@ -143,7 +143,7 @@ def merge_portfolio_dict(portfolio_holdings: dict, stock_quotes: dict) -> dict:
     return merged_json
 
 
-def calculate_portfolio_1day_diff(portfolio_data: dict = None) -> dict:
+def calculate_portfolio_1day_diff_and_weight(portfolio_data: dict = None, cash_amount: float = 0) -> dict:
     """
     Calculates current and previous values for portfolio holdings from a portfolio dict
     or a default string. It also computes the total portfolio value. The resulting dict
@@ -157,6 +157,7 @@ def calculate_portfolio_1day_diff(portfolio_data: dict = None) -> dict:
                                         - "shares" (float): The number of shares held.
                                         - "Last" (float): The last traded price of the stock.
                                         - "PreviousClose" (float): The previous closing price of the stock.
+        cash_amount (float, optional): The amount of cash in the portfolio. Defaults to 0.
 
     Returns:
         dict: A dictionary containing the calculated values for each ticker
@@ -210,6 +211,8 @@ def calculate_portfolio_1day_diff(portfolio_data: dict = None) -> dict:
             result[ticker] = None
 
     # Add the '__SUM' key with the totals
+    total_current_value += cash_amount
+    total_previous_value += cash_amount
     result['__SUM'] = {
         'Current Value': round(total_current_value, 2),
         'Previous Value': round(total_previous_value, 2),
@@ -253,9 +256,9 @@ def load_portfolio_holding_file(file_path: str) -> tuple[dict, float]:
     portfolio_data = {}
     with open(file_path, 'r') as f:
         portfolio_data = json.load(f)
-    
+
     cash_amount = portfolio_data.pop('__CASH', {}).get('shares', 0.0)
-    
+
     return portfolio_data, cash_amount
 
 
@@ -264,13 +267,43 @@ def main():
     parser.add_argument('--portfolio_file', type=str, required=True, help=
     'The path to the portfolio units JSON file. The file should be in the format: {"TICKER": {"Units": <number>}}')
     parser.add_argument('--llm_prompt_template', type=str, required=True, help=
-    'The path to the LLM prompt template text file that contains {{PORTFOLIO_HOLDING_DATA_JSON}}.') 
+    'The path to the LLM prompt template text file that contains {{PORTFOLIO_HOLDING_DATA_JSON}}.')
     parser.add_argument('--output_prompt', type=str, default=DEFAULT_OUTPUT_PROMPT_FILE, help=
     f'The output file name for the generated LLM prompt. Defaults to "{DEFAULT_OUTPUT_PROMPT_FILE}".')
     args = parser.parse_args()
-    
-    portfolio_holdings, cash_amount = load_portfolio_holding_file(args.portfolio_file)
 
+    portfolio_holding_shares, cash_amount = load_portfolio_holding_file(args.portfolio_file)
+
+    holding_prices = get_holding_prices(portfolio_holding_shares)
+
+    portfolio_holding_share_prices = merge_portfolio_share_prices(portfolio_holding_shares, holding_prices)
+    portfolio_holding_values_and_weights = calculate_portfolio_1day_diff_and_weight(portfolio_holding_share_prices, cash_amount)
+    num_lines_to_print = 15
+    print(f"\n--- Portfolio value change from last trading day (top {num_lines_to_print} lines) ---")
+    print('\n'.join(json.dumps(portfolio_holding_values_and_weights, indent=2).splitlines()[:num_lines_to_print]))
+
+    # Add cash amount to the portfolio data
+    portfolio_holding_values_and_weights['__CASH'] = cash_amount  # Add cash as a separate entry
+
+    # Read the prompt template
+    with open(args.llm_prompt_template, 'r') as f:
+        prompt_template = f.read()
+
+    # Replace the placeholder with the JSON data
+    llm_ready_prompt = prompt_template.replace("{{PORTFOLIO_HOLDING_DATA_JSON}}",
+                                               json.dumps(portfolio_holding_values_and_weights, indent=2))
+
+    if args.output_prompt == DEFAULT_OUTPUT_PROMPT_FILE:  # Check if the default output file name is used
+        output_file_path = os.path.join(os.path.dirname(args.llm_prompt_template), args.output_prompt)
+    else:
+        output_file_path = args.output_prompt  # Use the provided path directly
+    with open(output_file_path, 'w') as f:
+        f.write(llm_ready_prompt)
+
+    print(f"\nLLM prompt written to: {output_file_path}")
+
+
+def get_holding_prices(portfolio_holdings: dict) -> dict:
     # The URL of the Cloud Run function
     cloud_run_base_url = "https://us-central1-hil-financial-services.cloudfunctions.net/trade_station_realtime_quotes"
     if "STOCK_QUOTES_CLOUD_RUN_URL" in os.environ:
@@ -290,13 +323,13 @@ def main():
 
     try:
         # Call the function and print the result
-        result = invoke_cloud_run(cloud_run_base_url, cloud_run_url)
+        cloud_run_response = invoke_cloud_run(cloud_run_base_url, cloud_run_url)
         print("\n--- Parsing response from Cloud Run service to JSON ---")
         num_lines_to_print = 10
         try:
-            json_response = json.loads(result)
+            holding_prices = json.loads(cloud_run_response)
             print(f"--- Parsed JSON Response (top {num_lines_to_print} lines) ---")
-            print('\n'.join(json.dumps(json_response, indent=2).splitlines()[:num_lines_to_print]))
+            print('\n'.join(json.dumps(holding_prices, indent=2).splitlines()[:num_lines_to_print]))
         except json.JSONDecodeError:
             print("\n--- Response is not valid JSON ---")
             sys.exit(1)
@@ -305,39 +338,7 @@ def main():
     except Exception as e:
         print(f"\nFailed to invoke Cloud Run endpoint. Please check your URL and permissions.")
         sys.exit(1)
-
-    portfolio_holdings_quotes = merge_portfolio_dict(portfolio_holdings, json_response)
-    portfolio_holding_values = calculate_portfolio_1day_diff(portfolio_holdings_quotes)
-    num_lines_to_print = 15
-    print(f"\n--- Portfolio value change from last trading day (top {num_lines_to_print} lines) ---")
-    print('\n'.join(json.dumps(portfolio_holding_values, indent=2).splitlines()[:num_lines_to_print]))
-
-    # Add cash amount to the portfolio data
-    portfolio_holding_values['__CASH'] = cash_amount # Add cash as a separate entry
-    # Add cash amount to the total portfolio value
-    portfolio_holding_values['__SUM']['Current Value'] += cash_amount
-    portfolio_holding_values['__SUM']['Previous Value'] += cash_amount
-
-    portfolio_holding_values['__SUM']['daily performance change in percentage'] = str(
-        round((portfolio_holding_values['__SUM']['Current Value'] - portfolio_holding_values['__SUM']['Previous Value']) /
-              portfolio_holding_values['__SUM']['Previous Value'] * 100, 2)) + '%'
-
-    # Read the prompt template
-    with open(args.llm_prompt_template, 'r') as f:
-        prompt_template = f.read()
-
-    # Replace the placeholder with the JSON data
-    llm_ready_prompt = prompt_template.replace("{{PORTFOLIO_HOLDING_DATA_JSON}}",
-                                               json.dumps(portfolio_holding_values, indent=2))
-
-    if args.output_prompt == DEFAULT_OUTPUT_PROMPT_FILE: # Check if the default output file name is used
-        output_file_path = os.path.join(os.path.dirname(args.llm_prompt_template), args.output_prompt)
-    else:
-        output_file_path = args.output_prompt # Use the provided path directly
-    with open(output_file_path, 'w') as f: 
-        f.write(llm_ready_prompt)
-
-    print(f"\nLLM prompt written to: {output_file_path}")
+    return holding_prices
 
 
 if __name__ == "__main__":
