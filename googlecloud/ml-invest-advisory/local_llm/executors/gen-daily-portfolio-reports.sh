@@ -30,7 +30,7 @@ for file in $PORTFOLIO_FILES; do
     --output_prompt=$OUTPUT_PROMPT_FILE"
 
   MD_OUTPUT_FILE="${PORTFOLIO_DIR}/$USE_CASE-${PORTFOLIO_NAME}.md"
-  $GET_QUOTES_CMD && \
+  $GET_QUOTES_CMD
   ollama run gemma3 --verbose < "$OUTPUT_PROMPT_FILE" | tee "$MD_OUTPUT_FILE"
 
   # Convert markdown to HTML if pandoc is available
