@@ -1,0 +1,5 @@
+shioaji
+shioaji[speed]
+google-cloud-secret-manager
+functions-framework
+PyYAML
