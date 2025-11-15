@@ -32,4 +32,19 @@ gcloud functions deploy get_tw_stock_quotes \
   --service-account=$GCP_SA \
   --no-allow-unauthenticated --project $PROJECT_ID \
   --set-env-vars TW_NATIONAL_ID=$TW_NATIONAL_ID \
+  --memory=1024MiB \
+
+
+
+gcloud functions deploy get_us_stock_quotes \
+  --gen2 --region=$REGION \
+  --runtime=python313 \
+  --trigger-http \
+  --timeout=100 \
+  --source=. \
+  --entry-point=get_us_stock_quotes \
+  --quiet \
+  --service-account=$GCP_SA \
+  --no-allow-unauthenticated --project $PROJECT_ID \
+  --set-env-vars TRADE_STATION_OAUTH_SECRET_NAME=TradeStation_OAuth0 \
   --memory=512MiB \

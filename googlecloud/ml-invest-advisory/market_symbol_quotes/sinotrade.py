@@ -1,25 +1,16 @@
-import tempfile
 import os
-
+import tempfile
 import shioaji as sj
 import yaml
-from google.cloud import secretmanager
 
-
-def _access_secret(secret_id: str):
-    """Helper function to access a secret from Google Cloud Secret Manager."""
-    client = secretmanager.SecretManagerServiceClient()
-    secret_version_name = client.secret_path(os.environ["PROJECT_ID"], secret_id) + "/versions/latest"
-    request = {"name": secret_version_name}
-    response = client.access_secret_version(request)
-    return response.payload
+from gcp_data_access import get_gcp_secret
 
 
 def get_sinotrade_api_key(secret_id: str = "sinotrade-api-key"):
     """
     Accesses a secret's payload from Google Cloud Secret Manager.
     """
-    payload = _access_secret(secret_id)
+    payload = get_gcp_secret(secret_id)
     # Decode the payload to yaml.
     sino_trade_api_yaml = payload.data.decode("UTF-8")
 
@@ -35,7 +26,7 @@ def get_sinotrade_ca_pfx(secret_id: str = "sinotrade-ca-pfx"):
     Accesses the Sinotrade CA PFX file from Google Cloud Secret Manager
     and saves it to a temporary file.
     """
-    payload = _access_secret(secret_id)
+    payload = get_gcp_secret(secret_id)
     # The payload is the binary content of the PFX file
     pfx_content = payload.data
 
@@ -70,8 +61,8 @@ def get_sinotrade_snapshots(stock_symbols: list = ['2330', '006208', '00662']):
 
     api = sj.Shioaji()
     tw_national_id = os.environ['TW_NATIONAL_ID']
-    accounts = api.login(_cached_sinotrade_api_key_yaml[tw_national_id]['api_key'],
-                         _cached_sinotrade_api_key_yaml[tw_national_id]['api_key_secret'])
+    accounts = api.login(api_key=_cached_sinotrade_api_key_yaml[tw_national_id]['api_key'],
+                         secret_key=_cached_sinotrade_api_key_yaml[tw_national_id]['api_key_secret'])
     api.activate_ca(ca_path=_cached_temp_pfx_path, ca_passwd=tw_national_id,
                     person_id=tw_national_id)
     contracts = [api.Contracts.Stocks[symbol] for symbol in stock_symbols]
