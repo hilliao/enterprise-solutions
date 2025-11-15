@@ -1,26 +1,10 @@
-from google.cloud import secretmanager
 import datetime
 import json
 import os
-import requests
 from http import HTTPStatus
+import requests
 
-
-def _access_secret(secret_id: str):
-    """
-    Accesses a secret from Google Cloud Secret Manager.
-
-    Args:
-        secret_id: The ID of the secret to access.
-
-    Returns:
-        The secret value as a string.
-    """
-    client = secretmanager.SecretManagerServiceClient()
-    secret_version_name = client.secret_path(os.environ["PROJECT_ID"], secret_id) + "/versions/latest"
-    request = {"name": secret_version_name}
-    tradestation_client_secret_refresh_token = client.access_secret_version(request)
-    return tradestation_client_secret_refresh_token.payload.data.decode("UTF-8")
+from gcp_data_access import get_gcp_secret
 
 
 # Placeholder for log function
@@ -46,7 +30,7 @@ trade_station_url = 'https://api.tradestation.com/v3'
 trade_station_market_data = '/marketdata/stream/quotes/{symbols}'
 
 
-def refresh_access_token(secret_name: str = 'TradeStation_OAuth0'):
+def refresh_access_token(secret_name: str = os.environ.get('TRADE_STATION_OAUTH_SECRET_NAME', 'TradeStation_OAuth0')):
     """Refreshes the TradeStation access token using the refresh token.
 
     The secret should be in the format:
@@ -84,7 +68,8 @@ def refresh_access_token(secret_name: str = 'TradeStation_OAuth0'):
           }
         }
     """
-    TradeStation_OAuth0 = _access_secret(secret_name)
+    payload = get_gcp_secret(secret_name)
+    TradeStation_OAuth0 = payload.data.decode("UTF-8")
     if not TradeStation_OAuth0:
         raise ValueError(
             f"TradeStation OAuth secret not found. Ensure {secret_name} exists in Secret Manager.")
@@ -92,10 +77,10 @@ def refresh_access_token(secret_name: str = 'TradeStation_OAuth0'):
     TradeStation_OAuth0_dict = json.loads(TradeStation_OAuth0)
     access_token_dict = {}
 
-    for key, inner_dict in TradeStation_OAuth0_dict.items():
-        client_id = inner_dict['client_id']
-        client_secret = inner_dict['client_secret']
-        refresh_token = inner_dict['refresh_token']
+    for key, client_id_secret_refresh_token_dict in TradeStation_OAuth0_dict.items():
+        client_id = client_id_secret_refresh_token_dict['client_id']
+        client_secret = client_id_secret_refresh_token_dict['client_secret']
+        refresh_token = client_id_secret_refresh_token_dict['refresh_token']
 
         payload = 'grant_type=refresh_token&client_id={}&client_secret={}&refresh_token={}'.format(
             client_id, client_secret, refresh_token
@@ -110,11 +95,11 @@ def refresh_access_token(secret_name: str = 'TradeStation_OAuth0'):
 
             local_access_token = token_response.json()['access_token']
             last_modified = datetime.datetime.now()
-            local_access_token_info = {
+            local_access_token_dict = {
                 'token': local_access_token,
                 'last_modified': last_modified
             }
-            access_token_dict[key] = local_access_token_info
+            access_token_dict[key] = local_access_token_dict
         except requests.exceptions.RequestException as e:
             log(text=f"Failed to refresh token for account {key}: {e}", severity=LOG_SEVERITY_ERROR)
             # Depending on requirements, you might want to re-raise or continue
@@ -139,9 +124,10 @@ def refresh_global_access_token():
     if access_token is None:
         access_token = refresh_access_token()
     else:
+        # if one account's access token is too old, refresh all account's access token for simplicity.
         do_refresh_access_token = False
         for key, value in access_token.items():
-            # Check if 'last_modified' exists and if it's time to refresh
+            # Check if 'last_modified' exists and if access is too old
             if 'last_modified' not in value or \
                     datetime.datetime.now() - value['last_modified'] > trade_station_access_token_keep_alive:
                 do_refresh_access_token = True
@@ -152,24 +138,24 @@ def refresh_global_access_token():
     return access_token
 
 
-def get_tradestation_realtime_quotes(tickers: str = "VOO,QQQ"):
+def get_tradestation_realtime_quotes(tickers: list[str] = ["VOO", "QQQ"]):
     """
     Fetches real-time quotes for a list of tickers from TradeStation.
 
     Args:
-        tickers: A comma-separated string of ticker symbols (e.g., "VOO,QQQ").
+        tickers: A list of ticker symbols (e.g., ["VOO", "QQQ"]).
 
     Returns:
         A dictionary where keys are ticker symbols and values are the corresponding
         quote data from TradeStation.
     """
     # attempt to call Trade Station API to get real time price quote
-    refresh_global_access_token()
+    access_token = refresh_global_access_token()
     symbol_quotes = {}
 
     for key, value in access_token.items():
         if 'token' in value:
-            trade_station_quote = '{}{}'.format(trade_station_url, trade_station_market_data.format(symbols=tickers))
+            trade_station_quote = '{}{}'.format(trade_station_url, trade_station_market_data.format(symbols=','.join(tickers)))
             headers = {
                 'Authorization': 'Bearer {}'.format(value['token'])
             }
@@ -182,7 +168,7 @@ def get_tradestation_realtime_quotes(tickers: str = "VOO,QQQ"):
                             # The line is in bytes, so it needs to be decoded to a string
                             quote_json = json.loads(line.decode('utf-8'))
                             symbol_quotes[quote_json['Symbol']] = quote_json
-                            if len(symbol_quotes) == len(tickers.split(',')):
+                            if len(symbol_quotes) == len(tickers):
                                 break
 
                 else:
