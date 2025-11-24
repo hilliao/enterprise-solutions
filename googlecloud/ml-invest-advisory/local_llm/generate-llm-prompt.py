@@ -1,3 +1,28 @@
+"""
+This script generates an LLM prompt by combining portfolio holdings with real-time stock quotes.
+
+Workflow:
+1. Loads portfolio holdings (tickers and share counts) from a JSON file.
+2. Fetches real-time stock quotes (Last, PreviousClose, etc.) from a Cloud Run service.
+   - Uses `STOCK_QUOTES_CLOUD_RUN_URL` environment variable for the service URL.
+   - Authenticates using `GOOGLE_APPLICATION_CREDENTIALS`.
+3. Merges portfolio holdings with stock quotes.
+4. Calculates:
+   - Current Value (Shares * Last Price)
+   - Previous Value (Shares * Previous Close)
+   - Daily performance change (%)
+   - Portfolio weights
+5. Loads an LLM prompt template.
+6. Injects the calculated portfolio data into the template.
+7. Writes the final prompt to an output file.
+
+Usage:
+    python generate-llm-prompt.py --portfolio_file <path_to_portfolio.json> --llm_prompt_template <path_to_template.txt> [--output_prompt <path_to_output.txt>]
+
+Environment Variables:
+    GOOGLE_APPLICATION_CREDENTIALS: Path to service account key file (Required).
+    STOCK_QUOTES_CLOUD_RUN_URL: URL of the stock quotes service (Optional, defaults to hardcoded URL).
+"""
 # SET GOOGLE_APPLICATION_CREDENTIALS environment variable
 # https://cloud.google.com/docs/authentication/application-default-credentials
 
