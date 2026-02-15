@@ -2,7 +2,7 @@
 set -e # exit the script when execution hits any error
 #set -x # print the executing lines
 
-export PORTFOLIO_DIR="$HOME/git/enterprise-solutions/googlecloud/ml-invest-advisory/local_llm/test-portfolios"
+export PORTFOLIO_DIR="$HOME/workspace/portfolios"
 export LLM_PROMPT_TEMPLATE="$HOME/git/enterprise-solutions/googlecloud/ml-invest-advisory/local_llm/prompt_templates/daily_report_prompt_template.txt"
 export USE_CASE="daily-report"
 export STOCK_QUOTES_CLOUD_RUN_URL="https://us-central1-hil-financial-services.cloudfunctions.net/get_us_stock_quotes"
@@ -31,8 +31,9 @@ for file in $PORTFOLIO_FILES; do
     --output_prompt=$OUTPUT_PROMPT_FILE"
 
   MD_OUTPUT_FILE="${PORTFOLIO_DIR}/$USE_CASE-${PORTFOLIO_NAME}.md"
-  $GET_QUOTES_CMD
-  ollama run mistral --verbose < "$OUTPUT_PROMPT_FILE" | tee "$MD_OUTPUT_FILE"
+  $GET_QUOTES_CMD && \
+  ollama run gemma3:12b --verbose < "$OUTPUT_PROMPT_FILE" | tee "$MD_OUTPUT_FILE"
+
 
   # Convert markdown to HTML if pandoc is available
   if [ "$PANDOC_EXISTS" = true ]; then
