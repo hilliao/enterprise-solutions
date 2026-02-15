@@ -44,6 +44,31 @@ _cached_temp_pfx_path = None
 _cached_temp_file_obj = None
 
 
+def get_stock_positions():
+    """
+    Lists current positions for the stock account where API key is cached.
+    TODO: change the argument to accept a list of API key, secret.
+
+    Returns:
+        List of current stock positions
+    """
+    global _cached_sinotrade_api_key_yaml, _cached_temp_pfx_path, _cached_temp_file_obj
+
+    if _cached_sinotrade_api_key_yaml is None:
+        _cached_sinotrade_api_key_yaml = get_sinotrade_api_key()
+        print("Successfully cached SinoTrade API key from Secret Manager.")
+    else:
+        print("Using cached SinoTrade API key.")
+
+    api = sj.Shioaji(simulation=False)
+    tw_national_id = os.environ['TW_NATIONAL_ID']
+    accounts = api.login(api_key=_cached_sinotrade_api_key_yaml[tw_national_id]['api_key'],
+                         secret_key=_cached_sinotrade_api_key_yaml[tw_national_id]['api_key_secret'])
+
+    positions = api.list_positions(api.stock_account, unit=sj.constant.Unit.Share)
+    return positions
+
+
 def get_sinotrade_snapshots(stock_symbols: list = ['2330', '006208', '00662']):
     global _cached_sinotrade_api_key_yaml, _cached_temp_pfx_path, _cached_temp_file_obj
 
@@ -53,18 +78,11 @@ def get_sinotrade_snapshots(stock_symbols: list = ['2330', '006208', '00662']):
     else:
         print("Using cached SinoTrade API key.")
 
-    if _cached_temp_pfx_path is None:
-        _cached_temp_pfx_path, _cached_temp_file_obj = get_sinotrade_ca_pfx()
-        print(f"Successfully cached Sinotrade CA PFX file from Secret Manager. Path: {_cached_temp_pfx_path}")
-    else:
-        print(f"Using cached Sinotrade CA PFX file. Path: {_cached_temp_pfx_path}")
-
-    api = sj.Shioaji()
+    api = sj.Shioaji(simulation=True)
     tw_national_id = os.environ['TW_NATIONAL_ID']
     accounts = api.login(api_key=_cached_sinotrade_api_key_yaml[tw_national_id]['api_key'],
                          secret_key=_cached_sinotrade_api_key_yaml[tw_national_id]['api_key_secret'])
-    api.activate_ca(ca_path=_cached_temp_pfx_path, ca_passwd=tw_national_id,
-                    person_id=tw_national_id)
+    
     contracts = [api.Contracts.Stocks[symbol] for symbol in stock_symbols]
     snapshots = api.snapshots(contracts)
     return snapshots
@@ -77,4 +95,11 @@ if __name__ == "__main__":
               f"has current buy price at "
               f"{element['buy_price']}")
 
+    # test cached Sinotrade API key, secret
     snapshots = get_sinotrade_snapshots(['2330'])
+    print(snapshots[0])
+
+    # list client's account holding positions
+    pos = get_stock_positions()
+    print(pos)
+

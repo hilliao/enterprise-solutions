@@ -178,7 +178,7 @@ def get_tradestation_realtime_quotes(tickers: list[str] = ["VOO", "QQQ"]):
             break
         else:
             error_text = 'Failed to get TradeStation access token from refresh token in secret {}'.format(
-                os.environ.get('SECRET_NAME_TradeStation_OAuth0'))
+                os.environ.get('TRADE_STATION_OAUTH_SECRET_NAME'))
             raise ValueError(error_text)
 
     return symbol_quotes

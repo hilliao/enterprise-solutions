@@ -34,7 +34,6 @@ for file in $PORTFOLIO_FILES; do
   $GET_QUOTES_CMD && \
   ollama run gemma3:12b --verbose < "$OUTPUT_PROMPT_FILE" | tee "$MD_OUTPUT_FILE"
 
-
   # Convert markdown to HTML if pandoc is available
   if [ "$PANDOC_EXISTS" = true ]; then
     HTML5_OUTPUT_FILE="${PORTFOLIO_DIR}/$USE_CASE-${PORTFOLIO_NAME}.html"
