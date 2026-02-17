@@ -2,10 +2,10 @@
 set -e # exit the script when execution hits any error
 #set -x # print the executing lines
 
-export PORTFOLIO_DIR="$HOME/workspace/portfolios"
-export LLM_PROMPT_TEMPLATE="$HOME/git/enterprise-solutions/googlecloud/ml-invest-advisory/local_llm/prompt_templates/daily_report_prompt_template.txt"
-export USE_CASE="daily-report"
-export STOCK_QUOTES_CLOUD_RUN_URL="https://us-central1-hil-financial-services.cloudfunctions.net/get_us_stock_quotes"
+export PORTFOLIO_DIR="${PORTFOLIO_DIR:-$HOME/workspace/portfolios}"
+export LLM_PROMPT_TEMPLATE="${LLM_PROMPT_TEMPLATE:-$HOME/git/enterprise-solutions/googlecloud/ml-invest-advisory/local_llm/prompt_templates/daily_report_prompt_template.txt}"
+export USE_CASE="${USE_CASE:-daily-report}"
+export STOCK_QUOTES_CLOUD_RUN_URL="${STOCK_QUOTES_CLOUD_RUN_URL:-https://us-central1-hil-financial-services.cloudfunctions.net/get_us_stock_quotes}"
 
 # Check for dependencies at the start, outside the loop
 if ! command -v pandoc &> /dev/null; then
