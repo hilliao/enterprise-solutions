@@ -15,9 +15,10 @@ export PORTFOLIO_DIR="$HOME/path/to/output/portfolios/"
 
 # GCS Bucket destination (Replace 'your-project-id' and 'bucket-name')
 GCS_BUCKET="gs://bucket-name/folder/"
+GCLOUD_CONFIG="default"
 
 # Construct the command
-export CMD="$PORTFOLIO_SCRIPT && gsutil cp $PORTFOLIO_DIR/*.html $GCS_BUCKET"
+export CMD="$PORTFOLIO_SCRIPT && gcloud storage cp $PORTFOLIO_DIR/*.html $GCS_BUCKET --configuration=$GCLOUD_CONFIG"
 
 # Timing configurations
 ACTIVE_SLEEP=30       # seconds between consecutive runs during the window
