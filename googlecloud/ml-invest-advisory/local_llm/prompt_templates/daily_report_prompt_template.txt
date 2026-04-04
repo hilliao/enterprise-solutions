@@ -10,13 +10,14 @@ Generate a report with the following exact structure and headers:
 This is the calculated portfolio performance in 1 day; The format is JSON.
 The keys are holding tickers or symbols.
 The values are the following =>
-"Current Value": realtime price of the share;
-"Previous Value": price of the share in the prior trading day;
+"Current Value": realtime value of the holding;
+"Previous Value": past value of the holding at the prior market close;
 "shares": number of shares;
 "single share change in percentage": percentage of share price change in 1 trading day;
 "weight in percentage": the weighting of the holding in the portfolio;
-There's a special JSON key "__SUM" that's the sum of all holdings.
-There's a special JSON key "__CASH" that's the cash amount in the portfolio not invested.
+special JSON key "__CASH": the cash amount in the portfolio not invested.
+special JSON key "__SUM": the sum of all holdings including cash.
+
 ```json
 {{PORTFOLIO_HOLDING_DATA_JSON}}
 ```
@@ -30,4 +31,4 @@ Comment on each holding's volatility and risk factor, especially those with high
 Analyze the investor's investment style and Risk appetite in a detailed report.
 Identify potential risks and reward for the top few holdings.
 Tell a story about how a growing economy vs an economy in recession vs a flat economy may affect the portfolio.
-Compare the values of foreign vs domestic holdings in terms of percentage.
+Compare the values of foreign vs domestic USA holdings in terms of percentage.
