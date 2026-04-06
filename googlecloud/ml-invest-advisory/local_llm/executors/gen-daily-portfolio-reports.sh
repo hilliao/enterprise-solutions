@@ -32,7 +32,8 @@ for file in $PORTFOLIO_FILES; do
 
   MD_OUTPUT_FILE="${PORTFOLIO_DIR}/$USE_CASE-${PORTFOLIO_NAME}.md"
   $GET_QUOTES_CMD && \
-  ollama run gemma3:12b --verbose < "$OUTPUT_PROMPT_FILE" | tee "$MD_OUTPUT_FILE"
+    ollama run gemma3:12b < "$OUTPUT_PROMPT_FILE" \
+    | tee >(perl -pe 's/\e\[[0-?]*[ -\/]*[@-~]//g' > "$MD_OUTPUT_FILE")
 
   # Convert markdown to HTML if pandoc is available
   if [ "$PANDOC_EXISTS" = true ]; then
