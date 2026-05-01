@@ -3,9 +3,10 @@ set -e # exit the script when execution hits any error
 set -o pipefail # ensure exit code of pipe is the rightmost non-zero exit code
 #set -x # print the executing lines
 
-export PORTFOLIO_DIR="${PORTFOLIO_DIR:-$HOME/workspace/portfolios}"
+export PORTFOLIO_DIR="${PORTFOLIO_DIR:-$HOME/git/enterprise-solutions/googlecloud/ml-invest-advisory/local_llm/test-portfolios}"
 export LLM_PROMPT_TEMPLATE="${LLM_PROMPT_TEMPLATE:-$HOME/git/enterprise-solutions/googlecloud/ml-invest-advisory/local_llm/prompt_templates/daily_report_prompt_template.txt}"
 export USE_CASE="${USE_CASE:-daily-report}"
+export MARKET_COMMENTARY_FILE="${MARKET_COMMENTARY_FILE:-$PORTFOLIO_DIR/fundstrat-daily-market-commentary.txt}" # If this file is missing, the market commentary section in the LLM prompt will be omitted.
 export STOCK_QUOTES_CLOUD_RUN_URL="${STOCK_QUOTES_CLOUD_RUN_URL:-https://us-central1-hil-financial-services.cloudfunctions.net/get_us_stock_quotes}"
 
 # Check for dependencies at the start, outside the loop
@@ -33,8 +34,17 @@ for file in $PORTFOLIO_FILES; do
 
   MD_OUTPUT_FILE="${PORTFOLIO_DIR}/$USE_CASE-${PORTFOLIO_NAME}.md"
   $GET_QUOTES_CMD && \
-    ollama run gemma3:12b < "$OUTPUT_PROMPT_FILE" \
-    | tee >(perl -pe 's/\e\[[0-?]*[ -\/]*[@-~]//g' > "$MD_OUTPUT_FILE")
+    # The following Python command replaces the {{MARKET_COMMENTARY}} placeholder with the content of the commentary file.
+    # If the file is missing or inaccessible, an empty string is used instead.
+    python3 -c 'import sys
+text = open(sys.argv[1]).read()
+try:
+    commentary = open(sys.argv[2]).read()
+except Exception:
+    commentary = ""
+open(sys.argv[1], "w").write(text.replace("{{MARKET_COMMENTARY}}", commentary))' "$OUTPUT_PROMPT_FILE" "$MARKET_COMMENTARY_FILE" && \
+    ollama run --nowordwrap gemma3:12b < "$OUTPUT_PROMPT_FILE" \
+    | tee "$MD_OUTPUT_FILE"
 
   # Convert markdown to HTML if pandoc is available
   if [ "$PANDOC_EXISTS" = true ]; then
