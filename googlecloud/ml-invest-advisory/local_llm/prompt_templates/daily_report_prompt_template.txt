@@ -30,5 +30,8 @@ Comment on each holding's volatility and risk factor, especially those with high
 # Verbose Analysis of the Portfolio
 Analyze the investor's investment style and Risk appetite in a detailed report.
 Identify potential risks and reward for the top few holdings.
-Tell a story about how a growing economy vs an economy in recession vs a flat economy may affect the portfolio.
-Compare the values of foreign vs domestic USA holdings in terms of percentage.
+
+# Market Commentary from investment and advisory service providers
+Text below is the real time market commentary.
+If nothing is provided, omit this section. Otherwise, analyze how it's affecting the portfolio.
+{{MARKET_COMMENTARY}}

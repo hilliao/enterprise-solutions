@@ -3,10 +3,10 @@ set -e # exit the script when execution hits any error
 set -o pipefail # ensure exit code of pipe is the rightmost non-zero exit code
 #set -x # print the executing lines
 
-export PORTFOLIO_DIR="$HOME/git/enterprise-solutions/googlecloud/ml-invest-advisory/local_llm/test-portfolios"
-export LLM_PROMPT_TEMPLATE="$HOME/git/enterprise-solutions/googlecloud/ml-invest-advisory/local_llm/prompt_templates/flash-insights-report-template.txt"
-export USE_CASE="flash-insights"
-export NEWS_FILE="$PORTFOLIO_DIR/news.txt" # Assuming news.txt is in the same directory as portfolios
+export PORTFOLIO_DIR="${PORTFOLIO_DIR:-$HOME/git/enterprise-solutions/googlecloud/ml-invest-advisory/local_llm/test-portfolios}"
+export LLM_PROMPT_TEMPLATE="${LLM_PROMPT_TEMPLATE:-$HOME/git/enterprise-solutions/googlecloud/ml-invest-advisory/local_llm/prompt_templates/flash-insights-report-template.txt}"
+export USE_CASE="${USE_CASE:-flash-insights}"
+export NEWS_FILE="${NEWS_FILE:-$PORTFOLIO_DIR/news.txt}" # Assuming news.txt is in the same directory as portfolios
 export STOCK_QUOTES_CLOUD_RUN_URL="${STOCK_QUOTES_CLOUD_RUN_URL:-https://us-central1-hil-financial-services.cloudfunctions.net/get_us_stock_quotes}"
 
 # Check for dependencies at the start, outside the loop
@@ -37,8 +37,8 @@ for file in $PORTFOLIO_FILES; do
   # replace the {{FLASH_INSIGHTS}} keyword with breaking news such as Mark Newton's flash insights
   # Using python for multi-line string replacement to avoid sed escaping issues
   python3 -c 'import sys; text=open(sys.argv[1]).read(); news=open(sys.argv[2]).read(); open(sys.argv[1], "w").write(text.replace("{{FLASH_INSIGHTS}}", news))' "$OUTPUT_PROMPT_FILE" "$NEWS_FILE" && \
-  TERM=dumb ollama run gemma3 --verbose < "$OUTPUT_PROMPT_FILE" \
-    | tee >(perl -pe 's/\e\[[0-?]*[ -\/]*[@-~]//g' > "$MD_OUTPUT_FILE")
+  ollama run --nowordwrap gemma3:12b < "$OUTPUT_PROMPT_FILE" \
+    | tee "$MD_OUTPUT_FILE"
 
   # Convert markdown to HTML if pandoc is available
   if [ "$PANDOC_EXISTS" = true ]; then

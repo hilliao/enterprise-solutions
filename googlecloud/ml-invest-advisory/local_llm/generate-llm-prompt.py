@@ -36,6 +36,8 @@ import requests
 from google.oauth2 import id_token
 
 DEFAULT_OUTPUT_PROMPT_FILE = "prompt.txt"
+PORTFOLIO_DATA_PLACEHOLDER = "{{PORTFOLIO_HOLDING_DATA_JSON}}"
+
 
 
 def invoke_cloud_run(base_url: str, url: str) -> str:
@@ -296,7 +298,7 @@ def main():
     parser.add_argument('--portfolio_file', type=str, required=True, help=
     'The path to the portfolio units JSON file. The file should be in the format: {"TICKER": {"Units": <number>}}')
     parser.add_argument('--llm_prompt_template', type=str, required=True, help=
-    'The path to the LLM prompt template text file that contains {{PORTFOLIO_HOLDING_DATA_JSON}}.')
+    f'The path to the LLM prompt template text file that contains {PORTFOLIO_DATA_PLACEHOLDER}.')
     parser.add_argument('--output_prompt', type=str, default=DEFAULT_OUTPUT_PROMPT_FILE, help=
     f'The output file name for the generated LLM prompt. Defaults to "{DEFAULT_OUTPUT_PROMPT_FILE}".')
     args = parser.parse_args()
@@ -317,7 +319,7 @@ def main():
         prompt_template = f.read()
 
     # Replace the placeholder with the JSON data
-    llm_ready_prompt = prompt_template.replace("{{PORTFOLIO_HOLDING_DATA_JSON}}",
+    llm_ready_prompt = prompt_template.replace(PORTFOLIO_DATA_PLACEHOLDER,
                                                json.dumps(portfolio_holding_values_and_weights, indent=2))
 
     if args.output_prompt == DEFAULT_OUTPUT_PROMPT_FILE:  # Check if the default output file name is used
