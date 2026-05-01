@@ -1,2 +1,16 @@
 *.class
 .idea/
+# Android build outputs
+android/nap-time-alarm/NapTimeAlarm/release/
+
+# Python virtual environment files
+googlecloud/ml-vision-language/lib/
+googlecloud/ml-vision-language/lib64/
+googlecloud/ml-vision-language/bin/
+googlecloud/ml-vision-language/share/
+googlecloud/ml-vision-language/pyvenv.cfg
+
+# Caches and logs
+__pycache__/
+*.log
+.codex

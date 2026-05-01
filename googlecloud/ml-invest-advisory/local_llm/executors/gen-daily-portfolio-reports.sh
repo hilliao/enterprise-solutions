@@ -1,5 +1,6 @@
 #!/bin/bash
 set -e # exit the script when execution hits any error
+set -o pipefail # ensure exit code of pipe is the rightmost non-zero exit code
 #set -x # print the executing lines
 
 export PORTFOLIO_DIR="${PORTFOLIO_DIR:-$HOME/workspace/portfolios}"
