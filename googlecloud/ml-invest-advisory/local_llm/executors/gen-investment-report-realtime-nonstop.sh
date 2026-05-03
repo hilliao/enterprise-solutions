@@ -10,7 +10,7 @@ set -euo pipefail
 export GOOGLE_APPLICATION_CREDENTIALS="/path/to/your/service-account-key.json"
 
 # Internal paths
-PORTFOLIO_SCRIPT="$HOME/path/to/your/gen-daily-portfolio-reports.sh && $HOME/path/to/your/gen-flash-insights-portfolio-reports.sh"
+PORTFOLIO_SCRIPT="$HOME/path/to/your/gen-daily-portfolio-reports.sh && ($HOME/path/to/your/gen-flash-insights-portfolio-reports.sh || true)"
 export PORTFOLIO_DIR="$HOME/path/to/output/portfolios/"
 
 # GCS Bucket destination (Replace 'folder' and 'bucket-name')
