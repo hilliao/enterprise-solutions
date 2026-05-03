@@ -1,12 +1,19 @@
 #!/bin/bash
 set -e # exit the script when execution hits any error
 set -o pipefail # ensure exit code of pipe is the rightmost non-zero exit code
-#set -x # print the executing lines
+[[ -n "${DEBUG:-}" ]] && set -x # print the executing lines if DEBUG is set
 
 export PORTFOLIO_DIR="${PORTFOLIO_DIR:-$HOME/git/enterprise-solutions/googlecloud/ml-invest-advisory/local_llm/test-portfolios}"
 export LLM_PROMPT_TEMPLATE="${LLM_PROMPT_TEMPLATE:-$HOME/git/enterprise-solutions/googlecloud/ml-invest-advisory/local_llm/prompt_templates/daily_report_prompt_template.txt}"
 export USE_CASE="${USE_CASE:-daily-report}"
-export MARKET_COMMENTARY_FILE="${MARKET_COMMENTARY_FILE:-$PORTFOLIO_DIR/fundstrat-daily-market-commentary.txt}" # If this file is missing, the market commentary section in the LLM prompt will be omitted.
+# Expecting a date-based filename format: market-commentary_YYYY-MM-DD.txt (e.g., market-commentary_2026-05-03.txt)
+# If this file is missing, the market commentary section in the LLM prompt will be omitted.
+export MARKET_COMMENTARY_FILE="${MARKET_COMMENTARY_FILE:-$PORTFOLIO_DIR/market-commentary_$(date +%Y-%m-%d).txt}"
+if [ -r "$MARKET_COMMENTARY_FILE" ]; then
+  echo "Market commentary file is readable at: $MARKET_COMMENTARY_FILE"
+else
+  echo "Warning: Market commentary file is missing or not readable at: $MARKET_COMMENTARY_FILE. Section will be omitted."
+fi
 export STOCK_QUOTES_CLOUD_RUN_URL="${STOCK_QUOTES_CLOUD_RUN_URL:-https://us-central1-hil-financial-services.cloudfunctions.net/get_us_stock_quotes}"
 
 # Check for dependencies at the start, outside the loop
@@ -21,7 +28,7 @@ PORTFOLIO_FILES=$(find "$PORTFOLIO_DIR" -maxdepth 1 -type f -name "*.json")
 
 # Loop through each portfolio file and print its name and first x lines
 for file in $PORTFOLIO_FILES; do
-  echo "Found portfolio file: $file"
+  echo "Found portfolio file: $file. Showing top 6 lines:"
   head -n 6 "$file"
   echo "" # Add a blank line for readability
 

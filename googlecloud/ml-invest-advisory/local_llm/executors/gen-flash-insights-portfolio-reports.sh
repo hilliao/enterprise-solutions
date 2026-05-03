@@ -1,12 +1,20 @@
 #!/bin/bash
 set -e # exit the script when execution hits any error
 set -o pipefail # ensure exit code of pipe is the rightmost non-zero exit code
-#set -x # print the executing lines
+[[ -n "${DEBUG:-}" ]] && set -x # print the executing lines if DEBUG is set
 
 export PORTFOLIO_DIR="${PORTFOLIO_DIR:-$HOME/git/enterprise-solutions/googlecloud/ml-invest-advisory/local_llm/test-portfolios}"
 export LLM_PROMPT_TEMPLATE="${LLM_PROMPT_TEMPLATE:-$HOME/git/enterprise-solutions/googlecloud/ml-invest-advisory/local_llm/prompt_templates/flash-insights-report-template.txt}"
 export USE_CASE="${USE_CASE:-flash-insights}"
-export NEWS_FILE="${NEWS_FILE:-$PORTFOLIO_DIR/news.txt}" # Assuming news.txt is in the same directory as portfolios
+# Expecting a date-based filename format: news_YYYY-MM-DD.txt (e.g., news_2026-05-03.txt)
+# If the news file is missing or unreadable, the script will stop execution.
+export NEWS_FILE="${NEWS_FILE:-$PORTFOLIO_DIR/news_$(date +%Y-%m-%d).txt}"
+if [ -r "$NEWS_FILE" ]; then
+  echo "News file is readable at: $NEWS_FILE"
+else
+  echo "Error: News file is missing or not readable at: $NEWS_FILE. Stopping script." >&2
+  exit 1
+fi
 export STOCK_QUOTES_CLOUD_RUN_URL="${STOCK_QUOTES_CLOUD_RUN_URL:-https://us-central1-hil-financial-services.cloudfunctions.net/get_us_stock_quotes}"
 
 # Check for dependencies at the start, outside the loop
@@ -21,7 +29,7 @@ PORTFOLIO_FILES=$(find "$PORTFOLIO_DIR" -maxdepth 1 -type f -name "*.json")
 
 # Loop through each portfolio file and print its name and first x lines
 for file in $PORTFOLIO_FILES; do
-  echo "Found portfolio file: $file"
+  echo "Found portfolio file: $file. Showing top 6 lines:"
   head -n 6 "$file"
   echo "" # Add a blank line for readability
 
