@@ -7,26 +7,29 @@ I assume you know all stock ticker symbols. If you are unsure about the ticker s
 Generate a report with the following exact structure and headers:
 
 # Portfolio performance snapshot
-This is the calculated portfolio performance in 1 day. The format is JSON.
-Provide a brief summary of the daily change.
-The keys are holding tickers or symbols. The values are the following =>
-
-* "Current Value": realtime value of the holding;
-* "Previous Value": past value of the holding at the prior market close;
-* "shares": number of shares;
-* "single share change in percentage": percentage of share price change in 1 trading day;
-* "weight in percentage": the weighting of the holding in the portfolio;
-* special JSON key "__CASH": the cash amount in the portfolio not invested.
-* special JSON key "__SUM": the sum of all holdings including cash.
-
-Print the exact JSON data. You may replace __CASH with Cash and __SUM with Aggregate.
-```json
-{{PORTFOLIO_HOLDING_DATA_JSON}}
-```
-
-# AI breaking news impact analysis
-Study the following breaking news in the following section.
-Then generate a report about how it's impacting the portfolio.
+Provide a brief summary (in plain text, e.g., 2-3 sentences) of the overall portfolio performance, including the total current value and daily percentage change. Do NOT print or reproduce the raw JSON data block here.
 
 ## [Breaking News]
 {{FLASH_INSIGHTS}}
+
+Based on the breaking news section above, analyze the impact on the portfolio in the section below:
+
+1. **Direct Holdings Impact:**
+Identify any news directly referencing specific holdings
+ (e.g., individual stock news or upcoming earnings reports)
+  and explain the immediate impact on their prices.
+2. **Macro & Sector Channels:**
+Explain how macro developments (e.g., Fed interest rate sentiment, oil price fluctuations, geopolitical negotiations)
+ propagate to broader sectors represented in the portfolio
+  (e.g., Tech,Semiconductors, Airlines, Financials, or Cash,Treasuries).
+3. **Resilience vs. Vulnerability:**
+Evaluate how the portfolio's asset allocation (including weightings of top holdings and cash buffers)
+ helped cushion or expose the portfolio to today's news.
+4. **Tactical Action Items:**
+Provide 1-2 actionable, forward-looking recommendations or rebalancing ideas based on the news developments.
+
+[PORTFOLIO HOLDINGS DATA TO ANALYZE]
+The following JSON contains the portfolio holding details for your analysis. Do NOT print or replicate this raw JSON block in your final generated output.
+```json
+{{PORTFOLIO_HOLDING_DATA_JSON}}
+```

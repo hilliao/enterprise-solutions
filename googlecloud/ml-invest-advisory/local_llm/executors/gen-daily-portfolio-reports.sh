@@ -53,6 +53,10 @@ open(sys.argv[1], "w").write(text.replace("{{MARKET_COMMENTARY}}", commentary))'
     ollama run --nowordwrap gemma3:12b < "$OUTPUT_PROMPT_FILE" \
     | tee "$MD_OUTPUT_FILE"
 
+  # Append the prompt to the markdown file
+  echo -e "\n# <span style=\"color: brown;\">Input Prompt for LLM</span>" >> "$MD_OUTPUT_FILE"
+  cat "$OUTPUT_PROMPT_FILE" >> "$MD_OUTPUT_FILE"
+
   # Convert markdown to HTML if pandoc is available
   if [ "$PANDOC_EXISTS" = true ]; then
     HTML5_OUTPUT_FILE="${PORTFOLIO_DIR}/$USE_CASE-${PORTFOLIO_NAME}.html"
