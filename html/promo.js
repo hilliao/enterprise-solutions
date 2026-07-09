@@ -1,39 +1,39 @@
-$(document).ready(function () {
-    const urlParams = new URLSearchParams(window.location.search);
-    const queryParam = urlParams.get('promo-code');
+// Promo code redemption — vanilla JS, no jQuery required.
+// PUT {email, name} to the promotions service keyed by the Firestore doc ID.
+const PROMO_SERVICE_URL = 'http://services.googlecloud.fr:5001/promotions/';
 
-    $('#promo').val(queryParam);
-});
+document.addEventListener('DOMContentLoaded', () => {
+    const promoInput = document.getElementById('promo');
+    const queryParam = new URLSearchParams(window.location.search).get('promo-code');
+    if (queryParam) {
+        promoInput.value = queryParam;
+    }
 
-$(document).ready(function () {
-    $('#submit').click(function () {
-        console.log("clicked redeem");
-        var promo = $('#promo').val();
-        var email = $('#email').val();
-        var name = $('#name').val();
+    document.getElementById('promo-form').addEventListener('submit', async (event) => {
+        event.preventDefault();
+        console.log('clicked redeem');
 
-        $.ajax({
-            url: 'http://services.googlecloud.fr:5001/promotions/' + promo,
-            method: 'PUT',
-            "headers": {
-                "Content-Type": "application/json"
-            },
-            data: JSON.stringify({
-                email: email,
-                name: name,
-            }),
-            error: function (jqXHR, exception) {
-                document.getElementById("put_response").innerHTML +=
-                    '<p style="color:red;">' + JSON.stringify(jqXHR) + '</p>'
+        const log = document.getElementById('put_response');
+        const promo = promoInput.value.trim();
+        const email = document.getElementById('email').value.trim();
+        const name = document.getElementById('name').value.trim();
+
+        try {
+            const response = await fetch(PROMO_SERVICE_URL + encodeURIComponent(promo), {
+                method: 'PUT',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({email, name}),
+            });
+            const result = await response.json();
+            if (!response.ok) {
+                throw new Error(JSON.stringify(result));
             }
-        }).then(function (put_res) {
-            var google_form = "Please proceed to submit <a href=" + put_res['form-url'] + ">the Google form</a> to complete the process"
-            document.getElementById("put_response").innerHTML +=
-                '<p style="color:green;">' + JSON.stringify(put_res) + '<br>' + google_form + '</p>'
-
-            $('.put_response').append(JSON.stringify(put_res));
-            $('.put_response').append();
-            $('.put_response').css("color", "green");
-        });
+            log.insertAdjacentHTML('beforeend',
+                `<p class="log-ok">${JSON.stringify(result)}<br>` +
+                `Please proceed to submit <a href="${result['form-url']}">the Google form</a> ` +
+                'to complete the process.</p>');
+        } catch (error) {
+            log.insertAdjacentHTML('beforeend', `<p class="log-err">${error}</p>`);
+        }
     });
 });
