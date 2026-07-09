@@ -1,76 +1,75 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <title>GoogleCloud.fr</title>
-    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.5.1/jquery.min.js"></script>
-    <script src="promo.js"></script>
-    <style>
-        h1 {
-            text-align: center;
-        }
-
-        p {
-            text-align: center;
-        }
-
-        div {
-            text-align: center;
-        }
-
-        form {
-            text-align: center;
-            font-size: 18px;
-        }
-
-        input {
-            font-size: 24px;
-        }
-
-        table, td {
-            padding: 10px
-        }
-    </style>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Redeem a Promo Code — GoogleCloud.fr</title>
+    <meta name="description" content="Redeem your GoogleCloud.fr promotion code.">
+    <meta name="theme-color" content="#174ea6">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="stylesheet"
+          href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap">
+    <link rel="stylesheet" href="css/site.css">
+    <script src="promo.js" defer></script>
 </head>
 <body>
-<div>
-    <p><a href="http://googlecloud.fr" target="_blank"><img src="images/frlogo.png" height="75" width="393"></a>
-        <a href="https://cloud.google.com/find-a-partner/partner/googlecloud-fr" target="_blank"><img
-                src="images/gcpartner.png" height="65" width="195"></a>
-    <p><span
-            style="font-size:36px">Have a promo code?</span><br><span
-            style="font-size:18px"><i>Redeem Now!</i></span>
-</div>
-<form>
-    <p>
-    <table style="width:100%">
-        <tr>
-            <td><span
-                    style="font-size:24px">Promo code:</span></td>
-            <td><input style="width:300px" id="promo" type="text" name="promo code" value="Firestore doc id">
-                <span
-                        style="color:lightgrey">ex: D5wVaDYPgMCirkpcBfQy</span></td>
-        </tr>
-        <p>
-            <tr>
-                <td><span
-                        style="font-size:24px">your email:</span></td>
-                <td><input style="width:370px " id="email" type="text" name="email"><span
-                        style="color:lightgrey">ex: test@example.com</span></td>
-            </tr>
-            <br>
-        <p>
-            <tr>
-                <td><span
-                        style="font-size:24px">Your name:</span></td>
-                <td><input style="width:352px" id="name" type="text" name="name"><span
-                        style="color:lightgrey">ex: first_name last_name</span></td>
-            </tr>
-            <br>
-    </table>
-    <p>
-        <input id="submit" type="button" value="CONTINUE" style="font-size :18px;"/>
-</form>
-<div id="put_response" style="font-size:24px">Redeem result logs:</div>
+
+<header class="site-header">
+    <div class="container header-inner">
+        <a class="brand" href="index.html">
+            <img src="images/frlogo.png" alt="GoogleCloud.fr" width="196" height="38">
+        </a>
+        <nav class="site-nav" aria-label="Primary">
+            <a href="index.html">Home</a>
+            <a href="services.html">Services</a>
+            <a href="about-us.html">About us</a>
+        </nav>
+    </div>
+</header>
+
+<section class="hero hero-compact">
+    <div class="container">
+        <h1>Have a promo code?</h1>
+        <p>Redeem it now &mdash; it only takes a minute.</p>
+    </div>
+</section>
+
+<main>
+    <div class="container">
+        <form class="promo-card" id="promo-form">
+            <label>Promo code
+                <input id="promo" type="text" name="promo-code" placeholder="ex: D5wVaDYPgMCirkpcBfQy" required>
+                <span class="hint">The Firestore document ID from your promotion email</span>
+            </label>
+            <label>Your email
+                <input id="email" type="email" name="email" placeholder="ex: test@example.com" required>
+            </label>
+            <label>Your name
+                <input id="name" type="text" name="name" placeholder="ex: first_name last_name" required>
+            </label>
+            <button id="submit" type="submit" class="btn btn-blue">Redeem now</button>
+        </form>
+
+        <div id="put_response" aria-live="polite">Redeem result logs:</div>
+    </div>
+</main>
+
+<footer class="site-footer">
+    <div class="container footer-inner">
+        <nav class="footer-nav" aria-label="Footer">
+            <a href="index.html">Home</a>
+            <a href="services.html">Services</a>
+            <a href="about-us.html">About us</a>
+        </nav>
+        <a href="https://cloud.google.com/find-a-partner/partner/googlecloud-fr" target="_blank" rel="noopener"
+           class="partner-badge">
+            <img src="images/gcpartner.png" alt="Google Cloud Partner" width="195" height="65">
+        </a>
+        <small>Contact us at <a href="mailto:master@googlecloud.fr">master@googlecloud.fr</a><br>
+            &copy; GoogleCloud.fr &mdash; Google Cloud consulting &amp; professional services</small>
+    </div>
+</footer>
+
 </body>
 </html>
