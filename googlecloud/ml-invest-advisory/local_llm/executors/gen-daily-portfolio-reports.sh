@@ -40,17 +40,22 @@ for file in $PORTFOLIO_FILES; do
     --output_prompt=$OUTPUT_PROMPT_FILE"
 
   MD_OUTPUT_FILE="${PORTFOLIO_DIR}/$USE_CASE-${PORTFOLIO_NAME}.md"
-  $GET_QUOTES_CMD && \
-    # The following Python command replaces the {{MARKET_COMMENTARY}} placeholder with the content of the commentary file.
-    # If the file is missing or inaccessible, an empty string is used instead.
-    python3 -c 'import sys
+
+  # Execute GET_QUOTES_CMD. set -e will cause the script to exit if this fails.
+  $GET_QUOTES_CMD
+
+  # The following Python command replaces the {{MARKET_COMMENTARY}} placeholder with the content of the commentary file.
+  # If the file is missing or inaccessible, an empty string is used instead.
+  python3 -c 'import sys
 text = open(sys.argv[1]).read()
 try:
     commentary = open(sys.argv[2]).read()
 except Exception:
     commentary = ""
-open(sys.argv[1], "w").write(text.replace("{{MARKET_COMMENTARY}}", commentary))' "$OUTPUT_PROMPT_FILE" "$MARKET_COMMENTARY_FILE" && \
-    ollama run --nowordwrap gemma3:12b < "$OUTPUT_PROMPT_FILE" \
+open(sys.argv[1], "w").write(text.replace("{{MARKET_COMMENTARY}}", commentary))' "$OUTPUT_PROMPT_FILE" "$MARKET_COMMENTARY_FILE"
+
+  # Execute ollama run and tee. set -e and set -o pipefail will cause the script to exit if this fails.
+  ollama run --nowordwrap gemma3:12b < "$OUTPUT_PROMPT_FILE" \
     | tee "$MD_OUTPUT_FILE"
 
   # Append the prompt to the markdown file
