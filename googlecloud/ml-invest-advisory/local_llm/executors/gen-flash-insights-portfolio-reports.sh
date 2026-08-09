@@ -6,6 +6,7 @@ set -o pipefail # ensure exit code of pipe is the rightmost non-zero exit code
 export PORTFOLIO_DIR="${PORTFOLIO_DIR:-$HOME/git/enterprise-solutions/googlecloud/ml-invest-advisory/local_llm/test-portfolios}"
 export LLM_PROMPT_TEMPLATE="${LLM_PROMPT_TEMPLATE:-$HOME/git/enterprise-solutions/googlecloud/ml-invest-advisory/local_llm/prompt_templates/flash-insights-report-template.txt}"
 export USE_CASE="${USE_CASE:-flash-insights}"
+
 # Expecting a date-based filename format: news_YYYY-MM-DD.txt (e.g., news_2026-05-03.txt)
 # If the news file is missing or unreadable, the script will stop execution.
 export NEWS_FILE="${NEWS_FILE:-$PORTFOLIO_DIR/news_$(date +%Y-%m-%d).txt}"

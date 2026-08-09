@@ -6,6 +6,7 @@ set -o pipefail # ensure exit code of pipe is the rightmost non-zero exit code
 export PORTFOLIO_DIR="${PORTFOLIO_DIR:-$HOME/git/enterprise-solutions/googlecloud/ml-invest-advisory/local_llm/test-portfolios}"
 export LLM_PROMPT_TEMPLATE="${LLM_PROMPT_TEMPLATE:-$HOME/git/enterprise-solutions/googlecloud/ml-invest-advisory/local_llm/prompt_templates/daily_report_prompt_template.txt}"
 export USE_CASE="${USE_CASE:-daily-report}"
+
 # Expecting a date-based filename format: market-commentary_YYYY-MM-DD.txt (e.g., market-commentary_2026-05-03.txt)
 # If this file is missing, the market commentary section in the LLM prompt will be omitted.
 export MARKET_COMMENTARY_FILE="${MARKET_COMMENTARY_FILE:-$PORTFOLIO_DIR/market-commentary_$(date +%Y-%m-%d).txt}"
