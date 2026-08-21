@@ -36,10 +36,12 @@
 #      that headless Chrome will reuse on every run of this script.
 #
 # Usage:
-#   ./gen-fundstrat-insights.sh --flash-insights        # Dump Flash Insights & generate summary once and exit
+#   ./gen-fundstrat-insights.sh --flash-insights [LINES]  # Dump Flash Insights & generate summary once and exit.
+#                                                          # LINES: number of lines fed to Ollama (default 120)
 #   ./gen-fundstrat-insights.sh --technical-strategy    # Dump Technical Strategy article once and exit
 #   ./gen-fundstrat-insights.sh --crypto-comment       # Dump Crypto Comment article once and exit
-#   ./gen-fundstrat-insights.sh --poll [MINUTES]       # Poll Flash Insights every N (default 20) minutes during market open hours
+#   ./gen-fundstrat-insights.sh --poll [MINUTES] [LINES]  # Poll Flash Insights every N (default 20) minutes during
+#                                                          # market open hours. LINES: lines fed to Ollama (default 120)
 #
 
 set -euo pipefail
@@ -55,6 +57,7 @@ FLASH_INSIGHTS_OVERVIEW_MD="$HOME/Documents/flash-insights-overview.md"
 FLASH_INSIGHTS_OVERVIEW="$HOME/Documents/flash-insights-overview.txt"
 PORTFOLIO_DIR="$HOME/workspace/portfolios"
 INTERVAL_MINUTES=20
+FLASH_INSIGHTS_LINES=120
 CLOSED_CHECK_SLEEP=60
 export OLLAMA_HOST="${OLLAMA_HOST:-8400f:11435}"
 OLLAMA_MODEL="gemma3:4b"
@@ -102,7 +105,7 @@ ensure_members_html() {
       --user-data-dir="$PROFILE_DIR" \
       --virtual-time-budget=15000 \
       --dump-dom \
-      "$MEMBERS_URL" > "$RAW_MEMBERS_HTML"; then
+      "$MEMBERS_URL" 2>/dev/null > "$RAW_MEMBERS_HTML"; then
       echo "ERROR: google-chrome execution failed for $MEMBERS_URL." >&2
       return 1
     fi
@@ -126,7 +129,7 @@ run_flash_insights_once() {
     --user-data-dir="$PROFILE_DIR" \
     --virtual-time-budget=15000 \
     --dump-dom \
-    "$FLASH_INSIGHTS_URL" > "$RAW_FLASH_INSIGHT_HTML"; then
+    "$FLASH_INSIGHTS_URL" 2>/dev/null > "$RAW_FLASH_INSIGHT_HTML"; then
 
     if [[ ! -s "$RAW_FLASH_INSIGHT_HTML" ]]; then
       echo "ERROR: DOM dump for Flash Insights is empty — check Chrome profile session/login state." >&2
@@ -156,7 +159,7 @@ run_flash_insights_once() {
       fi
 
       if ollama run --nowordwrap "$OLLAMA_MODEL" \
-        "$prompt_text" < <(head -n 60 "$FLASH_INSIGHTS_FILE") \
+        "$prompt_text" < <(head -n "$FLASH_INSIGHTS_LINES" "$FLASH_INSIGHTS_FILE") \
         > "$FLASH_INSIGHTS_OVERVIEW_MD" && [[ -s "$FLASH_INSIGHTS_OVERVIEW_MD" ]]; then
         ollama_success=true
         echo "OK: wrote overview markdown to $FLASH_INSIGHTS_OVERVIEW_MD"
@@ -208,7 +211,7 @@ fetch_technical_strategy_once() {
     --user-data-dir="$PROFILE_DIR" \
     --virtual-time-budget=15000 \
     --dump-dom \
-    "$tech_strategy_url" > "$RAW_TECH_STRATEGY_HTML"; then
+    "$tech_strategy_url" 2>/dev/null > "$RAW_TECH_STRATEGY_HTML"; then
     echo "ERROR: google-chrome execution failed for $tech_strategy_url." >&2
     return 1
   fi
@@ -246,7 +249,7 @@ fetch_crypto_comment_once() {
     --user-data-dir="$PROFILE_DIR" \
     --virtual-time-budget=15000 \
     --dump-dom \
-    "$crypto_comment_url" > "$RAW_CRYPTO_COMMENT_HTML"; then
+    "$crypto_comment_url" 2>/dev/null > "$RAW_CRYPTO_COMMENT_HTML"; then
     echo "ERROR: google-chrome execution failed for $crypto_comment_url." >&2
     return 1
   fi
@@ -281,6 +284,9 @@ else
   case "$1" in
     --flash-insights|--dump-flash-insights|flash-insights)
       MODE="flash-insights"
+      if [[ $# -gt 1 && "$2" =~ ^[0-9]+$ ]]; then
+        FLASH_INSIGHTS_LINES="$2"
+      fi
       ;;
     --technical-strategy|--dump-technical-strategy|technical-strategy)
       MODE="technical-strategy"
@@ -293,15 +299,20 @@ else
       if [[ $# -gt 1 && "$2" =~ ^[0-9]+$ ]]; then
         INTERVAL_MINUTES="$2"
       fi
+      if [[ $# -gt 2 && "$3" =~ ^[0-9]+$ ]]; then
+        FLASH_INSIGHTS_LINES="$3"
+      fi
       ;;
     -h|--help|help)
       echo "Usage: $0 [OPTION]"
       echo ""
       echo "Options:"
-      echo "  --flash-insights, --dump-flash-insights        Dump Flash Insights & generate AI summary once and exit"
+      echo "  --flash-insights, --dump-flash-insights [LINES] Dump Flash Insights & generate AI summary once and exit"
+      echo "                                                  LINES: number of lines fed to Ollama (default 120)"
       echo "  --technical-strategy, --dump-technical-strategy Dump Technical Strategy article once and exit"
       echo "  --crypto-comment, --dump-crypto-comment        Dump Crypto Comment article once and exit"
-      echo "  --poll [MINUTES]                               Poll Flash Insights every N (default 20) minutes during market open hours"
+      echo "  --poll [MINUTES] [LINES]                       Poll Flash Insights every N (default 20) minutes during market open hours"
+      echo "                                                  LINES: number of lines fed to Ollama (default 120)"
       echo "  -h, --help                                     Display this help message"
       exit 0
       ;;

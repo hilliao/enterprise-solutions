@@ -14,3 +14,4 @@ googlecloud/ml-vision-language/pyvenv.cfg
 __pycache__/
 *.log
 .codex
+.gradle/
