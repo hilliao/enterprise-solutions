@@ -60,7 +60,7 @@ INTERVAL_MINUTES=20
 FLASH_INSIGHTS_LINES=120
 CLOSED_CHECK_SLEEP=60
 export OLLAMA_HOST="${OLLAMA_HOST:-8400f:11435}"
-OLLAMA_MODEL="gemma3:4b"
+OLLAMA_MODEL="qwen2.5:7b"
 
 if [[ ! -d "$PROFILE_DIR" ]]; then
   echo "ERROR: Profile directory '$PROFILE_DIR' does not exist." >&2
