@@ -138,7 +138,7 @@ run_flash_insights_once() {
 
     # Step 2: Convert raw HTML to text and extract sections.
     html2text "$RAW_FLASH_INSIGHT_HTML" | \
-      awk '/^[⚡âš¡]* FlashInsights$/,/\[FlashInsights\]/' \
+      awk '/^[⚡âš¡]* FlashInsights$/{f=1} f&&/click="shareOpen/{f=0; next} f{print} f&&/\[FlashInsights\]/{f=0}' \
       > "$FLASH_INSIGHTS_FILE"
 
     if ! grep -q "[⚡âš¡]* FlashInsights" "$FLASH_INSIGHTS_FILE"; then
