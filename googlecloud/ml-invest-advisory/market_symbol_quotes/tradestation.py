@@ -7,16 +7,16 @@ import requests
 from gcp_data_access import get_gcp_secret
 
 
-# Placeholder for log function
 def log(text: str, severity: str):
     """
-    Logs a message.
+    Logs a message as structured JSON so Cloud Logging records the severity:
+    https://cloud.google.com/run/docs/logging#using-json
 
     Args:
         text: The message to log.
         severity: The severity of the message (e.g., "ERROR", "WARNING").
     """
-    print(f"[{severity}] {text}")
+    print(json.dumps({'severity': severity, 'message': text}), flush=True)
 
 
 LOG_SEVERITY_ERROR = "ERROR"
@@ -27,7 +27,16 @@ access_token = None
 trade_station_access_token_keep_alive = datetime.timedelta(minutes=19)
 trade_station_token_url = "https://signin.tradestation.com/oauth/token"
 trade_station_url = 'https://api.tradestation.com/v3'
-trade_station_market_data = '/marketdata/stream/quotes/{symbols}'
+trade_station_market_data = '/marketdata/quotes/{symbols}'
+
+
+class TradeStationApiError(Exception):
+    """Raised when the TradeStation API returns a non-200 response; keeps the response body as detail."""
+
+    def __init__(self, status_code: int, url: str, detail):
+        super().__init__(f"TradeStation API returned {status_code} for url: {url}")
+        self.status_code = status_code
+        self.detail = detail
 
 
 def refresh_access_token(secret_name: str = os.environ.get('TRADE_STATION_OAUTH_SECRET_NAME', 'TradeStation_OAuth0')):
@@ -146,12 +155,17 @@ def get_tradestation_realtime_quotes(tickers: list[str] = ["VOO", "QQQ"]):
         tickers: A list of ticker symbols (e.g., ["VOO", "QQQ"]).
 
     Returns:
-        A dictionary where keys are ticker symbols and values are the corresponding
-        quote data from TradeStation.
+        A tuple of (symbol_quotes, symbol_errors). symbol_quotes is a dictionary where keys are ticker
+        symbols and values are the corresponding quote data from TradeStation. symbol_errors is the
+        TradeStation "Errors" list for symbols that could not be quoted, e.g. [{"Symbol": "XYZ", "Error": "..."}].
+
+    Raises:
+        TradeStationApiError: If TradeStation returns a non-200 response.
     """
     # attempt to call Trade Station API to get real time price quote
     access_token = refresh_global_access_token()
     symbol_quotes = {}
+    symbol_errors = []
 
     for key, value in access_token.items():
         if 'token' in value:
@@ -159,21 +173,22 @@ def get_tradestation_realtime_quotes(tickers: list[str] = ["VOO", "QQQ"]):
             headers = {
                 'Authorization': 'Bearer {}'.format(value['token'])
             }
-            with requests.get(trade_station_quote, headers=headers, stream=True, timeout=10) as quote_response:
-                if quote_response.status_code == HTTPStatus.OK:
-                    # 3. Iterate over the response line by line as data arrives.
-                    for line in quote_response.iter_lines():
-                        # Filter out keep-alive new lines
-                        if line:
-                            # The line is in bytes, so it needs to be decoded to a string
-                            quote_json = json.loads(line.decode('utf-8'))
-                            symbol_quotes[quote_json['Symbol']] = quote_json
-                            if len(symbol_quotes) == len(tickers):
-                                break
-
-                else:
-                    # This will raise an error for bad status codes (4xx or 5xx)
-                    quote_response.raise_for_status()
+            quote_response = requests.get(trade_station_quote, headers=headers, timeout=10)
+            if quote_response.status_code == HTTPStatus.OK:
+                quote_response_json = quote_response.json()
+                symbol_errors = quote_response_json.get('Errors', [])
+                if symbol_errors:
+                    log(text=f"TradeStation quote errors: {json.dumps(symbol_errors)}", severity=LOG_SEVERITY_WARNING)
+                for quote_json in quote_response_json.get('Quotes', []):
+                    symbol_quotes[quote_json['Symbol']] = quote_json
+            else:
+                try:
+                    detail = quote_response.json()
+                except ValueError:
+                    detail = quote_response.text
+                log(text=f"TradeStation API returned {quote_response.status_code} for url: {trade_station_quote}, "
+                         f"response: {quote_response.text}", severity=LOG_SEVERITY_ERROR)
+                raise TradeStationApiError(quote_response.status_code, trade_station_quote, detail)
             # Quotes have been fetched successfully, no need to try with other accounts.
             break
         else:
@@ -181,7 +196,7 @@ def get_tradestation_realtime_quotes(tickers: list[str] = ["VOO", "QQQ"]):
                 os.environ.get('TRADE_STATION_OAUTH_SECRET_NAME'))
             raise ValueError(error_text)
 
-    return symbol_quotes
+    return symbol_quotes, symbol_errors
 
 
 if __name__ == "__main__":
