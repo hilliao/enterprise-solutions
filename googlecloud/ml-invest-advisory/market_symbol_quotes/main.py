@@ -1,8 +1,10 @@
+import json
 import os
+import traceback
 
 import functions_framework
 
-from tradestation import get_tradestation_realtime_quotes
+from tradestation import get_tradestation_realtime_quotes, log, TradeStationApiError, LOG_SEVERITY_ERROR
 from sinotrade import get_sinotrade_snapshots
 import requests
 
@@ -63,9 +65,14 @@ def get_us_stock_quotes(http_request):
             return {'error': 'No valid stock symbols provided.'}, 400
 
         try:
-            stock_symbol_quotes = get_tradestation_realtime_quotes(tickers=stock_symbols)
-            return stock_symbol_quotes, 200
+            stock_symbol_quotes, symbol_errors = get_tradestation_realtime_quotes(tickers=stock_symbols)
+            # Keep the response body as {symbol: quote}; symbols TradeStation could not quote go in a header.
+            headers = {'X-TradeStation-Errors': json.dumps(symbol_errors)} if symbol_errors else {}
+            return stock_symbol_quotes, 200, headers
+        except TradeStationApiError as e:
+            return {'error': str(e), 'detail': e.detail}, 500
         except Exception as e:
+            log(text=f"get_us_stock_quotes failed: {traceback.format_exc()}", severity=LOG_SEVERITY_ERROR)
             return {'error': str(e)}, 500
     else:
         return {'error': 'Invalid request method.'}, 405
