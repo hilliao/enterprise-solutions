@@ -71,6 +71,15 @@ generic/template version).
   (default 60); while idle, prints a live single-line countdown to the next
   execution-window start.
 
+If the command fails, the loop prints an `ERROR` to stderr and exits with the
+command's exit code, instead of repeating the failing step every
+`--active-sleep` seconds. `generate-llm-prompt.py` retries a failed stock
+quotes Cloud Run request with exponential backoff (1, 2, 4, 8, 16 seconds),
+printing each failure's status code and response body (e.g. the 500 with
+TradeStation's 403 in `detail`) to stderr, then exits with code 69. The
+flash-insights step stays optional (`|| true` in `PORTFOLIO_SCRIPT`), so its
+failures don't abort the loop.
+
 Before running, edit the `CONFIGURATION` section for
 `GOOGLE_APPLICATION_CREDENTIALS`, the portfolio script paths, `PORTFOLIO_DIR`,
 and the GCS bucket/`gcloud` configuration.

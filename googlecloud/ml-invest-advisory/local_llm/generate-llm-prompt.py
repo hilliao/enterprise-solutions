@@ -30,6 +30,7 @@ import argparse
 import json
 import os
 import sys
+import time
 
 import google.auth.transport.requests
 import requests
@@ -37,6 +38,30 @@ from google.oauth2 import id_token
 
 DEFAULT_OUTPUT_PROMPT_FILE = "prompt.txt"
 PORTFOLIO_DATA_PLACEHOLDER = "{{PORTFOLIO_HOLDING_DATA_JSON}}"
+# Seconds to wait before each retry of a failed Cloud Run request: exponential backoff up to 16 seconds,
+# then give up. 6 attempts over ~31 seconds of waiting.
+CLOUD_RUN_RETRY_DELAYS = [1, 2, 4, 8, 16]
+CLOUD_RUN_REQUEST_TIMEOUT = 60
+# Exit code when the stock quotes endpoint still fails after all retries (sysexits EX_UNAVAILABLE).
+# executors/gen-investment-report-realtime-nonstop.sh reports this exit code as a quotes endpoint failure.
+EXIT_CODE_QUOTES_UNAVAILABLE = 69
+
+
+def describe_request_failure(e: requests.exceptions.RequestException) -> str:
+    """
+    Describes a failed request for the terminal: the error and, if the server responded, its status code and body.
+
+    The stock quotes Cloud Run function returns TradeStation errors in the body, e.g. a 500 with
+    {"error": "TradeStation API returned 403 for url: ...", "detail": "<html>...403 Forbidden...</html>"},
+    so the body is what explains the failure. JSON bodies are pretty-printed.
+    """
+    if e.response is None:
+        return str(e)
+    try:
+        body = json.dumps(e.response.json(), indent=2)
+    except ValueError:
+        body = e.response.text
+    return f"{e}\nResponse status: {e.response.status_code}\nResponse body:\n{body}"
 
 
 
@@ -58,8 +83,10 @@ def invoke_cloud_run(base_url: str, url: str) -> str:
     Returns:
         str: The text content of the response if successful.
 
+    A failed request is retried after each delay in CLOUD_RUN_RETRY_DELAYS (1, 2, 4, 8, 16 seconds).
+
     Raises:
-        Exception: If the HTTP request fails.
+        Exception: If the HTTP request still fails after the last retry.
     """
     try:
         # The 'audience' for an ID token is the URL of the service being called.
@@ -79,13 +106,22 @@ def invoke_cloud_run(base_url: str, url: str) -> str:
 
         print(f"Successfully obtained ID token. Making request at {url}")
 
-        # Make the authenticated GET request
-        response = requests.get(url, headers=headers)
-
-        # Raise an exception for bad status codes (4xx or 5xx)
-        response.raise_for_status()
-
-        return response.text
+        # Make the authenticated GET request, retrying failures with exponential backoff (CLOUD_RUN_RETRY_DELAYS)
+        # so a failing endpoint isn't called in a tight loop.
+        for attempt, retry_delay in enumerate(CLOUD_RUN_RETRY_DELAYS + [None], start=1):
+            try:
+                response = requests.get(url, headers=headers, timeout=CLOUD_RUN_REQUEST_TIMEOUT)
+                # Raise an exception for bad status codes (4xx or 5xx)
+                response.raise_for_status()
+                return response.text
+            except requests.exceptions.RequestException as e:
+                next_step = f"retrying in {retry_delay}s" if retry_delay is not None else \
+                    f"giving up after {len(CLOUD_RUN_RETRY_DELAYS)} retries"
+                print(f"ERROR: Cloud Run request attempt {attempt} failed, {next_step}: {describe_request_failure(e)}",
+                      file=sys.stderr, flush=True)
+                if retry_delay is None:
+                    raise
+                time.sleep(retry_delay)
 
     except Exception as e:
         print(f"An error occurred: {e}", file=sys.stderr)
@@ -361,13 +397,14 @@ def get_holding_prices(portfolio_holdings: dict) -> dict:
             print(f"--- Parsed JSON Response (top {num_lines_to_print} lines) ---")
             print('\n'.join(json.dumps(holding_prices, indent=2).splitlines()[:num_lines_to_print]))
         except json.JSONDecodeError:
-            print("\n--- Response is not valid JSON ---")
+            print(f"\nERROR: Cloud Run response is not valid JSON:\n{cloud_run_response}", file=sys.stderr)
             sys.exit(1)
 
 
     except Exception as e:
-        print(f"\nFailed to invoke Cloud Run endpoint. Please check your URL and permissions.")
-        sys.exit(1)
+        print(f"\nERROR: Failed to invoke Cloud Run endpoint: {e}. Please check your URL and permissions.",
+              file=sys.stderr)
+        sys.exit(EXIT_CODE_QUOTES_UNAVAILABLE)
     return holding_prices
 
 

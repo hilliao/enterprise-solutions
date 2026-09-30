@@ -23,6 +23,9 @@ export CMD="$PORTFOLIO_SCRIPT && gcloud storage cp $PORTFOLIO_DIR/*.html $GCS_BU
 # Timing configurations (defaults)
 ACTIVE_SLEEP=30       # seconds between consecutive runs during the window
 IDLE_SLEEP=60         # seconds to wait when outside the window
+# Exit code of generate-llm-prompt.py (EXIT_CODE_QUOTES_UNAVAILABLE) when the stock quotes endpoint still fails
+# after its retries; reported with its own error message before aborting.
+QUOTES_UNAVAILABLE_EXIT_CODE=69
 
 # ==============================================================================
 # LOGIC
@@ -74,6 +77,10 @@ execution window: Mon-Fri, 08:00-18:00 America/New_York, excluding configured
 holidays. Note this window is NOT the market's own hours (09:30-16:00 ET) --
 it starts ~1.5h before the market open and keeps running a few hours after
 the close, to also catch pre-market and after-hours activity.
+
+If the command fails, an ERROR is printed to stderr and the script exits with
+the command's exit code (69 if the stock quotes Cloud Run endpoint still fails
+after retries with exponential backoff up to 16 seconds).
 
 Options:
   --immediate          Run the command once immediately, ignoring the market
@@ -142,10 +149,17 @@ while :; do
       printf '\n'
       WAS_IDLE=false
     fi
-    # Execute the command
-    if ! eval "$CMD"; then
-      echo "Warning: Command failed at $(date)" >&2
-      if [ "$IMMEDIATE" = "true" ]; then exit 1; fi
+    # Execute the command and abort on any failure, so a failing step isn't repeated every ACTIVE_SLEEP seconds.
+    # generate-llm-prompt.py already retries the stock quotes Cloud Run endpoint with exponential backoff
+    # (1, 2, 4, 8, 16s) before exiting with QUOTES_UNAVAILABLE_EXIT_CODE.
+    cmd_exit_code=0
+    eval "$CMD" || cmd_exit_code=$?
+    if [ "$cmd_exit_code" -eq "$QUOTES_UNAVAILABLE_EXIT_CODE" ]; then
+      echo "ERROR: Stock quotes Cloud Run endpoint still failing after retries with exponential backoff up to 16s; aborting at $(date)" >&2
+      exit "$cmd_exit_code"
+    elif [ "$cmd_exit_code" -ne 0 ]; then
+      echo "ERROR: Command failed with exit code $cmd_exit_code; aborting at $(date)" >&2
+      exit "$cmd_exit_code"
     fi
     if [ "$IMMEDIATE" = "true" ]; then exit 0; fi
     sleep "$ACTIVE_SLEEP"
