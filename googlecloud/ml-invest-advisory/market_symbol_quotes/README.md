@@ -40,8 +40,10 @@ Only the first account is used to request quotes.
 ```
 
 The refresh token must have been granted the `MarketData` scope. Access tokens are refreshed from it via
-`https://signin.tradestation.com/oauth/token` and cached in memory per instance for 19 minutes
-(TradeStation access tokens expire after 20 minutes).
+`https://signin.tradestation.com/oauth/token` and cached in memory per instance until 2 minutes before the
+`expires_in` in the token response (20 minutes). If the quotes request returns `401` or `403`, tokens older than
+5 minutes are refreshed and the request is retried once. See the comment at the top of
+[tradestation.py](tradestation.py) for details.
 
 **SinoTrade** (`sinotrade-api-key`): YAML keyed by the Taiwan national ID in `$TW_NATIONAL_ID`.
 
@@ -138,8 +140,10 @@ curl -sS "http://localhost:8080/?tickers=VOO,QQQ"
 
 ## Troubleshooting
 
-**TradeStation `403 Forbidden`**: check the `detail` field or the `ERROR` log for TradeStation's message, then
-reproduce outside Cloud Run with the same refresh token:
+**TradeStation `403 Forbidden`**: check the `detail` field or the `ERROR` log for TradeStation's message. The log
+also shows `access token issued Ns ago`; a token only seconds or minutes old, especially right after a
+`retrying with a refreshed access token` warning, means the token isn't the cause. Then reproduce outside Cloud Run
+with the same refresh token:
 
 ```sh
 CREDS=$(gcloud secrets versions access latest --secret="$TRADE_STATION_OAUTH_SECRET_NAME" --project="$PROJECT_ID" \
