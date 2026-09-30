@@ -226,7 +226,8 @@ def calculate_portfolio_1day_diff_and_weight(portfolio_data: dict = None, cash_a
                 'Previous Value': round(previous_value, 2),
                 'shares': share_count,
                 'single share change in percentage': str(
-                    round(float(attributes.get('NetChangePct', 0)) * 100, 2)) + '%',
+                    f"{float(attributes.get('NetChangePct', 0)):.2f}%",
+                ),
             }
 
             # Add to the running totals
