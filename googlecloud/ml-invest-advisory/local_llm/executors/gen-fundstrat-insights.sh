@@ -61,6 +61,9 @@ FLASH_INSIGHTS_LINES=120
 CLOSED_CHECK_SLEEP=60
 export OLLAMA_HOST="${OLLAMA_HOST:-8400f:11435}"
 OLLAMA_MODEL="qwen2.5:7b"
+OLLAMA_MAX_ATTEMPTS=3
+# Text rendered by fundstratdirect.com instead of member content when the session is not authenticated.
+PAYWALL_MARKER="You need a Fundstrat Direct subscription"
 
 if [[ ! -d "$PROFILE_DIR" ]]; then
   echo "ERROR: Profile directory '$PROFILE_DIR' does not exist." >&2
@@ -76,7 +79,29 @@ mkdir -p "$(dirname "$FLASH_INSIGHTS_FILE")"
 mkdir -p "$(dirname "$TECHNICAL_STRATEGY_FILE")"
 mkdir -p "$(dirname "$CRYPTO_COMMENT_FILE")"
 mkdir -p "$PORTFOLIO_DIR"
-trap 'rm -f "$RAW_FLASH_INSIGHT_HTML" "$RAW_MEMBERS_HTML" "$RAW_TECH_STRATEGY_HTML" "$RAW_CRYPTO_COMMENT_HTML"' EXIT INT TERM
+trap 'rm -f "$RAW_FLASH_INSIGHT_HTML" "$RAW_MEMBERS_HTML" "$RAW_TECH_STRATEGY_HTML" "$RAW_CRYPTO_COMMENT_HTML"' EXIT
+trap 'echo "ERROR: interrupted." >&2; exit 130' INT
+trap 'echo "ERROR: terminated." >&2; exit 143' TERM
+
+# Fails if the DOM dump is the paywall/sign-in page, i.e. the Chrome profile session has expired.
+check_session() {
+  local html_file="$1" url="$2"
+  if grep -q "$PAYWALL_MARKER" "$html_file"; then
+    echo "ERROR: $url returned the subscription paywall — Chrome profile session expired." >&2
+    echo "  Re-authenticate: run the command below, log in, confirm the members page loads, then close Chrome completely:" >&2
+    echo "    google-chrome --user-data-dir=\"$PROFILE_DIR\" \"$MEMBERS_URL\"" >&2
+    return 1
+  fi
+}
+
+# Fails if the given output file has no lines.
+require_nonempty() {
+  local file="$1"
+  if [[ ! -s "$file" ]]; then
+    echo "ERROR: wrote 0 lines to $file." >&2
+    return 1
+  fi
+}
 
 # Check if NYSE/NASDAQ market is open (Mon-Fri 09:30 - 16:00 US/Eastern).
 is_market_open() {
@@ -114,6 +139,12 @@ ensure_members_html() {
       echo "ERROR: DOM dump for $MEMBERS_URL is empty — check Chrome profile session/login state." >&2
       return 1
     fi
+
+    if ! check_session "$RAW_MEMBERS_HTML" "$MEMBERS_URL"; then
+      # Clear the cache so a later call does not reuse the paywall page.
+      : > "$RAW_MEMBERS_HTML"
+      return 1
+    fi
   fi
 }
 
@@ -123,70 +154,78 @@ run_flash_insights_once() {
   echo "[$now_str] Fetching Flash Insights..."
 
   # Step 1: Launch headless Chrome against the authenticated profile for FLASH_INSIGHTS_URL.
-  if google-chrome \
+  if ! google-chrome \
     --headless=new \
     --disable-gpu \
     --user-data-dir="$PROFILE_DIR" \
     --virtual-time-budget=15000 \
     --dump-dom \
     "$FLASH_INSIGHTS_URL" 2>/dev/null > "$RAW_FLASH_INSIGHT_HTML"; then
-
-    if [[ ! -s "$RAW_FLASH_INSIGHT_HTML" ]]; then
-      echo "ERROR: DOM dump for Flash Insights is empty — check Chrome profile session/login state." >&2
-      return 1
-    fi
-
-    # Step 2: Convert raw HTML to text and extract sections.
-    html2text "$RAW_FLASH_INSIGHT_HTML" | \
-      awk '/^[⚡âš¡]* FlashInsights$/{f=1} f&&/click="shareOpen/{f=0; next} f{print} f&&/\[FlashInsights\]/{f=0}' \
-      > "$FLASH_INSIGHTS_FILE"
-
-    if ! grep -q "[⚡âš¡]* FlashInsights" "$FLASH_INSIGHTS_FILE"; then
-      echo "WARNING: '⚡ FlashInsights' not found in $FLASH_INSIGHTS_FILE — session may have expired." >&2
-    fi
-
-    echo "OK: wrote $(wc -l < "$FLASH_INSIGHTS_FILE") lines to $FLASH_INSIGHTS_FILE"
-
-    # Step 3: Generate summary with Ollama and output to markdown file (retry immediately on failure).
-    echo "Generating summary with Ollama..."
-    local ollama_success=false
-    local attempt=1
-    local prompt_text="Summarize the following article. highlight key macro and technical insights. prioritize posts with the most recent date and time. the audience is portfolio manager and certified financial planner. Execute risk assessments on the mentioned stocks, ETFs. Article: "
-
-    while [[ "$ollama_success" == "false" ]]; do
-      if [[ "$attempt" -gt 1 ]]; then
-        echo "Retrying Ollama generation immediately (attempt $attempt)..."
-      fi
-
-      if ollama run --nowordwrap "$OLLAMA_MODEL" \
-        "$prompt_text" < <(head -n "$FLASH_INSIGHTS_LINES" "$FLASH_INSIGHTS_FILE") \
-        > "$FLASH_INSIGHTS_OVERVIEW_MD" && [[ -s "$FLASH_INSIGHTS_OVERVIEW_MD" ]]; then
-        ollama_success=true
-        echo "OK: wrote overview markdown to $FLASH_INSIGHTS_OVERVIEW_MD"
-      else
-        echo "ERROR: Ollama summary generation failed. Retrying immediately..." >&2
-        attempt=$((attempt + 1))
-        sleep 2
-      fi
-    done
-
-    pandoc "$FLASH_INSIGHTS_OVERVIEW_MD" \
-      -f markdown \
-      -t plain \
-      -o "$FLASH_INSIGHTS_OVERVIEW" \
-      --wrap=none
-    echo "OK: wrote overview text to $FLASH_INSIGHTS_OVERVIEW"
-
-    # Step 4: Mirror the same overview content to a dated file under the portfolio directory.
-    NEWS_DATED_FILE="$PORTFOLIO_DIR/news_$(date +%Y-%m-%d).txt"
-    cp "$FLASH_INSIGHTS_OVERVIEW" "$NEWS_DATED_FILE"
-    echo "OK: wrote overview text to $NEWS_DATED_FILE"
-    scp -P 23 "$NEWS_DATED_FILE" hil@hil-fr-dc.freeddns.org:"$PORTFOLIO_DIR/"
-    echo "OK: wrote overview text to $NEWS_DATED_FILE on hil@hil-fr-dc.freeddns.org"
-  else
-    echo "ERROR: google-chrome execution failed." >&2
+    echo "ERROR: google-chrome execution failed for $FLASH_INSIGHTS_URL." >&2
     return 1
   fi
+
+  if [[ ! -s "$RAW_FLASH_INSIGHT_HTML" ]]; then
+    echo "ERROR: DOM dump for Flash Insights is empty — check Chrome profile session/login state." >&2
+    return 1
+  fi
+
+  check_session "$RAW_FLASH_INSIGHT_HTML" "$FLASH_INSIGHTS_URL" || return 1
+
+  # Step 2: Convert raw HTML to text and extract sections.
+  html2text "$RAW_FLASH_INSIGHT_HTML" | \
+    awk '/^[⚡âš¡]* FlashInsights$/{f=1} f&&/click="shareOpen/{f=0; next} f{print} f&&/\[FlashInsights\]/{f=0}' \
+    > "$FLASH_INSIGHTS_FILE"
+
+  if ! grep -q "[⚡âš¡]* FlashInsights" "$FLASH_INSIGHTS_FILE"; then
+    echo "ERROR: '⚡ FlashInsights' not found in $FLASH_INSIGHTS_FILE — session may have expired or page layout changed." >&2
+    return 1
+  fi
+  require_nonempty "$FLASH_INSIGHTS_FILE" || return 1
+
+  echo "OK: wrote $(wc -l < "$FLASH_INSIGHTS_FILE") lines to $FLASH_INSIGHTS_FILE"
+
+  # Step 3: Generate summary with Ollama and output to markdown file (retry immediately on failure).
+  echo "Generating summary with Ollama..."
+  local ollama_success=false
+  local attempt=1
+  local prompt_text="Summarize the following article. highlight key macro and technical insights. prioritize posts with the most recent date and time. the audience is portfolio manager and certified financial planner. Execute risk assessments on the mentioned stocks, ETFs. Article: "
+
+  while [[ "$ollama_success" == "false" ]]; do
+    if [[ "$attempt" -gt "$OLLAMA_MAX_ATTEMPTS" ]]; then
+      echo "ERROR: Ollama summary generation failed after $OLLAMA_MAX_ATTEMPTS attempts." >&2
+      return 1
+    fi
+    if [[ "$attempt" -gt 1 ]]; then
+      echo "Retrying Ollama generation (attempt $attempt of $OLLAMA_MAX_ATTEMPTS)..."
+    fi
+
+    if ollama run --nowordwrap "$OLLAMA_MODEL" \
+      "$prompt_text" < <(head -n "$FLASH_INSIGHTS_LINES" "$FLASH_INSIGHTS_FILE") \
+      > "$FLASH_INSIGHTS_OVERVIEW_MD" && [[ -s "$FLASH_INSIGHTS_OVERVIEW_MD" ]]; then
+      ollama_success=true
+      echo "OK: wrote overview markdown to $FLASH_INSIGHTS_OVERVIEW_MD"
+    else
+      echo "ERROR: Ollama summary generation failed." >&2
+      attempt=$((attempt + 1))
+      sleep 2
+    fi
+  done
+
+  pandoc "$FLASH_INSIGHTS_OVERVIEW_MD" \
+    -f markdown \
+    -t plain \
+    -o "$FLASH_INSIGHTS_OVERVIEW" \
+    --wrap=none
+  require_nonempty "$FLASH_INSIGHTS_OVERVIEW" || return 1
+  echo "OK: wrote overview text to $FLASH_INSIGHTS_OVERVIEW"
+
+  # Step 4: Mirror the same overview content to a dated file under the portfolio directory.
+  NEWS_DATED_FILE="$PORTFOLIO_DIR/news_$(date +%Y-%m-%d).txt"
+  cp "$FLASH_INSIGHTS_OVERVIEW" "$NEWS_DATED_FILE"
+  echo "OK: wrote overview text to $NEWS_DATED_FILE"
+  scp -P 23 "$NEWS_DATED_FILE" hil@hil-fr-dc.freeddns.org:"$PORTFOLIO_DIR/"
+  echo "OK: wrote overview text to $NEWS_DATED_FILE on hil@hil-fr-dc.freeddns.org"
 }
 
 # Performs a single fetch for the latest Technical Strategy article.
@@ -194,7 +233,7 @@ fetch_technical_strategy_once() {
   local now_str="$(TZ="America/New_York" date '+%Y-%m-%d %H:%M:%S %Z')"
   echo "[$now_str] Fetching Technical Strategy..."
 
-  ensure_members_html
+  ensure_members_html || return 1
 
   local tech_strategy_url
   tech_strategy_url="$(grep -Eo 'https://fundstratdirect\.com/technical-strategy/daily-technical-strategy/[^"'\''<>[:space:]]+' "$RAW_MEMBERS_HTML" | head -n 1 || true)"
@@ -221,9 +260,12 @@ fetch_technical_strategy_once() {
     return 1
   fi
 
+  check_session "$RAW_TECH_STRATEGY_HTML" "$tech_strategy_url" || return 1
+
   html2text "$RAW_TECH_STRATEGY_HTML" | \
     awk '/Key Takeaways/{flag=1} flag{print} /______________________________/ && flag{exit}' \
     > "$TECHNICAL_STRATEGY_FILE"
+  require_nonempty "$TECHNICAL_STRATEGY_FILE" || return 1
   echo "OK: wrote $(wc -l < "$TECHNICAL_STRATEGY_FILE") lines to $TECHNICAL_STRATEGY_FILE"
 }
 
@@ -232,7 +274,7 @@ fetch_crypto_comment_once() {
   local now_str="$(TZ="America/New_York" date '+%Y-%m-%d %H:%M:%S %Z')"
   echo "[$now_str] Fetching Crypto Comment..."
 
-  ensure_members_html
+  ensure_members_html || return 1
 
   local crypto_comment_url
   crypto_comment_url="$(grep -Eo 'https://fundstratdirect\.com/crypto-research/crypto-comments/[^"'\''<>[:space:]]+' "$RAW_MEMBERS_HTML" | head -n 1 || true)"
@@ -259,7 +301,10 @@ fetch_crypto_comment_once() {
     return 1
   fi
 
+  check_session "$RAW_CRYPTO_COMMENT_HTML" "$crypto_comment_url" || return 1
+
   html2text "$RAW_CRYPTO_COMMENT_HTML" > "$CRYPTO_COMMENT_FILE"
+  require_nonempty "$CRYPTO_COMMENT_FILE" || return 1
   echo "OK: wrote $(wc -l < "$CRYPTO_COMMENT_FILE") lines to $CRYPTO_COMMENT_FILE"
 }
 
@@ -348,7 +393,7 @@ case "$MODE" in
           printf "\n"
           closed_status_printed=false
         fi
-        run_flash_insights_once || true
+        run_flash_insights_once
         sleep_with_countdown "$INTERVAL_MINUTES"
       else
         now_str="$(TZ="America/New_York" date '+%Y-%m-%d %H:%M:%S %Z')"
