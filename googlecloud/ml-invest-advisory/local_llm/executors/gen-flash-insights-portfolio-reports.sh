@@ -1,4 +1,54 @@
 #!/bin/bash
+#
+# Purpose:
+#   Generates a breaking-news ("flash insights") impact report per portfolio with
+#   a local Ollama LLM. For every *.json portfolio file in PORTFOLIO_DIR:
+#     1) Builds an LLM prompt from LLM_PROMPT_TEMPLATE via generate-llm-prompt.py,
+#        which fetches current quotes from STOCK_QUOTES_CLOUD_RUN_URL.
+#     2) Replaces {{FLASH_INSIGHTS}} in the prompt with the contents of NEWS_FILE.
+#     3) Runs the prompt through `ollama run gemma3:12b` and writes
+#        $PORTFOLIO_DIR/$USE_CASE-<portfolio>.md (report + input prompt), plus
+#        $PORTFOLIO_DIR/$USE_CASE-<portfolio>.html if pandoc is installed.
+#
+#   NEWS_FILE is produced by `gen-fundstrat-insights.sh --flash-insights` (or
+#   --poll), which writes $PORTFOLIO_DIR/news_YYYY-MM-DD.txt, or by
+#   gen-news-aggregate.sh. The script exits with status 1 if NEWS_FILE is missing.
+#
+# Requirements:
+#   - python with generate-llm-prompt.py's dependencies installed
+#   - GOOGLE_APPLICATION_CREDENTIALS set (required by generate-llm-prompt.py)
+#   - `ollama` CLI with the gemma3:12b model available
+#   - `pandoc` (optional; HTML reports are skipped without it)
+#
+# Environment variables (all optional; defaults shown):
+#   PORTFOLIO_DIR              ~/git/enterprise-solutions/googlecloud/ml-invest-advisory/local_llm/test-portfolios
+#   LLM_PROMPT_TEMPLATE        .../local_llm/prompt_templates/flash-insights-report-template.txt
+#   USE_CASE                   flash-insights (prefix of the output file names)
+#   NEWS_FILE                  $PORTFOLIO_DIR/news_YYYY-MM-DD.txt (today's date)
+#   STOCK_QUOTES_CLOUD_RUN_URL https://us-central1-hil-financial-services.cloudfunctions.net/get_us_stock_quotes
+#   DEBUG                      set to any value to trace execution (set -x)
+#
+# Usage:
+#   ./gen-fundstrat-insights.sh --flash-insights   # produce today's news file first
+#   ./gen-flash-insights-portfolio-reports.sh
+#   NEWS_FILE=~/Documents/flash-insights-overview.txt ./gen-flash-insights-portfolio-reports.sh
+#
+# Exit status:
+#   1 if NEWS_FILE is missing or unreadable; otherwise non-zero on the first
+#   failing step (69 means generate-llm-prompt.py could not reach the stock
+#   quotes endpoint after its retries).
+#
+# Callers:
+#   gen-investment-report-realtime-nonstop.sh (and its machine-specific copy
+#   ryzen7-7700x_gen-investment-report-realtime.sh) runs both report scripts in
+#   PORTFOLIO_SCRIPT on every loop iteration during the 08:00-18:00 ET window,
+#   then uploads $PORTFOLIO_DIR/*.html to GCS:
+#
+#     gen-daily-portfolio-reports.sh && (gen-flash-insights-portfolio-reports.sh || true)
+#
+#   The daily report is required (a failure aborts the loop); the flash-insights
+#   report is optional (its failure, e.g. a missing news file, is ignored).
+
 set -e # exit the script when execution hits any error
 set -o pipefail # ensure exit code of pipe is the rightmost non-zero exit code
 [[ -n "${DEBUG:-}" ]] && set -x # print the executing lines if DEBUG is set

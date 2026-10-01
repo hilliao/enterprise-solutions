@@ -1,4 +1,49 @@
 #!/bin/bash
+#
+# Purpose:
+#   Generates the daily portfolio analysis report with a local Ollama LLM. For
+#   every *.json portfolio file in PORTFOLIO_DIR:
+#     1) Builds an LLM prompt from LLM_PROMPT_TEMPLATE via generate-llm-prompt.py,
+#        which fetches current quotes from STOCK_QUOTES_CLOUD_RUN_URL.
+#     2) Replaces {{MARKET_COMMENTARY}} in the prompt with MARKET_COMMENTARY_FILE
+#        (an empty string if that file is missing).
+#     3) Runs the prompt through `ollama run gemma3:12b` and writes
+#        $PORTFOLIO_DIR/$USE_CASE-<portfolio>.md (report + input prompt), plus
+#        $PORTFOLIO_DIR/$USE_CASE-<portfolio>.html if pandoc is installed.
+#
+# Requirements:
+#   - python with generate-llm-prompt.py's dependencies installed
+#   - GOOGLE_APPLICATION_CREDENTIALS set (required by generate-llm-prompt.py)
+#   - `ollama` CLI with the gemma3:12b model available
+#   - `pandoc` (optional; HTML reports are skipped without it)
+#
+# Environment variables (all optional; defaults shown):
+#   PORTFOLIO_DIR              ~/git/enterprise-solutions/googlecloud/ml-invest-advisory/local_llm/test-portfolios
+#   LLM_PROMPT_TEMPLATE        .../local_llm/prompt_templates/daily_report_prompt_template.txt
+#   USE_CASE                   daily-report (prefix of the output file names)
+#   MARKET_COMMENTARY_FILE     $PORTFOLIO_DIR/market-commentary_YYYY-MM-DD.txt (today's date)
+#   STOCK_QUOTES_CLOUD_RUN_URL https://us-central1-hil-financial-services.cloudfunctions.net/get_us_stock_quotes
+#   DEBUG                      set to any value to trace execution (set -x)
+#
+# Usage:
+#   ./gen-daily-portfolio-reports.sh
+#   PORTFOLIO_DIR=~/workspace/portfolios ./gen-daily-portfolio-reports.sh
+#
+# Exit status:
+#   Non-zero on the first failing step. 69 means generate-llm-prompt.py could not
+#   reach the stock quotes endpoint after its retries.
+#
+# Callers:
+#   gen-investment-report-realtime-nonstop.sh (and its machine-specific copy
+#   ryzen7-7700x_gen-investment-report-realtime.sh) runs both report scripts in
+#   PORTFOLIO_SCRIPT on every loop iteration during the 08:00-18:00 ET window,
+#   then uploads $PORTFOLIO_DIR/*.html to GCS:
+#
+#     gen-daily-portfolio-reports.sh && (gen-flash-insights-portfolio-reports.sh || true)
+#
+#   The daily report is required (a failure aborts the loop); the flash-insights
+#   report is optional (its failure, e.g. a missing news file, is ignored).
+
 set -e # exit the script when execution hits any error
 set -o pipefail # ensure exit code of pipe is the rightmost non-zero exit code
 [[ -n "${DEBUG:-}" ]] && set -x # print the executing lines if DEBUG is set

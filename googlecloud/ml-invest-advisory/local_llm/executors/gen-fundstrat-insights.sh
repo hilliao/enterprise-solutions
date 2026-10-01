@@ -64,6 +64,13 @@ OLLAMA_MODEL="qwen2.5:7b"
 OLLAMA_MAX_ATTEMPTS=3
 # Text rendered by fundstratdirect.com instead of member content when the session is not authenticated.
 PAYWALL_MARKER="You need a Fundstrat Direct subscription"
+# NYSE/NASDAQ full-day market holidays; polling is skipped on these dates.
+# Keep in sync with HOLIDAYS in gen-investment-report-realtime-nonstop.sh.
+HOLIDAYS=(
+  "2026-01-01" "2026-01-19" "2026-02-16" "2026-04-03" "2026-05-25" "2026-06-19" "2026-07-03" "2026-09-07" "2026-11-26" "2026-12-25"
+  "2027-01-01" "2027-01-18" "2027-02-15" "2027-03-26" "2027-05-31" "2027-06-18" "2027-07-05" "2027-09-06" "2027-11-25" "2027-12-24"
+  "2028-01-17" "2028-02-21" "2028-04-14" "2028-05-29" "2028-06-19" "2028-07-04" "2028-09-04" "2028-11-23" "2028-12-25"
+)
 
 if [[ ! -d "$PROFILE_DIR" ]]; then
   echo "ERROR: Profile directory '$PROFILE_DIR' does not exist." >&2
@@ -103,9 +110,23 @@ require_nonempty() {
   fi
 }
 
-# Check if NYSE/NASDAQ market is open (Mon-Fri 09:30 - 16:00 US/Eastern).
+# Returns 0 if the given YYYY-MM-DD date is in HOLIDAYS.
+is_market_holiday() {
+  local candidate_date="$1" holiday
+  for holiday in "${HOLIDAYS[@]}"; do
+    if [[ "$candidate_date" == "$holiday" ]]; then
+      return 0
+    fi
+  done
+  return 1
+}
+
+# Check if NYSE/NASDAQ market is open (Mon-Fri 09:30 - 16:00 US/Eastern, excluding HOLIDAYS).
 is_market_open() {
   local day_of_week hour min total_min
+  if is_market_holiday "$(TZ="America/New_York" date +%Y-%m-%d)"; then
+    return 1
+  fi
   day_of_week="$(TZ="America/New_York" date +%u)" # 1=Mon, ..., 7=Sun
   hour="$(TZ="America/New_York" date +%-H)"        # 0..23 (no leading zero)
   min="$(TZ="America/New_York" date +%-M)"         # 0..59 (no leading zero)
@@ -118,6 +139,22 @@ is_market_open() {
     fi
   fi
   return 1
+}
+
+# Prints the epoch seconds of the next market open (09:30 US/Eastern on the next weekday not in HOLIDAYS).
+next_market_open_epoch() {
+  local candidate_date day_of_week open_epoch now_epoch
+  candidate_date="$(TZ="America/New_York" date +%Y-%m-%d)"
+  now_epoch="$(date +%s)"
+  while true; do
+    day_of_week="$(TZ="America/New_York" date -d "$candidate_date" +%u)"
+    open_epoch="$(TZ="America/New_York" date -d "$candidate_date 09:30:00" +%s)"
+    if [[ "$day_of_week" -le 5 && "$open_epoch" -gt "$now_epoch" ]] && ! is_market_holiday "$candidate_date"; then
+      echo "$open_epoch"
+      return 0
+    fi
+    candidate_date="$(TZ="America/New_York" date -d "$candidate_date +1 day" +%Y-%m-%d)"
+  done
 }
 
 # Helper to fetch MEMBERS_URL DOM dump if not already cached in RAW_MEMBERS_HTML
@@ -396,10 +433,21 @@ case "$MODE" in
         run_flash_insights_once
         sleep_with_countdown "$INTERVAL_MINUTES"
       else
-        now_str="$(TZ="America/New_York" date '+%Y-%m-%d %H:%M:%S %Z')"
-        printf "\r\033[K[%s] NYSE and NASDAQ markets are closed." "$now_str"
-        closed_status_printed=true
-        sleep "$CLOSED_CHECK_SLEEP"
+        # Refresh the countdown every second on the same line until the next market-open recheck.
+        next_open_epoch="$(next_market_open_epoch)"
+        elapsed=0
+        while [[ "$elapsed" -lt "$CLOSED_CHECK_SLEEP" ]]; do
+          remaining=$((next_open_epoch - $(date +%s)))
+          if [[ "$remaining" -le 0 ]]; then
+            break
+          fi
+          now_str="$(TZ="America/New_York" date '+%Y-%m-%d %H:%M:%S %Z')"
+          printf "\r\033[K[%s] NYSE and NASDAQ markets are closed. Script to resume in %dh %dm %ds." \
+            "$now_str" $((remaining / 3600)) $((remaining % 3600 / 60)) $((remaining % 60))
+          closed_status_printed=true
+          sleep 1
+          elapsed=$((elapsed + 1))
+        done
       fi
     done
     ;;
