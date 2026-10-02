@@ -51,7 +51,7 @@ GCP_SA="smart-invest@$PROJECT_ID.iam.gserviceaccount.com"
 REGION=us-central1
 
 # Taiwan quotes: SinoTrade API key is read from the "sinotrade-api-key" secret using $TW_NATIONAL_ID.
-gcloud functions deploy get_tw_stock_quotes \
+gcloud functions deploy get-tw-stock-quotes \
   --gen2 --region=$REGION \
   --runtime=python313 \
   --trigger-http \
@@ -65,7 +65,7 @@ gcloud functions deploy get_tw_stock_quotes \
   --memory=1024MiB \
 
 # US quotes: TradeStation access tokens are refreshed from the refresh token in $TRADE_STATION_OAUTH_SECRET_NAME.
-gcloud functions deploy get_us_stock_quotes \
+gcloud functions deploy get-us-stock-quotes \
   --gen2 --region=$REGION \
   --runtime=python313 \
   --trigger-http \

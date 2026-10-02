@@ -240,18 +240,18 @@ def calculate_portfolio_1day_diff_and_weight(portfolio_data: dict = None, cash_a
     total_current_value = 0.0
     total_previous_value = 0.0
 
+    failed_tickers = []
+
     # Process each ticker in the portfolio
     for ticker, attributes in portfolio_data.items():
         try:
+            for required in ('shares', 'Last', 'PreviousClose'):
+                if attributes.get(required) is None:
+                    raise ValueError(f"'{required}' attribute missing; the stock quotes response has no "
+                                     f"usable quote for this ticker")
             share_count = float(attributes.get('shares'))
-            if share_count is None:
-                raise ValueError(f"'shares' attribute missing for ticker {ticker}")
             last_price = float(attributes.get('Last'))
-            if last_price is None:
-                raise ValueError(f"'Last' attribute missing for ticker {ticker}")
             previous_close = float(attributes.get('PreviousClose'))
-            if previous_close is None:
-                raise ValueError(f"'PreviousClose' attribute missing for ticker {ticker}")
 
             current_value = share_count * last_price
             previous_value = share_count * previous_close
@@ -271,8 +271,14 @@ def calculate_portfolio_1day_diff_and_weight(portfolio_data: dict = None, cash_a
             total_previous_value += previous_value
 
         except (ValueError, TypeError) as e:
-            print(f"Skipping ticker {ticker} due to a data error: {e}", file=sys.stderr)
-            calculated[ticker] = None
+            print(f"ERROR: ticker {ticker} has a data error: {e}", file=sys.stderr)
+            failed_tickers.append(ticker)
+
+    # Weights and totals would be wrong without every holding's value
+    if failed_tickers:
+        print(f"\nERROR: Cannot calculate portfolio values; missing or invalid quotes for "
+              f"{len(failed_tickers)} tickers: {', '.join(failed_tickers)}", file=sys.stderr)
+        sys.exit(EXIT_CODE_QUOTES_UNAVAILABLE)
 
     # Add the '__SUM' key with the totals
     total_current_value += cash_amount
@@ -291,7 +297,7 @@ def calculate_portfolio_1day_diff_and_weight(portfolio_data: dict = None, cash_a
     # Calculate the weight of each holding
     for ticker, attributes in calculated.items():
         if ticker not in ['__SUM', '__CASH']:
-            attributes['weight in percentage'] = attributes['weight in percentage'] = str(
+            attributes['weight in percentage'] = str(
                 round(attributes['Current Value'] / calculated['__SUM']['Current Value'] * 100, 2)) + '%'
 
     return calculated
@@ -404,6 +410,16 @@ def get_holding_prices(portfolio_holdings: dict) -> dict:
     except Exception as e:
         print(f"\nERROR: Failed to invoke Cloud Run endpoint: {e}. Please check your URL and permissions.",
               file=sys.stderr)
+        sys.exit(EXIT_CODE_QUOTES_UNAVAILABLE)
+
+    # The service returns {"Error": ..., "Symbol": ...} instead of a quote for tickers it failed to fetch
+    ticker_errors = {ticker: quote.get('Error') for ticker, quote in holding_prices.items()
+                     if isinstance(quote, dict) and quote.get('Error')}
+    if ticker_errors:
+        print(f"\nERROR: Cloud Run service {cloud_run_base_url} returned errors instead of quotes for "
+              f"{len(ticker_errors)} of {len(tickers)} tickers:", file=sys.stderr)
+        for ticker, error in ticker_errors.items():
+            print(f"  {ticker}: Error={error}", file=sys.stderr)
         sys.exit(EXIT_CODE_QUOTES_UNAVAILABLE)
     return holding_prices
 
