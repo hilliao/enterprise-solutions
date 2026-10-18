@@ -36,12 +36,12 @@
 #      that headless Chrome will reuse on every run of this script.
 #
 # Usage:
-#   ./gen-fundstrat-insights.sh --flash-insights [LINES]  # Dump Flash Insights & generate summary once and exit.
-#                                                          # LINES: number of lines fed to Ollama (default 120)
-#   ./gen-fundstrat-insights.sh --technical-strategy    # Dump Technical Strategy article once and exit
-#   ./gen-fundstrat-insights.sh --crypto-comment       # Dump Crypto Comment article once and exit
-#   ./gen-fundstrat-insights.sh --poll [MINUTES] [LINES]  # Poll Flash Insights every N (default 20) minutes during
-#                                                          # market open hours. LINES: lines fed to Ollama (default 120)
+#   ./fetch-fundstrat.sh --flash-insights [LINES]  # Dump Flash Insights & generate summary once and exit.
+#                                                   # LINES: number of lines fed to Ollama (default 120)
+#   ./fetch-fundstrat.sh --technical-strategy    # Dump Technical Strategy article once and exit
+#   ./fetch-fundstrat.sh --crypto-comment       # Dump Crypto Comment article once and exit
+#   ./fetch-fundstrat.sh --poll [MINUTES] [LINES]  # Poll Flash Insights every N (default 20) minutes during
+#                                                   # market open hours. LINES: lines fed to Ollama (default 120)
 #
 
 set -euo pipefail
@@ -65,7 +65,7 @@ OLLAMA_MAX_ATTEMPTS=3
 # Text rendered by fundstratdirect.com instead of member content when the session is not authenticated.
 PAYWALL_MARKER="You need a Fundstrat Direct subscription"
 # NYSE/NASDAQ full-day market holidays; polling is skipped on these dates.
-# Keep in sync with HOLIDAYS in gen-investment-report-realtime-nonstop.sh.
+# Keep in sync with HOLIDAYS in run-market-hours.sh.
 HOLIDAYS=(
   "2026-01-01" "2026-01-19" "2026-02-16" "2026-04-03" "2026-05-25" "2026-06-19" "2026-07-03" "2026-09-07" "2026-11-26" "2026-12-25"
   "2027-01-01" "2027-01-18" "2027-02-15" "2027-03-26" "2027-05-31" "2027-06-18" "2027-07-05" "2027-09-06" "2027-11-25" "2027-12-24"

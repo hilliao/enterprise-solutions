@@ -9,7 +9,7 @@ Three HTTP Cloud Functions (gen2, running on Cloud Run) that return real-time st
 | `get_tw_stock_quotes` | Taiwan | [SinoTrade Shioaji](https://sinotrade.github.io/) `api.snapshots()` | [sinotrade.py](sinotrade.py) |
 
 All entry points are in [main.py](main.py). The US quotes are used by the portfolio reports in
-[local_llm](../local_llm) (`STOCK_QUOTES_CLOUD_RUN_URL`, see [generate-llm-prompt.py](../local_llm/generate-llm-prompt.py)).
+[portfolio_reports](../portfolio_reports) (`STOCK_QUOTES_CLOUD_RUN_URL`, see [build_portfolio_prompt.py](../portfolio_reports/build_portfolio_prompt.py)).
 The two US functions take the same parameters and return the same response format, so either URL can be used as
 `STOCK_QUOTES_CLOUD_RUN_URL`.
 
@@ -130,7 +130,7 @@ curl -sS -i -H "Authorization: Bearer $(gcloud auth print-identity-token)" \
 
 Differences from the TradeStation function:
 
-- Prices are JSON numbers instead of strings; [generate-llm-prompt.py](../local_llm/generate-llm-prompt.py) converts
+- Prices are JSON numbers instead of strings; [build_portfolio_prompt.py](../portfolio_reports/build_portfolio_prompt.py) converts
   both with `float()`.
 - Ticker symbols are upper-cased.
 - Symbols Alpaca returns no snapshot for (unknown symbols), or that have no last trade or previous close, are left

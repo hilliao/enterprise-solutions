@@ -13,19 +13,19 @@
 #   - `pandoc` (optional, for markdown -> plain text conversion of the summary)
 #
 # Usage:
-#   ./news-aggregate.sh                                   # Fetch & summarize ALL registered sites
-#   ./news-aggregate.sh --site wsj                        # Fetch & summarize only WSJ
-#   ./news-aggregate.sh --site cnbc                       # Fetch & summarize only CNBC
-#   ./news-aggregate.sh --site all                        # Fetch & summarize all registered sites (explicit)
-#   ./news-aggregate.sh --url <URL> --name <label>        # Fetch & summarize an arbitrary URL
-#   ./news-aggregate.sh --url <URL> --name <label> --lines 400
-#                                                          # Use first 400 lines of extracted text as the Ollama prompt input (default 200)
-#   ./news-aggregate.sh --list                            # List available site keys
-#   ./news-aggregate.sh -h|--help                         # Show help
+#   ./fetch-news.sh                                   # Fetch & summarize ALL registered sites
+#   ./fetch-news.sh --site wsj                        # Fetch & summarize only WSJ
+#   ./fetch-news.sh --site cnbc                       # Fetch & summarize only CNBC
+#   ./fetch-news.sh --site all                        # Fetch & summarize all registered sites (explicit)
+#   ./fetch-news.sh --url <URL> --name <label>        # Fetch & summarize an arbitrary URL
+#   ./fetch-news.sh --url <URL> --name <label> --lines 400
+#                                                      # Use first 400 lines of extracted text as the Ollama prompt input (default 200)
+#   ./fetch-news.sh --list                            # List available site keys
+#   ./fetch-news.sh -h|--help                         # Show help
 #
 # Examples:
-#   ./news-aggregate.sh --url "https://www.bloomberg.com/markets" --name bloomberg-markets
-#   ./news-aggregate.sh --url "https://www.bloomberg.com/news/articles/xxxx" --name bbg-article --lines 500
+#   ./fetch-news.sh --url "https://www.bloomberg.com/markets" --name bloomberg-markets
+#   ./fetch-news.sh --url "https://www.bloomberg.com/news/articles/xxxx" --name bbg-article --lines 500
 #
 
 set -euo pipefail

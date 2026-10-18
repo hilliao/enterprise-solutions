@@ -3,7 +3,7 @@ Alpaca real-time US stock quotes for the get_us_ticker_quotes Cloud Function (se
 
 A second US quotes provider next to TradeStation (tradestation.py). The quotes use the same field names as
 TradeStation's quote snapshots ("Last", "PreviousClose", "NetChangePct", ...), so the portfolio report scripts in
-local_llm can consume either function.
+portfolio_reports can consume either function.
 
 Flow:
   1. get_alpaca_client() reads the API key and secret from the Secret Manager secret $ALPACA_SECRET_NAME and caches a

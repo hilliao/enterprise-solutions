@@ -4,9 +4,9 @@ This system provides a suite of tools to generate real-time investment portfolio
 
 ## Overview
 
-The system uses specialized scripts in the `executors/` directory to perform the following core operations:
+The system uses specialized scripts in the `scripts/` directory to perform the following core operations:
 
-1.  **Fetch Real-time Quotes**: Uses `generate-llm-prompt.py` to get current market data for securities in a portfolio file via a Google Cloud Function endpoint.
+1.  **Fetch Real-time Quotes**: Uses `build_portfolio_prompt.py` to get current market data for securities in a portfolio file via a Google Cloud Function endpoint.
 2.  **Prompt Construction**: Injects real-time data and external context (like news or market commentary) into predefined templates.
 3.  **Local LLM Inference**: Pipes the generated prompt to a local LLM running on Ollama.
 4.  **Reporting**: Saves the analysis as Markdown (`.md`) and optionally converts it to HTML using `pandoc`.
@@ -45,20 +45,20 @@ Each portfolio should be a `.json` file in the `PORTFOLIO_DIR`:
 
 ## Executors
 
-The `executors/` directory contains different scripts tailored for specific reporting needs:
+The `scripts/` directory contains different scripts tailored for specific reporting needs:
 
 ### 1. Daily Portfolio Reports
-**Script**: `executors/gen-daily-portfolio-reports.sh`
+**Script**: `scripts/report-daily.sh`
 
 Generates a comprehensive daily analysis. It searches for all `.json` portfolios in `PORTFOLIO_DIR`, incorporates market commentary from `MARKET_COMMENTARY_FILE` (if provided), and saves both `.md` and `.html` reports.
 
 ### 2. Flash Insights reports
-**Script**: `executors/gen-flash-insights-portfolio-reports.sh`
+**Script**: `scripts/report-news-impact.sh`
 
 Designed for rapid analysis of breaking news. It uses a specific "flash insights" template and injects content from `NEWS_FILE` to analyze how current events might impact your specific holdings.
 
 ### 3. Realtime Continuous Monitoring
-**Script**: `executors/gen-investment-report-realtime-nonstop.sh`
+**Script**: `scripts/run-market-hours.sh`
 
 A continuous monitoring loop that executes during market hours (08:00 - 18:00 ET, Mon-Fri). It runs the daily report generator at a specified interval and can be configured to upload output files to a Google Cloud Storage (GCS) bucket for remote access.
 
@@ -67,7 +67,7 @@ A continuous monitoring loop that executes during market hours (08:00 - 18:00 ET
 To generate reports, simply execute the desired script from the root of the project:
 
 ```bash
-./executors/gen-daily-portfolio-reports.sh
+./scripts/report-daily.sh
 ```
 
 The reports will be saved in your `PORTFOLIO_DIR` with filenames prefixing the use-case (e.g., `daily-report-my_portfolio.md`).
