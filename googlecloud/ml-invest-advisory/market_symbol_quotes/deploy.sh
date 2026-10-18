@@ -8,6 +8,8 @@ set -x # print the executing lines
 # 1. get_tw_stock_quotes: Taiwan stock snapshots from the SinoTrade Shioaji API (sinotrade.py).
 # 2. get_us_stock_quotes: US stock quotes from the TradeStation quote snapshot API
 #    GET https://api.tradestation.com/v3/marketdata/quotes/{symbols} (tradestation.py).
+# 3. get_us_ticker_quotes: US stock quotes from Alpaca stock snapshots
+#    GET https://data.alpaca.markets/v2/stocks/snapshots (alpaca-quotes.py), same response format as 2.
 #
 # [mandatory variables]
 #   PROJECT_ID                       GCP project to deploy to, e.g. hil-financial-services.
@@ -15,20 +17,29 @@ set -x # print the executing lines
 #   TRADE_STATION_OAUTH_SECRET_NAME  Secret Manager secret with TradeStation client_id/client_secret/refresh_token
 #                                    per account, e.g. TradeStation_OAuth0.
 #
+# [optional variables]
+#   ALPACA_SECRET_NAME               Secret Manager secret with the Alpaca API key in YAML with "key" and "secret"
+#                                    attributes. Default: alpaca-api-key.
+#   ALPACA_DATA_FEED                 Alpaca data feed, e.g. sip or iex. Default: Alpaca picks SIP with a paid
+#                                    subscription, otherwise IEX.
+#
 # [prerequisites]
 #   - Service account smart-invest@$PROJECT_ID.iam.gserviceaccount.com exists and has
-#     roles/secretmanager.secretAccessor on the secrets above.
+#     roles/secretmanager.secretAccessor on the secrets above, including $ALPACA_SECRET_NAME.
 #   - The deployer has roles/cloudfunctions.developer and roles/iam.serviceAccountUser on that service account.
 #
 # [usage]
 #   PROJECT_ID=hil-financial-services TW_NATIONAL_ID=... TRADE_STATION_OAUTH_SECRET_NAME=TradeStation_OAuth0 ./deploy.sh
 #
-# Both functions are deployed with --no-allow-unauthenticated; invoke them with a GCP identity token:
+# All functions are deployed with --no-allow-unauthenticated; invoke them with a GCP identity token:
 #   curl -H "Authorization: Bearer $(gcloud auth print-identity-token)" \
 #     "https://us-central1-$PROJECT_ID.cloudfunctions.net/get_tw_stock_quotes?symbols=2330,00662,006208"
 #   curl -i -H "Authorization: Bearer $(gcloud auth print-identity-token)" \
 #     "https://us-central1-$PROJECT_ID.cloudfunctions.net/get_us_stock_quotes?tickers=VOO,QQQ"
-# US symbols TradeStation cannot quote are listed in the X-TradeStation-Errors response header.
+#   curl -i -H "Authorization: Bearer $(gcloud auth print-identity-token)" \
+#     "https://us-central1-$PROJECT_ID.cloudfunctions.net/get-us-ticker-quotes?tickers=VOO,QQQ"
+# US symbols TradeStation or Alpaca cannot quote are listed in the X-TradeStation-Errors or X-Alpaca-Errors
+# response header.
 
 # Validate mandatory variables
 if [ -z "$PROJECT_ID" ]; then
@@ -46,7 +57,9 @@ if [ -z "$TRADE_STATION_OAUTH_SECRET_NAME" ]; then
   exit 1
 fi
 
-# Runtime identity of both functions; reads the SinoTrade and TradeStation secrets from Secret Manager.
+ALPACA_SECRET_NAME="${ALPACA_SECRET_NAME:-alpaca-api-key}"
+
+# Runtime identity of all functions; reads the SinoTrade, TradeStation and Alpaca secrets from Secret Manager.
 GCP_SA="smart-invest@$PROJECT_ID.iam.gserviceaccount.com"
 REGION=us-central1
 
@@ -76,4 +89,18 @@ gcloud functions deploy get-us-stock-quotes \
   --service-account=$GCP_SA \
   --no-allow-unauthenticated --project $PROJECT_ID \
   --set-env-vars TRADE_STATION_OAUTH_SECRET_NAME=$TRADE_STATION_OAUTH_SECRET_NAME \
+  --memory=512MiB \
+
+# US quotes from Alpaca: the API key is read from the $ALPACA_SECRET_NAME secret.
+gcloud functions deploy get-us-ticker-quotes \
+  --gen2 --region=$REGION \
+  --runtime=python313 \
+  --trigger-http \
+  --timeout=100 \
+  --source=. \
+  --entry-point=get_us_ticker_quotes \
+  --quiet \
+  --service-account=$GCP_SA \
+  --no-allow-unauthenticated --project $PROJECT_ID \
+  --set-env-vars "ALPACA_SECRET_NAME=$ALPACA_SECRET_NAME${ALPACA_DATA_FEED:+,ALPACA_DATA_FEED=$ALPACA_DATA_FEED}" \
   --memory=512MiB \

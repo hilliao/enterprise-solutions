@@ -3,3 +3,5 @@ shioaji[speed]
 google-cloud-secret-manager
 functions-framework
 PyYAML
+alpaca-py
+tzdata
