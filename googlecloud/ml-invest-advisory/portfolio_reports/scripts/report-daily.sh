@@ -37,9 +37,8 @@
 #   exceeded OLLAMA_TIMEOUT_SECONDS twice (first attempt and its retry).
 #
 # Callers:
-#   run-market-hours.sh (and its machine-specific copy
-#   ryzen7-7700x_gen-investment-report-realtime.sh) runs both report scripts in
-#   PORTFOLIO_SCRIPT on every loop iteration during the 08:00-18:00 ET window,
+#   run-market-hours.sh runs both report scripts in PORTFOLIO_SCRIPT on every
+#   loop iteration during the 08:00-18:00 ET window,
 #   then uploads $PORTFOLIO_DIR/*.html to GCS:
 #
 #     report-daily.sh && (report-news-impact.sh || true)

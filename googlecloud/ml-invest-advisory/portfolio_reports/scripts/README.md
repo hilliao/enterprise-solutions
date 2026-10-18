@@ -54,16 +54,14 @@ with Ollama.
 Requires `google-chrome`, `html2text`, `ollama` (optionally `pandoc`). Writes
 to `~/Documents/news-aggregate/`.
 
-### run-market-hours.sh / ryzen7-7700x_gen-investment-report-realtime.sh
+### run-market-hours.sh
 Loop that runs the daily + flash-insights portfolio scripts and uploads the
 resulting HTML reports to a GCS bucket, repeatedly, during this script's
 execution window (Mon-Fri, 08:00-18:00 America/New_York, excluding configured
 holidays — intentionally ~1.5h before the actual 09:30-16:00 ET market
 session and a few hours after it, to also catch pre-market/after-hours
-activity). The two files are identical except for the paths/GCS
-bucket/config baked into their `CONFIGURATION` section (`ryzen7-7700x_...` is
-tailored to that machine; `run-market-hours.sh` is the
-generic/template version).
+activity). The paths, GCS bucket and gcloud config are set in its
+`CONFIGURATION` section; the checked-in version is a generic template.
 ```
 ./run-market-hours.sh [--immediate] [--active-sleep SEC] [--idle-sleep SEC] [-h|--help]
 ```
