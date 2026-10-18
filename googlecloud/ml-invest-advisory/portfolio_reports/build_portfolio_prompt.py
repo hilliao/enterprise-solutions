@@ -17,11 +17,11 @@ Workflow:
 7. Writes the final prompt to an output file.
 
 Usage:
-    python generate-llm-prompt.py --portfolio_file <path_to_portfolio.json> --llm_prompt_template <path_to_template.txt> [--output_prompt <path_to_output.txt>]
+    python build_portfolio_prompt.py --portfolio_file <path_to_portfolio.json> --llm_prompt_template <path_to_template.txt> [--output_prompt <path_to_output.txt>]
 
 Environment Variables:
     GOOGLE_APPLICATION_CREDENTIALS: Path to service account key file (Required).
-    STOCK_QUOTES_CLOUD_RUN_URL: URL of the stock quotes service (Optional, defaults to hardcoded URL).
+    STOCK_QUOTES_CLOUD_RUN_URL: URL of the stock quotes service (Required).
 """
 # SET GOOGLE_APPLICATION_CREDENTIALS environment variable
 # https://cloud.google.com/docs/authentication/application-default-credentials
@@ -43,7 +43,7 @@ PORTFOLIO_DATA_PLACEHOLDER = "{{PORTFOLIO_HOLDING_DATA_JSON}}"
 CLOUD_RUN_RETRY_DELAYS = [1, 2, 4, 8, 16]
 CLOUD_RUN_REQUEST_TIMEOUT = 60
 # Exit code when the stock quotes endpoint still fails after all retries (sysexits EX_UNAVAILABLE).
-# executors/gen-investment-report-realtime-nonstop.sh reports this exit code as a quotes endpoint failure.
+# scripts/run-market-hours.sh reports this exit code as a quotes endpoint failure.
 EXIT_CODE_QUOTES_UNAVAILABLE = 69
 # Number of tickers printed to the terminal from the quotes and the portfolio values.
 NUM_TICKERS_TO_PRINT = 3
@@ -397,12 +397,12 @@ def main():
 
 def get_holding_prices(portfolio_holdings: dict) -> dict:
     # The URL of the Cloud Run function
-    cloud_run_base_url = "https://us-central1-hil-financial-services.cloudfunctions.net/trade_station_realtime_quotes"
-    if "STOCK_QUOTES_CLOUD_RUN_URL" in os.environ:
-        cloud_run_base_url = os.environ["STOCK_QUOTES_CLOUD_RUN_URL"]
-        print(f"Using STOCK_QUOTES_CLOUD_RUN_URL from environment variable: {cloud_run_base_url}")
-    else:
-        print(f"STOCK_QUOTES_CLOUD_RUN_URL environment variable not set. Using default: {cloud_run_base_url}")
+    cloud_run_base_url = os.environ.get("STOCK_QUOTES_CLOUD_RUN_URL")
+    if not cloud_run_base_url:
+        print("Error: The STOCK_QUOTES_CLOUD_RUN_URL environment variable is not set.", file=sys.stderr)
+        print("Please set it to the URL of the stock quotes Cloud Run function.", file=sys.stderr)
+        sys.exit(1)
+    print(f"Using STOCK_QUOTES_CLOUD_RUN_URL from environment variable: {cloud_run_base_url}")
 
     tickers = list(portfolio_holdings.keys())
     cloud_run_url = f"{cloud_run_base_url}/?tickers={','.join(tickers)}"

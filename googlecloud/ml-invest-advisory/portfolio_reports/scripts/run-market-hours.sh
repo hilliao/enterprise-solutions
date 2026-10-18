@@ -1,4 +1,46 @@
 #!/usr/bin/env bash
+#
+# Purpose:
+#   Continuously regenerates the portfolio reports during this script's execution
+#   window (Mon-Fri, 08:00-18:00 America/New_York, excluding HOLIDAYS) and uploads
+#   them to GCS. On every loop iteration it evals CMD, which:
+#     1) Runs report-daily.sh, then report-news-impact.sh
+#        (a flash-insights failure, e.g. no news file yet, is ignored).
+#     2) Copies $PORTFOLIO_DIR/*.html to GCS_BUCKET with `gcloud storage cp`.
+#   It then sleeps ACTIVE_SLEEP seconds. Outside the window it prints a live
+#   countdown (on a single terminal line) to the next 08:00 ET window start and
+#   rechecks every IDLE_SLEEP seconds. The window is NOT the market session
+#   (09:30-16:00 ET); it starts ~1.5h before the open and runs a few hours after
+#   the close to catch pre-market and after-hours moves.
+#
+# Requirements:
+#   - Everything required by report-daily.sh and
+#     report-news-impact.sh (python, ollama, optional pandoc)
+#   - `gcloud` CLI with a configuration (GCLOUD_CONFIG) that can write to GCS_BUCKET
+#   - GNU `date` (uses `date -d` for time zone and date arithmetic)
+#   - HOLIDAYS kept up to date; it currently lists NYSE holidays for 2026-2028
+#
+# Configuration (edit the CONFIGURATION section below before running):
+#   GOOGLE_APPLICATION_CREDENTIALS service account JSON key (exported to the report scripts)
+#   PORTFOLIO_SCRIPT               report command(s) run on each iteration
+#   PORTFOLIO_DIR                  portfolio *.json input and report output directory (exported)
+#   GCS_BUCKET                     gs:// destination for the *.html reports
+#   GCLOUD_CONFIG                  gcloud configuration used for the upload
+#   STOCK_QUOTES_CLOUD_RUN_URL     stock quotes endpoint (exported to build_portfolio_prompt.py)
+#   ACTIVE_SLEEP / IDLE_SLEEP      defaults 30s / 60s; overridable with the options below
+#
+# Usage:
+#   ./run-market-hours.sh                      # loop forever
+#   ./run-market-hours.sh --immediate          # run once now, ignoring the window, then exit
+#   ./run-market-hours.sh --active-sleep 300 --idle-sleep 120
+#   ./run-market-hours.sh --help
+#
+# Exit status:
+#   0 after a successful --immediate run. Otherwise the loop aborts on the first
+#   failing CMD with that command's exit code; 69 means build_portfolio_prompt.py
+#   could not reach the stock quotes endpoint after its retries (exponential
+#   backoff up to 16s). 1 on an unknown option.
+#
 set -euo pipefail
 
 # ==============================================================================
@@ -10,12 +52,13 @@ set -euo pipefail
 export GOOGLE_APPLICATION_CREDENTIALS="/path/to/your/service-account-key.json"
 
 # Internal paths
-PORTFOLIO_SCRIPT="$HOME/path/to/your/gen-daily-portfolio-reports.sh && ($HOME/path/to/your/gen-flash-insights-portfolio-reports.sh || true)"
+PORTFOLIO_SCRIPT="$HOME/path/to/your/report-daily.sh && ($HOME/path/to/your/report-news-impact.sh || true)"
 export PORTFOLIO_DIR="$HOME/path/to/output/portfolios/"
 
 # GCS Bucket destination (Replace 'folder' and 'bucket-name')
 GCS_BUCKET="gs://bucket-name/folder/"
 GCLOUD_CONFIG="default"
+export STOCK_QUOTES_CLOUD_RUN_URL=https://europe-west9-hil-financial-services.cloudfunctions.net/get-us-ticker-quotes
 
 # Construct the command
 export CMD="$PORTFOLIO_SCRIPT && gcloud storage cp $PORTFOLIO_DIR/*.html $GCS_BUCKET --configuration=$GCLOUD_CONFIG"
@@ -23,7 +66,7 @@ export CMD="$PORTFOLIO_SCRIPT && gcloud storage cp $PORTFOLIO_DIR/*.html $GCS_BU
 # Timing configurations (defaults)
 ACTIVE_SLEEP=30       # seconds between consecutive runs during the window
 IDLE_SLEEP=60         # seconds to wait when outside the window
-# Exit code of generate-llm-prompt.py (EXIT_CODE_QUOTES_UNAVAILABLE) when the stock quotes endpoint still fails
+# Exit code of build_portfolio_prompt.py (EXIT_CODE_QUOTES_UNAVAILABLE) when the stock quotes endpoint still fails
 # after its retries; reported with its own error message before aborting.
 QUOTES_UNAVAILABLE_EXIT_CODE=69
 
@@ -150,7 +193,7 @@ while :; do
       WAS_IDLE=false
     fi
     # Execute the command and abort on any failure, so a failing step isn't repeated every ACTIVE_SLEEP seconds.
-    # generate-llm-prompt.py already retries the stock quotes Cloud Run endpoint with exponential backoff
+    # build_portfolio_prompt.py already retries the stock quotes Cloud Run endpoint with exponential backoff
     # (1, 2, 4, 8, 16s) before exiting with QUOTES_UNAVAILABLE_EXIT_CODE.
     cmd_exit_code=0
     eval "$CMD" || cmd_exit_code=$?
