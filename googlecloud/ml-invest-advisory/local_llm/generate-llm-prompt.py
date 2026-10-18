@@ -45,6 +45,27 @@ CLOUD_RUN_REQUEST_TIMEOUT = 60
 # Exit code when the stock quotes endpoint still fails after all retries (sysexits EX_UNAVAILABLE).
 # executors/gen-investment-report-realtime-nonstop.sh reports this exit code as a quotes endpoint failure.
 EXIT_CODE_QUOTES_UNAVAILABLE = 69
+# Number of tickers printed to the terminal from the quotes and the portfolio values.
+NUM_TICKERS_TO_PRINT = 3
+
+
+def condensed_json(data, max_keys: int) -> str:
+    """
+    Formats a dictionary as JSON for the terminal with each top-level key and its value on one line, e.g.:
+    {
+      "AAAU": {"Current Value": 49900.05, "Previous Value": 49997.25, "shares": 1215.0},
+      "BIL": {"Current Value": 5952.05, "Previous Value": 5950.1, "shares": 65.0},
+      ... 25 more
+    }
+    Only the first max_keys keys are printed; the "... N more" line makes the output not valid JSON when keys are left
+    out. Values that aren't dictionaries are formatted as compact JSON on one line.
+    """
+    if not isinstance(data, dict):
+        return json.dumps(data)
+    lines = [f"  {json.dumps(key)}: {json.dumps(value)}" for key, value in list(data.items())[:max_keys]]
+    if len(data) > max_keys:
+        lines.append(f"  ... {len(data) - max_keys} more")
+    return '{\n' + ',\n'.join(lines) + '\n}'
 
 
 def describe_request_failure(e: requests.exceptions.RequestException) -> str:
@@ -353,9 +374,8 @@ def main():
     portfolio_holding_share_prices = merge_portfolio_share_prices(portfolio_holding_shares, holding_prices)
     portfolio_holding_values_and_weights = calculate_portfolio_1day_diff_and_weight(portfolio_holding_share_prices,
                                                                                     cash_amount)
-    num_lines_to_print = 15
-    print(f"\n--- Portfolio value change from last trading day (top {num_lines_to_print} lines) ---")
-    print('\n'.join(json.dumps(portfolio_holding_values_and_weights, indent=2).splitlines()[:num_lines_to_print]))
+    print(f"\n--- Portfolio value change from last trading day (top {NUM_TICKERS_TO_PRINT} tickers) ---")
+    print(condensed_json(portfolio_holding_values_and_weights, NUM_TICKERS_TO_PRINT))
 
     # Read the prompt template
     with open(args.llm_prompt_template, 'r') as f:
@@ -397,11 +417,10 @@ def get_holding_prices(portfolio_holdings: dict) -> dict:
         # Call the function and print the result
         cloud_run_response = invoke_cloud_run(cloud_run_base_url, cloud_run_url)
         print("\n--- Parsing response from Cloud Run service to JSON ---")
-        num_lines_to_print = 10
         try:
             holding_prices = json.loads(cloud_run_response)
-            print(f"--- Parsed JSON Response (top {num_lines_to_print} lines) ---")
-            print('\n'.join(json.dumps(holding_prices, indent=2).splitlines()[:num_lines_to_print]))
+            print(f"--- Parsed JSON Response (top {NUM_TICKERS_TO_PRINT} tickers) ---")
+            print(condensed_json(holding_prices, NUM_TICKERS_TO_PRINT))
         except json.JSONDecodeError:
             print(f"\nERROR: Cloud Run response is not valid JSON:\n{cloud_run_response}", file=sys.stderr)
             sys.exit(1)
