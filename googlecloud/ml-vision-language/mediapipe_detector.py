@@ -111,6 +111,9 @@ frame_slot = queue.Queue(maxsize=1)
 gcs_executor = concurrent.futures.ThreadPoolExecutor(max_workers=math.ceil(MAX_WORKERS))
 
 if "IS_GPU" in os.environ and os.environ.get("IS_GPU") == "1":
+    # This script is headless. An inherited DISPLAY (e.g. Chrome Remote Desktop's virtual X server) makes glvnd pick
+    # Mesa's llvmpipe software renderer instead of the NVIDIA driver; without DISPLAY, EGL uses the GPU directly
+    os.environ.pop("DISPLAY", None)
     base_options = python.BaseOptions(model_asset_path=TFLITE_MODEL_PATH, delegate=python.BaseOptions.Delegate.GPU)
 else:
     base_options = python.BaseOptions(model_asset_path=TFLITE_MODEL_PATH)
