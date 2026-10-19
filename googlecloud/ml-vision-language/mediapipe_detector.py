@@ -84,6 +84,7 @@ Check out the [MediaPipe documentation](https://developers.google.com/mediapipe/
 
 import datetime
 import faulthandler
+import itertools
 import signal
 import mediapipe as mp
 from mediapipe.tasks import python
@@ -102,8 +103,16 @@ import math
 # The C-level faulthandler watchdog works even when Python threads are deadlocked on the GIL.
 WATCHDOG_SECONDS = int(os.environ.get("WATCHDOG_SECONDS", "120"))
 RECONNECT_DELAY_SECONDS = 5
+# On a terminal, redraw one status line in place; otherwise (e.g. redirected to a log file) print a new line each time
+INTERACTIVE = sys.stdout.isatty()
+# Report liveness this often; it needs the GIL, so silence means Python is stuck and the watchdog will fire
+HEARTBEAT_SECONDS = int(os.environ.get("HEARTBEAT_SECONDS", "1" if INTERACTIVE else "60"))
+# Report STALLED instead of OK when no detection completed for this long
+STALL_WARNING_SECONDS = 10
 # `kill -USR1 <pid>` prints the stack of every thread without stopping the process
 faulthandler.register(signal.SIGUSR1, all_threads=True)
+# Progress counters read by the heartbeat; each key is written by a single thread
+stats = {"frames_read": 0, "detections": 0, "last_detection": time.monotonic()}
 
 # Holds only the latest frame so the capture loop never blocks and detection never works on stale frames
 frame_slot = queue.Queue(maxsize=1)
@@ -180,9 +189,37 @@ def detection_worker():
             detection_result = detector.detect_for_video(image, timestamp_ms)
             # Re-arm the watchdog: stalls in either RTSP capture or detection stop this line from being reached
             faulthandler.dump_traceback_later(WATCHDOG_SECONDS, exit=True)
+            stats["detections"] += 1
+            stats["last_detection"] = time.monotonic()
             handle_detection(frame, detection_result)
         except Exception as e:
             sys.stderr.write(f"Error: detection failed for frame at {timestamp_ms} ms: {e}\n")
+
+
+def heartbeat():
+    """Report frame/detection rates and thread counts every HEARTBEAT_SECONDS; flag STALLED detection."""
+    prev_frames, prev_detections = 0, 0
+    spinner = itertools.cycle("|/-\\")
+    while True:
+        time.sleep(HEARTBEAT_SECONDS)
+        frames, detections = stats["frames_read"], stats["detections"]
+        idle = time.monotonic() - stats["last_detection"]
+        stalled = idle >= STALL_WARNING_SECONDS
+        state = f"STALLED: no detection for {idle:.0f} s, watchdog exits at {WATCHDOG_SECONDS} s" if stalled else "OK"
+        os_threads = len(os.listdir("/proc/self/task")) if os.path.isdir("/proc/self/task") else "unknown"
+        status = (f"{datetime.datetime.now():%Y-%m-%d %H:%M:%S} {state} | "
+                  f"{(frames - prev_frames) / HEARTBEAT_SECONDS:.1f} frames/s read, "
+                  f"{(detections - prev_detections) / HEARTBEAT_SECONDS:.1f} detections/s | "
+                  f"threads: {threading.active_count()} Python, {os_threads} OS")
+        if INTERACTIVE:
+            # Clear the line, draw the status, then return to column 0 so the next output overwrites it
+            sys.stdout.write(f"\r\033[K{next(spinner)} {status}\r")
+            sys.stdout.flush()
+        elif stalled:
+            sys.stderr.write(f"WARNING: {status}\n")
+        else:
+            print(f"Heartbeat {status}", flush=True)
+        prev_frames, prev_detections = frames, detections
 
 
 def open_video_capture():
@@ -201,8 +238,10 @@ if __name__ == "__main__":
     frames_to_skip = SKIP_X_FRAMES  # Skip every X frames
     frame_count = 0
     video_capture = None
+    interrupted = False
     faulthandler.dump_traceback_later(WATCHDOG_SECONDS, exit=True)
     threading.Thread(target=detection_worker, name="detection_worker", daemon=True).start()
+    threading.Thread(target=heartbeat, name="heartbeat", daemon=True).start()
 
     try:
         video_capture = open_video_capture()
@@ -219,10 +258,12 @@ if __name__ == "__main__":
                 continue
 
             frame_count += 1
+            stats["frames_read"] = frame_count
             if frame_count % (frames_to_skip + 1) == 0:  # Process only every (frames_to_skip + 1)th frame
                 offer_latest_frame(frame)
 
     except KeyboardInterrupt as e:
+        interrupted = True
         sys.stderr.write(f":KeyboardInterrupt caught: {e}\n")
     finally:  # Restore terminal settings
         faulthandler.cancel_dump_traceback_later()
@@ -233,3 +274,10 @@ if __name__ == "__main__":
         detector.close()
         gcs_executor.shutdown(wait=False)
         print("main execution exiting...")  # Indicate clean exit
+
+    if interrupted:
+        # Die by SIGINT instead of exiting 0: a shell loop such as `while true; do ./run_detector.sh; done` only stops
+        # on Ctrl+C when the child was killed by SIGINT, otherwise it assumes the child handled it and starts another
+        signal.signal(signal.SIGINT, signal.SIG_DFL)
+        sys.stdout.flush()  # dying by signal skips Python's exit-time flush of buffered output
+        os.kill(os.getpid(), signal.SIGINT)
