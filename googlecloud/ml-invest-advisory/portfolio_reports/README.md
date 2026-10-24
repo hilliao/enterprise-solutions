@@ -15,7 +15,7 @@ The system uses specialized scripts in the `scripts/` directory to perform the f
 
 Ensure you have the following installed and configured:
 
-*   **Ollama**: Installed and running with a model pulled (e.g., `gemma3:12b`).
+*   **Ollama**: Installed and running with a model pulled (e.g., `gemma4:12b-it-qat`).
 *   **Python 3**: Recommended to use a virtual environment.
     ```bash
     python3 -m venv py-venv
@@ -33,6 +33,7 @@ Set the following environment variables to customize the behavior:
 *   `GOOGLE_APPLICATION_CREDENTIALS`: Path to your Google Cloud service account key.
 *   `MARKET_COMMENTARY_FILE`: (For daily reports) Path to a text file containing market commentary.
 *   `NEWS_FILE`: (For flash insights) Path to a text file containing breaking news/insights.
+*   `OLLAMA_MODEL`: Ollama model used for the reports (default `gemma4:12b-it-qat`). Use `scripts/compare-models.sh` to compare candidate models on the same prompt.
 
 ### Portfolio Format
 Each portfolio should be a `.json` file in the `PORTFOLIO_DIR`:
