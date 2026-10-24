@@ -7,7 +7,7 @@
 #        which fetches current quotes from STOCK_QUOTES_CLOUD_RUN_URL.
 #     2) Replaces {{MARKET_COMMENTARY}} in the prompt with MARKET_COMMENTARY_FILE
 #        (an empty string if that file is missing).
-#     3) Runs the prompt through `ollama run gemma3:12b` (killed and retried
+#     3) Runs the prompt through `ollama run $OLLAMA_MODEL` (killed and retried
 #        once after OLLAMA_TIMEOUT_SECONDS) and writes
 #        $PORTFOLIO_DIR/$USE_CASE-<portfolio>.md (report + input prompt), plus
 #        $PORTFOLIO_DIR/$USE_CASE-<portfolio>.html if pandoc is installed.
@@ -15,7 +15,7 @@
 # Requirements:
 #   - python with build_portfolio_prompt.py's dependencies installed
 #   - GOOGLE_APPLICATION_CREDENTIALS set (required by build_portfolio_prompt.py)
-#   - `ollama` CLI with the gemma3:12b model available
+#   - `ollama` CLI with the OLLAMA_MODEL model available
 #   - `pandoc` (optional; HTML reports are skipped without it)
 #
 # Environment variables (all optional; defaults shown):
@@ -24,7 +24,8 @@
 #   USE_CASE                   daily-report (prefix of the output file names)
 #   MARKET_COMMENTARY_FILE     $PORTFOLIO_DIR/market-commentary_YYYY-MM-DD.txt (today's date)
 #   STOCK_QUOTES_CLOUD_RUN_URL https://us-central1-hil-financial-services.cloudfunctions.net/get_us_stock_quotes
-#   OLLAMA_TIMEOUT_SECONDS     300 (kill `ollama run` and retry once if a report takes longer)
+#   OLLAMA_MODEL               gemma4:12b-it-qat (any model from `ollama list`)
+#   OLLAMA_TIMEOUT_SECONDS     600 (kill `ollama run` and retry once if a report takes longer)
 #   DEBUG                      set to any value to trace execution (set -x)
 #
 # Usage:
@@ -63,7 +64,8 @@ else
   echo "Warning: Market commentary file is missing or not readable at: $MARKET_COMMENTARY_FILE. Section will be omitted."
 fi
 export STOCK_QUOTES_CLOUD_RUN_URL="${STOCK_QUOTES_CLOUD_RUN_URL:-https://us-central1-hil-financial-services.cloudfunctions.net/get_us_stock_quotes}"
-export OLLAMA_TIMEOUT_SECONDS="${OLLAMA_TIMEOUT_SECONDS:-300}"
+export OLLAMA_MODEL="${OLLAMA_MODEL:-gemma4:12b-it-qat}"
+export OLLAMA_TIMEOUT_SECONDS="${OLLAMA_TIMEOUT_SECONDS:-600}"
 if ! [[ "$OLLAMA_TIMEOUT_SECONDS" =~ ^[1-9][0-9]*$ ]]; then
   echo "ERROR: OLLAMA_TIMEOUT_SECONDS must be a positive integer number of seconds, got: $OLLAMA_TIMEOUT_SECONDS" >&2
   exit 1
@@ -78,7 +80,7 @@ run_ollama() {
   local prompt_file="$1" output_file="$2" exit_code attempt
   for attempt in 1 2; do
     exit_code=0
-    timeout --foreground --kill-after=10s "${OLLAMA_TIMEOUT_SECONDS}s" ollama run --nowordwrap gemma3:12b < "$prompt_file" \
+    timeout --foreground --kill-after=10s "${OLLAMA_TIMEOUT_SECONDS}s" ollama run --nowordwrap --hidethinking "$OLLAMA_MODEL" < "$prompt_file" \
       | tee "$output_file" || exit_code=$?
     if [ "$exit_code" -ne 124 ] && [ "$exit_code" -ne 137 ]; then
       return "$exit_code"
