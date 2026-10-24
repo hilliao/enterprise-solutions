@@ -10,11 +10,11 @@ portfolio_reports layout (portfolio JSON files, prompt templates, `build_portfol
 Generates the daily portfolio analysis report. For every `*.json` file in
 `PORTFOLIO_DIR`, builds an LLM prompt via `build_portfolio_prompt.py` (optionally
 inlining a `market-commentary_YYYY-MM-DD.txt` file), runs it through
-`ollama run gemma3:12b`, and writes a Markdown report (plus an HTML version if
-`pandoc` is installed).
+`ollama run $OLLAMA_MODEL` (default `gemma4:12b-it-qat`), and writes a Markdown report
+(plus an HTML version if `pandoc` is installed).
 Key env vars: `PORTFOLIO_DIR`, `LLM_PROMPT_TEMPLATE`, `USE_CASE`,
-`MARKET_COMMENTARY_FILE`, `STOCK_QUOTES_CLOUD_RUN_URL`, `OLLAMA_TIMEOUT_SECONDS`
-(default 300; kills a stuck `ollama run`, retries it once, then fails the script).
+`MARKET_COMMENTARY_FILE`, `STOCK_QUOTES_CLOUD_RUN_URL`, `OLLAMA_MODEL`, `OLLAMA_TIMEOUT_SECONDS`
+(default 600; kills a stuck `ollama run`, retries it once, then fails the script).
 
 ### report-news-impact.sh
 Same pipeline as `report-daily.sh`, but generates a "flash
@@ -23,7 +23,18 @@ insights" / breaking-news impact report per portfolio, injecting a
 `fetch-news.sh`) in place of `{{FLASH_INSIGHTS}}`. Exits with an error
 if the news file is missing.
 Key env vars: `PORTFOLIO_DIR`, `LLM_PROMPT_TEMPLATE`, `USE_CASE`, `NEWS_FILE`,
-`OLLAMA_TIMEOUT_SECONDS`.
+`OLLAMA_MODEL`, `OLLAMA_TIMEOUT_SECONDS`.
+
+### compare-models.sh
+Runs one prompt (e.g. a `daily-report-<portfolio>.txt` written by
+`report-daily.sh`) through several Ollama models in turn, unloading each
+before the next, and writes every report plus a timing summary (wall clock,
+tokens/s, CPU/GPU split, context length) and a side-by-side `comparison.html`
+to a new timestamped directory under `<prompt dir>/model-comparison/`.
+```
+./compare-models.sh PROMPT_FILE [MODEL ...]   # default: gemma4:12b-it-qat qwen3.5:9b-q8_0
+```
+Key env vars: `OUTPUT_DIR`, `OLLAMA_TIMEOUT_SECONDS` (default 1800), `OLLAMA_THINK`.
 
 ### fetch-fundstrat.sh
 Fetches membership content from fundstratdirect.com via headless Chrome
