@@ -23,7 +23,8 @@
 #   LLM_PROMPT_TEMPLATE        .../portfolio_reports/prompt_templates/daily_report_prompt_template.txt
 #   USE_CASE                   daily-report (prefix of the output file names)
 #   MARKET_COMMENTARY_FILE     $PORTFOLIO_DIR/market-commentary_YYYY-MM-DD.txt (today's date)
-#   STOCK_QUOTES_CLOUD_RUN_URL https://us-central1-hil-financial-services.cloudfunctions.net/get_us_stock_quotes
+#   STOCK_QUOTES_CLOUD_RUN_URL https://us-central1-my-gcp-project.cloudfunctions.net/get-us-ticker-quotes
+#                              (sample project ID; set it to your get-us-ticker-quotes URL)
 #   OLLAMA_MODEL               gemma4:12b-it-qat (any model from `ollama list`)
 #   OLLAMA_TIMEOUT_SECONDS     600 (kill `ollama run` and retry once if a report takes longer)
 #   DEBUG                      set to any value to trace execution (set -x)
@@ -63,7 +64,7 @@ if [ -r "$MARKET_COMMENTARY_FILE" ]; then
 else
   echo "Warning: Market commentary file is missing or not readable at: $MARKET_COMMENTARY_FILE. Section will be omitted."
 fi
-export STOCK_QUOTES_CLOUD_RUN_URL="${STOCK_QUOTES_CLOUD_RUN_URL:-https://us-central1-hil-financial-services.cloudfunctions.net/get_us_stock_quotes}"
+export STOCK_QUOTES_CLOUD_RUN_URL="${STOCK_QUOTES_CLOUD_RUN_URL:-https://us-central1-my-gcp-project.cloudfunctions.net/get-us-ticker-quotes}"
 export OLLAMA_MODEL="${OLLAMA_MODEL:-gemma4:12b-it-qat}"
 export OLLAMA_TIMEOUT_SECONDS="${OLLAMA_TIMEOUT_SECONDS:-600}"
 if ! [[ "$OLLAMA_TIMEOUT_SECONDS" =~ ^[1-9][0-9]*$ ]]; then

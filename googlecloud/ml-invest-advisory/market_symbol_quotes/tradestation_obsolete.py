@@ -1,4 +1,8 @@
 """
+OBSOLETE: the TradeStation API is retired and replaced by Alpaca quotes (alpaca-quotes.py, get_us_ticker_quotes).
+This file was renamed from tradestation.py and is no longer deployed (see deploy.sh). It is kept for reference only;
+don't import it from other code. get_us_stock_quotes, its Cloud Function entry point, is commented out in main.py.
+
 TradeStation real-time US stock quotes for the get_us_stock_quotes Cloud Function (see main.py and README.md).
 
 Flow:
@@ -38,23 +42,8 @@ from http import HTTPStatus
 import requests
 
 from gcp_data_access import get_gcp_secret
+from structured_logging import log, LOG_SEVERITY_ERROR, LOG_SEVERITY_WARNING
 
-
-def log(text: str, severity: str):
-    """
-    Logs a message as structured JSON so Cloud Logging records the severity:
-    https://cloud.google.com/run/docs/logging#using-json
-
-    Args:
-        text: The message to log.
-        severity: The severity of the message (e.g., "ERROR", "WARNING").
-    """
-    print(json.dumps({'severity': severity, 'message': text}), flush=True)
-
-
-LOG_SEVERITY_ERROR = "ERROR"
-LOG_SEVERITY_WARNING = "WARNING"
-LOG_SEVERITY_DEBUG = "DEBUG"
 
 # Cached access tokens per account, see refresh_access_token() for the format. Guarded by access_token_lock.
 access_token = None

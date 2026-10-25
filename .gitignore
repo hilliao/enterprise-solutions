@@ -12,6 +12,7 @@ googlecloud/ml-vision-language/pyvenv.cfg
 
 # Caches and logs
 __pycache__/
+googlecloud/ml-invest-advisory/portfolio_reports/sec_*.json
 *.log
 .codex
 .gradle/
