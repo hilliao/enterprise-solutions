@@ -1,7 +1,7 @@
 """
 Alpaca real-time US stock quotes for the get_us_ticker_quotes Cloud Function (see main.py and README.md).
 
-A second US quotes provider next to TradeStation (tradestation.py). The quotes use the same field names as
+The US quotes provider that replaced the retired TradeStation API (tradestation_obsolete.py). The quotes use the same field names as
 TradeStation's quote snapshots ("Last", "PreviousClose", "NetChangePct", ...), so the portfolio report scripts in
 portfolio_reports can consume either function.
 
@@ -37,7 +37,7 @@ from alpaca.data.models import Snapshot
 from alpaca.data.requests import StockSnapshotRequest
 
 from gcp_data_access import get_gcp_secret
-from tradestation import log, LOG_SEVERITY_WARNING
+from structured_logging import log, LOG_SEVERITY_WARNING
 
 # Secret Manager secret in $PROJECT_ID with the Alpaca API key, set by deploy.sh, in the format:
 # key: AKXXXXXXXXXXXXXXXXXX
@@ -139,7 +139,7 @@ def get_alpaca_realtime_quotes(tickers: list[str] = ["VOO", "QQQ"]):
         tickers: A list of ticker symbols (e.g., ["VOO", "QQQ"]).
 
     Returns:
-        A tuple of (symbol_quotes, symbol_errors), like tradestation.get_tradestation_realtime_quotes().
+        A tuple of (symbol_quotes, symbol_errors), like tradestation_obsolete.get_tradestation_realtime_quotes().
         symbol_quotes is a dictionary where keys are ticker symbols and values are quotes in the format of
         snapshot_to_quote(). symbol_errors lists the symbols that could not be quoted,
         e.g. [{"Symbol": "XYZ", "Error": "..."}].

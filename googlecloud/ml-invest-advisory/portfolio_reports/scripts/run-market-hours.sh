@@ -58,7 +58,8 @@ export PORTFOLIO_DIR="$HOME/path/to/output/portfolios/"
 # GCS Bucket destination (Replace 'folder' and 'bucket-name')
 GCS_BUCKET="gs://bucket-name/folder/"
 GCLOUD_CONFIG="default"
-export STOCK_QUOTES_CLOUD_RUN_URL=https://europe-west9-hil-financial-services.cloudfunctions.net/get-us-ticker-quotes
+# Stock quotes endpoint (Replace 'my-gcp-project' and the region with where get-us-ticker-quotes is deployed)
+export STOCK_QUOTES_CLOUD_RUN_URL=https://europe-west9-my-gcp-project.cloudfunctions.net/get-us-ticker-quotes
 
 # Construct the command
 export CMD="$PORTFOLIO_SCRIPT && gcloud storage cp $PORTFOLIO_DIR/*.html $GCS_BUCKET --configuration=$GCLOUD_CONFIG"
