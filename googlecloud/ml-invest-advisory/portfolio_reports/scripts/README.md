@@ -49,7 +49,8 @@ one-time setup) and, for Flash Insights, summarizes it with Ollama.
 ```
 Requires `google-chrome`, `html2text`, `ollama`. Writes to `~/Documents/` and
 mirrors the Flash Insights overview to `PORTFOLIO_DIR/news_YYYY-MM-DD.txt`
-(also scp'd to a remote host).
+(also scp'd to a remote host). Key env vars: `OLLAMA_HOST`, `OLLAMA_MODEL`
+(default `gemma4:12b-it-qat`), `OLLAMA_THINK` (default `false`).
 
 ### fetch-news.sh
 PoC news aggregator: fetches one or more news pages via headless Chrome
