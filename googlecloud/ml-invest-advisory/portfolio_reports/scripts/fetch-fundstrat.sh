@@ -15,7 +15,13 @@
 #   - google-chrome installed and on PATH
 #   - A pre-authenticated Chrome profile at ~/workspace/chrome-flashinsights-profile
 #   - `html2text` CLI installed via: sudo apt install html2text
-#   - `ollama` CLI installed and accessible
+#   - `ollama` CLI installed and accessible, with OLLAMA_MODEL pulled on OLLAMA_HOST
+#
+# Environment variables (all optional; defaults shown):
+#   OLLAMA_HOST    8400f:11434
+#   OLLAMA_MODEL   gemma4:12b-it-qat
+#   OLLAMA_THINK   false (passed as --think=$OLLAMA_THINK; thinking tokens can overflow the
+#                  4096-token default context and truncate the summary)
 #
 # ---------------------------------------------------------------------------
 # One-time setup: authenticate the Chrome profile used by this script
@@ -59,8 +65,9 @@ PORTFOLIO_DIR="$HOME/workspace/portfolios"
 INTERVAL_MINUTES=20
 FLASH_INSIGHTS_LINES=120
 CLOSED_CHECK_SLEEP=60
-export OLLAMA_HOST="${OLLAMA_HOST:-8400f:11435}"
-OLLAMA_MODEL="qwen2.5:7b"
+export OLLAMA_HOST="${OLLAMA_HOST:-8400f:11434}"
+OLLAMA_MODEL="${OLLAMA_MODEL:-gemma4:12b-it-qat}"
+OLLAMA_THINK="${OLLAMA_THINK:-false}"
 OLLAMA_MAX_ATTEMPTS=3
 # Text rendered by fundstratdirect.com instead of member content when the session is not authenticated.
 PAYWALL_MARKER="You need a Fundstrat Direct subscription"
@@ -226,7 +233,13 @@ run_flash_insights_once() {
   echo "Generating summary with Ollama..."
   local ollama_success=false
   local attempt=1
-  local prompt_text="Summarize the following article. highlight key macro and technical insights. prioritize posts with the most recent date and time. the audience is portfolio manager and certified financial planner. Execute risk assessments on the mentioned stocks, ETFs. Article: "
+  local prompt_head="You are a financial analyst writing for portfolio managers and certified financial planners. The FlashInsights posts are between the <article> tags below."
+  local prompt_tail="Task:
+1. Summarize the posts above, prioritizing the posts with the most recent date and time.
+2. Highlight the key macro and technical insights.
+3. Give a risk assessment for each stock and ETF mentioned.
+Use only facts and price levels stated in the posts; never invent numbers.
+Format: Markdown headings and bullet points. Be concise."
 
   while [[ "$ollama_success" == "false" ]]; do
     if [[ "$attempt" -gt "$OLLAMA_MAX_ATTEMPTS" ]]; then
@@ -237,9 +250,19 @@ run_flash_insights_once() {
       echo "Retrying Ollama generation (attempt $attempt of $OLLAMA_MAX_ATTEMPTS)..."
     fi
 
-    if ollama run --nowordwrap "$OLLAMA_MODEL" \
-      "$prompt_text" < <(head -n "$FLASH_INSIGHTS_LINES" "$FLASH_INSIGHTS_FILE") \
+    # The whole prompt goes through stdin; ollama would otherwise place stdin before a prompt argument.
+    if ollama run --nowordwrap --think="$OLLAMA_THINK" "$OLLAMA_MODEL" \
+      < <(printf '%s\n<article>\n' "$prompt_head"
+          head -n "$FLASH_INSIGHTS_LINES" "$FLASH_INSIGHTS_FILE"
+          printf '</article>\n\n%s\n' "$prompt_tail") \
       > "$FLASH_INSIGHTS_OVERVIEW_MD" && [[ -s "$FLASH_INSIGHTS_OVERVIEW_MD" ]]; then
+      # Some models (e.g. qwen2.5) drift into Chinese; reject output containing CJK characters/punctuation and retry.
+      if LC_ALL=C.UTF-8 grep -qP '[\x{3000}-\x{303F}\x{3400}-\x{9FFF}\x{F900}-\x{FAFF}\x{FF00}-\x{FFEF}]' "$FLASH_INSIGHTS_OVERVIEW_MD"; then
+        echo "ERROR: Ollama summary contains CJK characters." >&2
+        attempt=$((attempt + 1))
+        sleep 2
+        continue
+      fi
       ollama_success=true
       echo "OK: wrote overview markdown to $FLASH_INSIGHTS_OVERVIEW_MD"
     else
