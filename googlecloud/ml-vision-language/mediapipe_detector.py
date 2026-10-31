@@ -48,43 +48,73 @@ import sys
 import time
 from urllib.parse import urlparse
 
-import cv2
-# Import the functions
-from image_utils import visualize
-from gcp_utils import gcs_upload_blob, gcs_path_to_http_url
+import process_utils
 
-# Parameters must be set for each environment variable
-parameters = ["RTSP_URL", "TFLITE_MODEL_PATH", "MAX_WORKERS", "OUTPUT_IMAGE_DIR", "SKIP_X_FRAMES",
+# Mandatory environment variables; the README section at the top of run_detector.sh also lists the optional ones
+parameters = ["RTSP_URL", "TFLITE_MODEL_PATH", "OUTPUT_IMAGE_DIR",
               "OBJ_DETECT_CONFIDENCE_SCORE", "PERSON_DETECT_CONFIDENCE_SCORE"]
+# Mandatory only for uploads, which setting GOOGLE_APPLICATION_CREDENTIALS turns on
+gcs_parameters = ["GCS_BUCKET", "GCS_FOLDER"]
 
 if "GOOGLE_APPLICATION_CREDENTIALS" in os.environ:
-    parameters.extend(["GCS_BUCKET", "GCS_FOLDER"])
+    parameters.extend(gcs_parameters)
 
-for param in parameters:  # Iterate through the parameters list
-    if os.environ.get(param) is None:  # Check if the environment variable is set
-        sys.stderr.write(
-            f"Error: required environment variable {param} is not set. you must set all {parameters}!\n")  # Print to stderr with the parameter name
-        exit(1)
+# Report every problem at once so the configuration is fixed in one go; an empty value counts as not set. Checked before
+# the supervisor starts, so a configuration error exits right away instead of being retried
+errors = [f"mandatory environment variable {param} is not set"
+          + (" (needed because GOOGLE_APPLICATION_CREDENTIALS is set; unset it to skip uploads)"
+             if param in gcs_parameters else "")
+          for param in parameters if not os.environ.get(param)]
+for param, exists, kind in [("TFLITE_MODEL_PATH", os.path.isfile, "file"),
+                            ("OUTPUT_IMAGE_DIR", os.path.isdir, "folder"),
+                            ("GOOGLE_APPLICATION_CREDENTIALS", os.path.isfile, "file")]:
+    if os.environ.get(param) and not exists(os.environ[param]):
+        errors.append(f"{param} is set to {os.environ[param]}, which is not an existing {kind}")
+if errors:
+    for error in errors:
+        sys.stderr.write(f"Error: {error}\n")
+    sys.stderr.write(f"Mandatory environment variables: {', '.join(parameters)}\n")
+    exit(1)
 
 # Now you can safely access the environment variables, knowing they are set
 IP_CAM_URL = os.environ.get("RTSP_URL")
 TFLITE_MODEL_PATH = os.environ.get("TFLITE_MODEL_PATH")
-MAX_WORKERS = int(os.environ.get("MAX_WORKERS"))
+# MAX_WORKERS and SKIP_X_FRAMES are optional: unset or "auto" picks them automatically
+AUTO_MAX_WORKERS = os.environ.get("MAX_WORKERS", "auto") == "auto"
+# ThreadPoolExecutor's own default for I/O-bound work: CPU threads + 4 (20 on a Ryzen 7 7700X), never more than 32
+MAX_WORKERS = min(32, (os.cpu_count() or 1) + 4) if AUTO_MAX_WORKERS else int(os.environ["MAX_WORKERS"])
 OUTPUT_IMAGE_DIR = os.environ.get("OUTPUT_IMAGE_DIR")
-SKIP_X_FRAMES = int(os.environ.get("SKIP_X_FRAMES"))
+AUTO_SKIP_X_FRAMES = os.environ.get("SKIP_X_FRAMES", "auto") == "auto"
+# Auto starts from 3, which worked well when set by hand, then follows auto_frames_to_skip()
+SKIP_X_FRAMES = 3 if AUTO_SKIP_X_FRAMES else int(os.environ["SKIP_X_FRAMES"])
 OBJ_DETECT_CONFIDENCE_SCORE = float(os.environ.get("OBJ_DETECT_CONFIDENCE_SCORE"))
 PERSON_DETECT_CONFIDENCE_SCORE = float(os.environ.get("PERSON_DETECT_CONFIDENCE_SCORE"))
 GCS_BUCKET = os.environ.get("GCS_BUCKET")
 GCS_FOLDER = os.environ.get("GCS_FOLDER")
+# Restart the detector when it fails, e.g. when the watchdog exits it: after RESTART_BACKOFF_SECONDS, then twice as
+# long after each further failure, giving up after RESTART_RETRIES restarts in a row without a detection. 0 disables it
+RESTART_RETRIES = int(os.environ.get("RESTART_RETRIES", "5"))
+RESTART_BACKOFF_SECONDS = float(os.environ.get("RESTART_BACKOFF_SECONDS", "5"))
+
+if __name__ == "__main__" and RESTART_RETRIES > 0 and not process_utils.is_supervised():
+    # This process only supervises; the detector runs in a child process so it can be restarted after the watchdog
+    # exits it. Nothing below runs here, so the supervisor never loads OpenCV, MediaPipe or the model
+    sys.exit(process_utils.supervise(RESTART_RETRIES, RESTART_BACKOFF_SECONDS))
 
 """## Running inference and visualizing the results
 Here are the steps to run object detection using MediaPipe.
 Check out the [MediaPipe documentation](https://developers.google.com/mediapipe/solutions/vision/object_detector/python) to learn more about configuration options that this solution supports.
 """
 
+import cv2
+# Import the functions
+from image_utils import visualize
+from gcp_utils import gcs_upload_blob, gcs_path_to_http_url
+
 import datetime
 import faulthandler
 import itertools
+import shutil
 import signal
 import mediapipe as mp
 from mediapipe.tasks import python
@@ -111,13 +141,19 @@ HEARTBEAT_SECONDS = int(os.environ.get("HEARTBEAT_SECONDS", "1" if INTERACTIVE e
 STALL_WARNING_SECONDS = 10
 # `kill -USR1 <pid>` prints the stack of every thread without stopping the process
 faulthandler.register(signal.SIGUSR1, all_threads=True)
+# SKIP_X_FRAMES=auto re-tunes this often from what was measured since the last time
+AUTO_SKIP_SECONDS = 10
+# SKIP_X_FRAMES=auto skips frames so detection takes at most this fraction of the time. SKIP_X_FRAMES=3 on a 30 frames/s
+# camera and 70 ms per detection (EfficientDet-Lite2 on a Ryzen 7 7700X CPU) is about 0.5
+DETECTION_DUTY_CYCLE = float(os.environ.get("DETECTION_DUTY_CYCLE", "0.5"))
 # Progress counters read by the heartbeat; each key is written by a single thread
-stats = {"frames_read": 0, "detections": 0, "last_detection": time.monotonic()}
+stats = {"frames_read": 0, "detections": 0, "detect_seconds": 0.0, "last_detection": time.monotonic(),
+         "frames_to_skip": SKIP_X_FRAMES}
 
 # Holds only the latest frame so the capture loop never blocks and detection never works on stale frames
 frame_slot = queue.Queue(maxsize=1)
 # Thread pool for uploading files to Google cloud storage
-gcs_executor = concurrent.futures.ThreadPoolExecutor(max_workers=math.ceil(MAX_WORKERS))
+gcs_executor = concurrent.futures.ThreadPoolExecutor(max_workers=MAX_WORKERS)
 
 if "IS_GPU" in os.environ and os.environ.get("IS_GPU") == "1":
     # This script is headless. An inherited DISPLAY (e.g. Chrome Remote Desktop's virtual X server) makes glvnd pick
@@ -185,15 +221,40 @@ def detection_worker():
         timestamp_ms = max(time.monotonic_ns() // 1_000_000, last_timestamp_ms + 1)
         last_timestamp_ms = timestamp_ms
         try:
+            started = time.monotonic()
             image = mp.Image(image_format=mp.ImageFormat.SRGB, data=frame)
             detection_result = detector.detect_for_video(image, timestamp_ms)
             # Re-arm the watchdog: stalls in either RTSP capture or detection stop this line from being reached
             faulthandler.dump_traceback_later(WATCHDOG_SECONDS, exit=True)
-            stats["detections"] += 1
             stats["last_detection"] = time.monotonic()
+            stats["detect_seconds"] += stats["last_detection"] - started
+            stats["detections"] += 1
+            if stats["detections"] == 1:
+                process_utils.report_healthy()  # a restart that gets this far resets the supervisor's back-off
             handle_detection(frame, detection_result)
         except Exception as e:
             sys.stderr.write(f"Error: detection failed for frame at {timestamp_ms} ms: {e}\n")
+
+
+def detection_progress():
+    """Snapshot for auto_frames_to_skip(): time, frames read, detections, and total seconds spent detecting."""
+    return time.monotonic(), stats["frames_read"], stats["detections"], stats["detect_seconds"]
+
+
+def auto_frames_to_skip(start, end, frames_to_skip):
+    """SKIP_X_FRAMES=auto: skip just enough frames that detection takes at most DETECTION_DUTY_CYCLE of the time.
+
+    Uses the stream's frame rate and the average time per detection between the detection_progress() snapshots start
+    and end. Detection slows down on a busy CPU or with a bigger model, so more frames are skipped and the RTSP reader
+    and other detectors keep their share of the CPU; on a faster camera or GPU, fewer are skipped.
+    """
+    start_time, start_frames, start_detections, start_detect_seconds = start
+    end_time, end_frames, end_detections, end_detect_seconds = end
+    if end_detections == start_detections:
+        return frames_to_skip  # nothing to measure while the camera is down or detection is stalled
+    frames_per_second = (end_frames - start_frames) / (end_time - start_time)
+    seconds_per_detection = (end_detect_seconds - start_detect_seconds) / (end_detections - start_detections)
+    return max(0, math.ceil(frames_per_second * seconds_per_detection / DETECTION_DUTY_CYCLE) - 1)
 
 
 def heartbeat():
@@ -209,11 +270,14 @@ def heartbeat():
         os_threads = len(os.listdir("/proc/self/task")) if os.path.isdir("/proc/self/task") else "unknown"
         status = (f"{datetime.datetime.now():%Y-%m-%d %H:%M:%S} {state} | "
                   f"{(frames - prev_frames) / HEARTBEAT_SECONDS:.1f} frames/s read, "
-                  f"{(detections - prev_detections) / HEARTBEAT_SECONDS:.1f} detections/s | "
+                  f"{(detections - prev_detections) / HEARTBEAT_SECONDS:.1f} detections/s, "
+                  f"skip {stats['frames_to_skip']}{' (auto)' if AUTO_SKIP_X_FRAMES else ''} | "
                   f"threads: {threading.active_count()} Python, {os_threads} OS")
         if INTERACTIVE:
-            # Clear the line, draw the status, then return to column 0 so the next output overwrites it
-            sys.stdout.write(f"\r\033[K{next(spinner)} {status}\r")
+            # Clear the line, draw the status, then return to column 0 so the next output overwrites it. Cut the status
+            # to the terminal width: \r only returns to the start of a wrapped line's last row, leaving the rest behind
+            columns = shutil.get_terminal_size().columns
+            sys.stdout.write(f"\r\033[K{next(spinner)} {status[:columns - 3]}\r")
             sys.stdout.flush()
         elif stalled:
             sys.stderr.write(f"WARNING: {status}\n")
@@ -243,8 +307,12 @@ if __name__ == "__main__":
     threading.Thread(target=detection_worker, name="detection_worker", daemon=True).start()
     threading.Thread(target=heartbeat, name="heartbeat", daemon=True).start()
 
+    print(f"Uploading with up to {MAX_WORKERS} threads{' (auto)' if AUTO_MAX_WORKERS else ''}; skipping "
+          f"{frames_to_skip} frames between detections{', re-tuned automatically' if AUTO_SKIP_X_FRAMES else ''}")
+
     try:
         video_capture = open_video_capture()
+        progress = detection_progress()
 
         while True:
             ret, frame = video_capture.read()
@@ -259,6 +327,9 @@ if __name__ == "__main__":
 
             frame_count += 1
             stats["frames_read"] = frame_count
+            if AUTO_SKIP_X_FRAMES and time.monotonic() - progress[0] >= AUTO_SKIP_SECONDS:
+                previous, progress = progress, detection_progress()
+                frames_to_skip = stats["frames_to_skip"] = auto_frames_to_skip(previous, progress, frames_to_skip)
             if frame_count % (frames_to_skip + 1) == 0:  # Process only every (frames_to_skip + 1)th frame
                 offer_latest_frame(frame)
 
@@ -276,8 +347,5 @@ if __name__ == "__main__":
         print("main execution exiting...")  # Indicate clean exit
 
     if interrupted:
-        # Die by SIGINT instead of exiting 0: a shell loop such as `while true; do ./run_detector.sh; done` only stops
-        # on Ctrl+C when the child was killed by SIGINT, otherwise it assumes the child handled it and starts another
-        signal.signal(signal.SIGINT, signal.SIG_DFL)
-        sys.stdout.flush()  # dying by signal skips Python's exit-time flush of buffered output
-        os.kill(os.getpid(), signal.SIGINT)
+        # Die by SIGINT instead of exiting 0, so the supervisor and any calling shell loop stop instead of restarting
+        process_utils.exit_by_signal(signal.SIGINT)
