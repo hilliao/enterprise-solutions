@@ -42,11 +42,14 @@ fi
 OUTPUT_DIR="$HOME/Documents/news-aggregate"
 mkdir -p "$OUTPUT_DIR"
 
-export OLLAMA_HOST="${OLLAMA_HOST:-8400f:11435}"
+export OLLAMA_HOST="${OLLAMA_HOST:-8400f:11434}"
 OLLAMA_MODEL="${OLLAMA_MODEL:-gemma3:4b}"
 
 DEFAULT_PROMPT_LINES=200
 DEFAULT_VIRTUAL_TIME_BUDGET=15000
+# Some sites answer "403 Forbidden" when the user agent says HeadlessChrome, so present
+# the installed Chrome version as a regular desktop browser.
+CHROME_USER_AGENT="Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/$(google-chrome --version | sed -E 's/[^0-9]*([0-9]+).*/\1/').0.0.0 Safari/537.36"
 
 # Registry of built-in sites: key -> URL
 declare -A SITE_URLS=(
@@ -83,6 +86,7 @@ process_site() {
     --headless=new \
     --disable-gpu \
     --user-data-dir="$PROFILE_DIR" \
+    --user-agent="$CHROME_USER_AGENT" \
     --virtual-time-budget="$DEFAULT_VIRTUAL_TIME_BUDGET" \
     --dump-dom \
     "$url" 2>/dev/null > "$raw_html"; then
