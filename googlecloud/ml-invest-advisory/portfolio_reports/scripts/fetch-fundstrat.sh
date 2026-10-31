@@ -46,8 +46,8 @@
 #                                                   # LINES: number of lines fed to Ollama (default 120)
 #   ./fetch-fundstrat.sh --technical-strategy    # Dump Technical Strategy article once and exit
 #   ./fetch-fundstrat.sh --crypto-comment       # Dump Crypto Comment article once and exit
-#   ./fetch-fundstrat.sh --poll [MINUTES] [LINES]  # Poll Flash Insights every N (default 20) minutes during
-#                                                   # market open hours. LINES: lines fed to Ollama (default 120)
+#   ./fetch-fundstrat.sh --poll [MINUTES] [LINES]  # Poll Flash Insights every N (default 15) minutes from 08:30 to
+#                                                   # 17:30 ET on trading days. LINES: lines fed to Ollama (default 120)
 #
 
 set -euo pipefail
@@ -62,13 +62,19 @@ CRYPTO_COMMENT_FILE="$HOME/Documents/crypto-comment.txt"
 FLASH_INSIGHTS_OVERVIEW_MD="$HOME/Documents/flash-insights-overview.md"
 FLASH_INSIGHTS_OVERVIEW="$HOME/Documents/flash-insights-overview.txt"
 PORTFOLIO_DIR="$HOME/workspace/portfolios"
-INTERVAL_MINUTES=20
+INTERVAL_MINUTES=15
+# Flash Insights are posted up to 1 hour before the 09:30 ET open and 1.5 hours after the 16:00 ET close.
+POLL_START_TIME="08:30" # America/New_York
+POLL_END_TIME="17:30"   # America/New_York
 FLASH_INSIGHTS_LINES=120
 CLOSED_CHECK_SLEEP=60
 export OLLAMA_HOST="${OLLAMA_HOST:-8400f:11434}"
 OLLAMA_MODEL="${OLLAMA_MODEL:-gemma4:12b-it-qat}"
 OLLAMA_THINK="${OLLAMA_THINK:-false}"
 OLLAMA_MAX_ATTEMPTS=3
+# fundstratdirect.com answers "403 Forbidden" when the user agent says HeadlessChrome, so present
+# the installed Chrome version as a regular desktop browser.
+CHROME_USER_AGENT="Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/$(google-chrome --version | sed -E 's/[^0-9]*([0-9]+).*/\1/').0.0.0 Safari/537.36"
 # Text rendered by fundstratdirect.com instead of member content when the session is not authenticated.
 PAYWALL_MARKER="You need a Fundstrat Direct subscription"
 # NYSE/NASDAQ full-day market holidays; polling is skipped on these dates.
@@ -106,6 +112,13 @@ check_session() {
     echo "    google-chrome --user-data-dir=\"$PROFILE_DIR\" \"$MEMBERS_URL\"" >&2
     return 1
   fi
+  # The web server answers with a bare error page (e.g. "403 Forbidden" from nginx) when it refuses the request.
+  local error_title
+  error_title="$(grep -oiE '<title>[45][0-9]{2} [^<]*' "$html_file" | head -n 1 | sed 's/^<title>//I' || true)"
+  if [[ -n "$error_title" ]]; then
+    echo "ERROR: $url returned HTTP error page '$error_title' — the site refused the headless Chrome request." >&2
+    return 1
+  fi
 }
 
 # Fails if the given output file has no lines.
@@ -128,9 +141,9 @@ is_market_holiday() {
   return 1
 }
 
-# Check if NYSE/NASDAQ market is open (Mon-Fri 09:30 - 16:00 US/Eastern, excluding HOLIDAYS).
-is_market_open() {
-  local day_of_week hour min total_min
+# Check if now is inside the polling window (Mon-Fri POLL_START_TIME - POLL_END_TIME US/Eastern, excluding HOLIDAYS).
+is_poll_window() {
+  local day_of_week hour min total_min start_min end_min
   if is_market_holiday "$(TZ="America/New_York" date +%Y-%m-%d)"; then
     return 1
   fi
@@ -138,24 +151,26 @@ is_market_open() {
   hour="$(TZ="America/New_York" date +%-H)"        # 0..23 (no leading zero)
   min="$(TZ="America/New_York" date +%-M)"         # 0..59 (no leading zero)
   total_min=$((hour * 60 + min))
+  start_min=$((10#${POLL_START_TIME%:*} * 60 + 10#${POLL_START_TIME#*:}))
+  end_min=$((10#${POLL_END_TIME%:*} * 60 + 10#${POLL_END_TIME#*:}))
 
-  # Mon (1) to Fri (5) between 09:30 (570 min) and 16:00 (960 min) ET
+  # Mon (1) to Fri (5) between POLL_START_TIME and POLL_END_TIME ET
   if [[ "$day_of_week" -ge 1 && "$day_of_week" -le 5 ]]; then
-    if [[ "$total_min" -ge 570 && "$total_min" -lt 960 ]]; then
+    if [[ "$total_min" -ge "$start_min" && "$total_min" -lt "$end_min" ]]; then
       return 0
     fi
   fi
   return 1
 }
 
-# Prints the epoch seconds of the next market open (09:30 US/Eastern on the next weekday not in HOLIDAYS).
-next_market_open_epoch() {
+# Prints the epoch seconds of the next polling window start (POLL_START_TIME US/Eastern on the next weekday not in HOLIDAYS).
+next_poll_start_epoch() {
   local candidate_date day_of_week open_epoch now_epoch
   candidate_date="$(TZ="America/New_York" date +%Y-%m-%d)"
   now_epoch="$(date +%s)"
   while true; do
     day_of_week="$(TZ="America/New_York" date -d "$candidate_date" +%u)"
-    open_epoch="$(TZ="America/New_York" date -d "$candidate_date 09:30:00" +%s)"
+    open_epoch="$(TZ="America/New_York" date -d "$candidate_date $POLL_START_TIME:00" +%s)"
     if [[ "$day_of_week" -le 5 && "$open_epoch" -gt "$now_epoch" ]] && ! is_market_holiday "$candidate_date"; then
       echo "$open_epoch"
       return 0
@@ -172,6 +187,7 @@ ensure_members_html() {
       --headless=new \
       --disable-gpu \
       --user-data-dir="$PROFILE_DIR" \
+      --user-agent="$CHROME_USER_AGENT" \
       --virtual-time-budget=15000 \
       --dump-dom \
       "$MEMBERS_URL" 2>/dev/null > "$RAW_MEMBERS_HTML"; then
@@ -202,6 +218,7 @@ run_flash_insights_once() {
     --headless=new \
     --disable-gpu \
     --user-data-dir="$PROFILE_DIR" \
+    --user-agent="$CHROME_USER_AGENT" \
     --virtual-time-budget=15000 \
     --dump-dom \
     "$FLASH_INSIGHTS_URL" 2>/dev/null > "$RAW_FLASH_INSIGHT_HTML"; then
@@ -308,6 +325,7 @@ fetch_technical_strategy_once() {
     --headless=new \
     --disable-gpu \
     --user-data-dir="$PROFILE_DIR" \
+    --user-agent="$CHROME_USER_AGENT" \
     --virtual-time-budget=15000 \
     --dump-dom \
     "$tech_strategy_url" 2>/dev/null > "$RAW_TECH_STRATEGY_HTML"; then
@@ -349,6 +367,7 @@ fetch_crypto_comment_once() {
     --headless=new \
     --disable-gpu \
     --user-data-dir="$PROFILE_DIR" \
+    --user-agent="$CHROME_USER_AGENT" \
     --virtual-time-budget=15000 \
     --dump-dom \
     "$crypto_comment_url" 2>/dev/null > "$RAW_CRYPTO_COMMENT_HTML"; then
@@ -416,7 +435,7 @@ else
       echo "                                                  LINES: number of lines fed to Ollama (default 120)"
       echo "  --technical-strategy, --dump-technical-strategy Dump Technical Strategy article once and exit"
       echo "  --crypto-comment, --dump-crypto-comment        Dump Crypto Comment article once and exit"
-      echo "  --poll [MINUTES] [LINES]                       Poll Flash Insights every N (default 20) minutes during market open hours"
+      echo "  --poll [MINUTES] [LINES]                       Poll Flash Insights every N (default 15) minutes from $POLL_START_TIME to $POLL_END_TIME ET on trading days"
       echo "                                                  LINES: number of lines fed to Ollama (default 120)"
       echo "  -h, --help                                     Display this help message"
       exit 0
@@ -448,7 +467,7 @@ case "$MODE" in
     echo "Starting web content polling monitor (Execution frequency: every ${INTERVAL_MINUTES} minutes)..."
     closed_status_printed=false
     while true; do
-      if is_market_open; then
+      if is_poll_window; then
         if [[ "$closed_status_printed" == "true" ]]; then
           printf "\n"
           closed_status_printed=false
@@ -456,8 +475,8 @@ case "$MODE" in
         run_flash_insights_once
         sleep_with_countdown "$INTERVAL_MINUTES"
       else
-        # Refresh the countdown every second on the same line until the next market-open recheck.
-        next_open_epoch="$(next_market_open_epoch)"
+        # Refresh the countdown every second on the same line until the next polling-window recheck.
+        next_open_epoch="$(next_poll_start_epoch)"
         elapsed=0
         while [[ "$elapsed" -lt "$CLOSED_CHECK_SLEEP" ]]; do
           remaining=$((next_open_epoch - $(date +%s)))
@@ -465,7 +484,7 @@ case "$MODE" in
             break
           fi
           now_str="$(TZ="America/New_York" date '+%Y-%m-%d %H:%M:%S %Z')"
-          printf "\r\033[K[%s] NYSE and NASDAQ markets are closed. Script to resume in %dh %dm %ds." \
+          printf "\r\033[K[%s] Outside the $POLL_START_TIME-$POLL_END_TIME ET polling window. Script to resume in %dh %dm %ds." \
             "$now_str" $((remaining / 3600)) $((remaining % 3600 / 60)) $((remaining % 60))
           closed_status_printed=true
           sleep 1

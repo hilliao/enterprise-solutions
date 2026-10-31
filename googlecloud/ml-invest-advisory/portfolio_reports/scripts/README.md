@@ -44,7 +44,7 @@ one-time setup) and, for Flash Insights, summarizes it with Ollama.
 ./fetch-fundstrat.sh --flash-insights [LINES]        # dump + summarize once
 ./fetch-fundstrat.sh --technical-strategy            # dump latest article once
 ./fetch-fundstrat.sh --crypto-comment                # dump latest article once
-./fetch-fundstrat.sh --poll [MINUTES] [LINES]         # poll during market hours (default 20 min)
+./fetch-fundstrat.sh --poll [MINUTES] [LINES]         # poll 08:30-17:30 ET on trading days (default 15 min)
 ./fetch-fundstrat.sh -h|--help
 ```
 Requires `google-chrome`, `html2text`, `ollama`. Writes to `~/Documents/` and
