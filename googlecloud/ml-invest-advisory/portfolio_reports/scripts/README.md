@@ -18,11 +18,16 @@ Key env vars: `PORTFOLIO_DIR`, `LLM_PROMPT_TEMPLATE`, `USE_CASE`,
 
 ### report-news-impact.sh
 Same pipeline as `report-daily.sh`, but generates a "flash
-insights" / breaking-news impact report per portfolio, injecting a
-`news_YYYY-MM-DD.txt` file (produced by `fetch-fundstrat.sh` or
-`fetch-news.sh`) in place of `{{FLASH_INSIGHTS}}`. Exits with an error
-if the news file is missing.
-Key env vars: `PORTFOLIO_DIR`, `LLM_PROMPT_TEMPLATE`, `USE_CASE`, `NEWS_FILE`,
+insights" / breaking-news impact report per portfolio and news site. It
+reads every `PORTFOLIO_DIR/news-<SITE>_YYYY-MM-DD.txt` file for today
+(produced by `fetch-news.sh --site <SITE>`, e.g. `news-fundstrat_2026-11-01.txt`,
+`news-cnbc_2026-11-01.txt`, `news-wsj_2026-11-01.txt`) and prints which files
+it found. For each portfolio it fetches quotes once, then writes one report per
+news file, with that file in place of `{{FLASH_INSIGHTS}}`:
+`$USE_CASE-<portfolio>-<SITE>.{txt,md,html}` (e.g.
+`flash-insights-yang-cnbc.html`). Set `NEWS_FILES` to a comma-separated list
+to use other files. Exits with an error if no news file is found.
+Key env vars: `PORTFOLIO_DIR`, `LLM_PROMPT_TEMPLATE`, `USE_CASE`, `NEWS_FILES`,
 `OLLAMA_MODEL`, `OLLAMA_TIMEOUT_SECONDS`.
 
 ### compare-models.sh
@@ -36,35 +41,38 @@ to a new timestamped directory under `<prompt dir>/model-comparison/`.
 ```
 Key env vars: `OUTPUT_DIR`, `OLLAMA_TIMEOUT_SECONDS` (default 1800), `OLLAMA_THINK`.
 
-### fetch-fundstrat.sh
-Fetches membership content from fundstratdirect.com via headless Chrome
-(reusing a pre-authenticated Chrome profile — see the script header for
-one-time setup) and, for Flash Insights, summarizes it with Ollama.
-```
-./fetch-fundstrat.sh --flash-insights [LINES]        # dump + summarize once
-./fetch-fundstrat.sh --technical-strategy            # dump latest article once
-./fetch-fundstrat.sh --crypto-comment                # dump latest article once
-./fetch-fundstrat.sh --poll [MINUTES] [LINES]         # poll 08:30-17:30 ET on trading days (default 15 min)
-./fetch-fundstrat.sh -h|--help
-```
-Requires `google-chrome`, `html2text`, `ollama`. Writes to `~/Documents/` and
-mirrors the Flash Insights overview to `PORTFOLIO_DIR/news_YYYY-MM-DD.txt`
-(also scp'd to a remote host). Key env vars: `OLLAMA_HOST`, `OLLAMA_MODEL`
-(default `gemma4:12b-it-qat`), `OLLAMA_THINK` (default `false`).
-
 ### fetch-news.sh
-PoC news aggregator: fetches one or more news pages via headless Chrome
-(built-in registry: `wsj`, `cnbc`, or any ad-hoc `--url`) and summarizes each
-with Ollama.
+News aggregator: fetches one news page via headless Chrome (a built-in site
+`wsj`, `cnbc` or `fundstrat`, or any ad-hoc `--url`) and summarizes it with
+Ollama. `--site fundstrat` fetches the fundstratdirect.com Flash Insights page
+(reusing a pre-authenticated Chrome profile — see the script header for
+one-time setup) and extracts the posts. Every `--site` run copies its summary
+to `PORTFOLIO_DIR/news-<SITE>_YYYY-MM-DD.txt` (read by `report-news-impact.sh`)
+and, with `scp -P $REMOTE_PORT`, to the same path on `--remote-host` (default
+`hil@hil-fr-dc.freeddns.org`; `""` skips the copy). `--url` runs only write to
+`OUTPUT_DIR`.
 ```
-./fetch-news.sh                                   # all registered sites
-./fetch-news.sh --site wsj|cnbc|all
+./fetch-news.sh --site wsj|cnbc|fundstrat
 ./fetch-news.sh --url <URL> --name <label> [--lines N]
+./fetch-news.sh --site wsj --profile-dir DIR      # use another Chrome profile
+./fetch-news.sh --site wsj --output-dir DIR       # write to DIR
+./fetch-news.sh --site wsj --remote-host U@H       # copy news-wsj_YYYY-MM-DD.txt to another host
+./fetch-news.sh --site wsj|cnbc|fundstrat --poll [MIN]  # repeat forever, sleeping MIN (default 30) after each cycle
 ./fetch-news.sh --list
 ./fetch-news.sh -h|--help
 ```
 Requires `google-chrome`, `html2text`, `ollama` (optionally `pandoc`). Writes
-to `~/Documents/news-aggregate/`.
+to `OUTPUT_DIR` (default `~/Documents/news-aggregate/`). The site navigation before the first `*****`
+heading (html2text `<h2>`) is skipped, and the next `--lines` lines (default
+600) go to Ollama. With `--poll`, a failed fetch (e.g. a WSJ captcha page) is
+retried next cycle instead of stopping the loop, and `fundstrat` is only
+fetched 08:30-17:30 ET on trading days. Key env vars: `PROFILE_DIR`,
+`OUTPUT_DIR`, `PORTFOLIO_DIR`, `REMOTE_HOST`, `REMOTE_PORT`, `OLLAMA_HOST`,
+`OLLAMA_MODEL` (default `gemma4:12b-it-qat` for every site), `OLLAMA_THINK`.
+
+The 600-line default assumes the Ollama server runs with
+`OLLAMA_CONTEXT_LENGTH=16384` (set on 8400f); with Ollama's 4096-token default
+the prompt does not fit and Ollama truncates it.
 
 ### run-market-hours.sh
 Loop that runs the daily + flash-insights portfolio scripts and uploads the
