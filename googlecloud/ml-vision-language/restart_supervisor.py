@@ -37,7 +37,7 @@ def report_healthy():
 def exit_by_signal(signum):
     """Die by signum instead of exiting with a status.
 
-    A shell loop such as `while true; do ./run_detector.sh; done` only stops on Ctrl+C when the child was killed by
+    A shell loop such as `while true; do ./run_detector_<camera>.sh; done` only stops on Ctrl+C when the child was killed by
     SIGINT, otherwise it assumes the child handled it and starts another.
     """
     signal.signal(signum, signal.SIG_DFL)
@@ -53,11 +53,11 @@ def supervise(retries, backoff_seconds):
     80 seconds for a 5 second back-off. A child that reported healthy before failing starts the count over, so the
     supervisor only gives up after `retries` restarts in a row that failed before their first detection.
     """
-    script = os.path.basename(sys.argv[0])
-    failures = 0
+    script_name = os.path.basename(sys.argv[0])
+    failures_in_a_row = 0
     child = None
 
-    def forward(signum, frame):
+    def forward_signal(signum, frame):
         """Pass `kill -USR1` (stack traces) on to the child; pass SIGTERM and SIGHUP on, then stop the same way."""
         if child is not None:
             child.send_signal(signum)  # does nothing once the child has exited
@@ -65,23 +65,23 @@ def supervise(retries, backoff_seconds):
             exit_by_signal(signum)
 
     for signum in (signal.SIGTERM, signal.SIGHUP, signal.SIGUSR1):
-        signal.signal(signum, forward)
+        signal.signal(signum, forward_signal)
 
     try:
         while True:
-            read_fd, write_fd = os.pipe()
-            os.set_blocking(read_fd, False)
+            health_read_fd, health_write_fd = os.pipe()
+            os.set_blocking(health_read_fd, False)
             # sys.orig_argv keeps interpreter options such as -X; sys.executable is the absolute interpreter path
-            child = subprocess.Popen([sys.executable, *sys.orig_argv[1:]], pass_fds=[write_fd],
-                                     env={**os.environ, HEALTH_FD_VARIABLE: str(write_fd)})
-            os.close(write_fd)
-            print(f"Supervisor: started {script} as process {child.pid}", flush=True)
+            child = subprocess.Popen([sys.executable, *sys.orig_argv[1:]], pass_fds=[health_write_fd],
+                                     env={**os.environ, HEALTH_FD_VARIABLE: str(health_write_fd)})
+            os.close(health_write_fd)
+            print(f"Supervisor: started {script_name} as process {child.pid}", flush=True)
             returncode = child.wait()
             try:
-                healthy = os.read(read_fd, 1) == b"1"
+                healthy = os.read(health_read_fd, 1) == b"1"
             except BlockingIOError:  # nothing written, but a process the child started still holds the pipe open
                 healthy = False
-            os.close(read_fd)
+            os.close(health_read_fd)
 
             if returncode == 0:
                 return 0
@@ -89,15 +89,15 @@ def supervise(retries, backoff_seconds):
                 exit_by_signal(-returncode)
             reason = (f"was killed by signal {-returncode} ({signal.strsignal(-returncode)})" if returncode < 0
                       else f"exited with code {returncode}")
-            failures = 1 if healthy else failures + 1
-            if failures > retries:
-                sys.stderr.write(f"{CLEAR_LINE}Supervisor: {script} {reason}; giving up after {retries} restarts "
+            failures_in_a_row = 1 if healthy else failures_in_a_row + 1
+            if failures_in_a_row > retries:
+                sys.stderr.write(f"{CLEAR_LINE}Supervisor: {script_name} {reason}; giving up after {retries} restarts "
                                  f"in a row failed before their first detection\n")
                 return returncode if returncode > 0 else 128 - returncode  # the shell's status for death by signal
-            delay = backoff_seconds * 2 ** (failures - 1)
-            sys.stderr.write(f"{CLEAR_LINE}Supervisor: {script} {reason}; restart {failures} of {retries} "
-                             f"in {delay:g} s\n")
-            time.sleep(delay)
+            wait_seconds = backoff_seconds * 2 ** (failures_in_a_row - 1)
+            sys.stderr.write(f"{CLEAR_LINE}Supervisor: {script_name} {reason}; restart {failures_in_a_row} of {retries} "
+                             f"in {wait_seconds:g} s\n")
+            time.sleep(wait_seconds)
     except KeyboardInterrupt:
         # Ctrl+C reached the child too, as both are in the terminal's foreground process group; let it clean up
         if child is not None:

@@ -1,19 +1,31 @@
 # Machine learning person detector using Mediapipe library
 
-* **[MediaPipe Models](https://github.com/google-ai-edge/mediapipe-samples/blob/main/examples/object_detection/python/object_detector.ipynb):** Download a TensorFlow Lite [object detection model](https://ai.google.dev/edge/mediapipe/solutions/vision/object_detector).  EfficientDet-Lite models are recommended for their balance of speed and accuracy.  Place the model in your project directory. See `mediapipe_detector.py` for examples.
+* **[MediaPipe Models](https://github.com/google-ai-edge/mediapipe-samples/blob/main/examples/object_detection/python/object_detector.ipynb):** Download a TensorFlow Lite [object detection model](https://ai.google.dev/edge/mediapipe/solutions/vision/object_detector).  EfficientDet-Lite models are recommended for their balance of speed and accuracy.  Place the model in your project directory. See [Running the Detector](#running-the-detector) for download commands.
 * **RTSP Stream:**  You'll need access to an RTSP or FFMPEG HTTP/CGI video stream.  The URL, username, and password are configured in environment variables (see below).
 * **Output Directory:**  Ensure the output directory (`OUTPUT_IMAGE_DIR`) for saving annotated images exists and is writable.
 * **(Optional) Google Cloud Storage:** To enable uploads to GCS, you'll need a GCS bucket and appropriate credentials.
 
+## Files
+
+| File | What it does |
+|---|---|
+| `run_detector_template.sh` | Template for the per-camera launch scripts: copy it to `run_detector_<camera>.sh`, set the camera's values, and run the copy. The README section at its top lists every environment variable. |
+| `person_detector.py` | The person detector: reads the camera stream, detects objects with MediaPipe, and saves and uploads frames with a person. The launch scripts run it. |
+| `restart_supervisor.py` | Runs the detector in a child process and restarts it with exponential back-off after a failure. See [Automatic restart](#automatic-restart). |
+| `draw_detections.py` | Draws the detection boxes, labels and scores on a saved frame. |
+| `gcs_upload.py` | Uploads saved frames to Google Cloud Storage and builds the URL to view them in a browser. |
+| `requirements.txt` | Python packages for the detector and the proofs of concept. |
+| `poc/` | Stand-alone experiments the detector does not use: describing camera frames with Ollama, visual question answering with BLIP, and a GPU stress test. See [poc/README.md](poc/README.md). |
+
 ## Configuration
 
-Environment variables are used to configure the script. These are set within the `run_detector.sh` script; the README section at the top of each `run_detector*.sh` lists them too. **Mandatory:** `RTSP_URL`, `TFLITE_MODEL_PATH`, `OUTPUT_IMAGE_DIR`, `OBJ_DETECT_CONFIDENCE_SCORE`, `PERSON_DETECT_CONFIDENCE_SCORE`, plus `GCS_BUCKET` and `GCS_FOLDER` when `GOOGLE_APPLICATION_CREDENTIALS` is set. All others are optional. If a mandatory variable is unset or empty, or `TFLITE_MODEL_PATH`, `OUTPUT_IMAGE_DIR` or `GOOGLE_APPLICATION_CREDENTIALS` does not exist, the detector prints an `Error:` line for each problem and exits with code 1 without restarting.
+Environment variables are used to configure the script. These are set in `run_detector_<camera>.sh`, a copy of `run_detector_template.sh`; the README section at the top of each `run_detector_*.sh` lists them too. **Mandatory:** `RTSP_URL`, `TFLITE_MODEL_PATH`, `OUTPUT_IMAGE_DIR`, `OBJ_DETECT_CONFIDENCE_SCORE`, `PERSON_DETECT_CONFIDENCE_SCORE`, plus `GCS_BUCKET` and `GCS_FOLDER` when `GOOGLE_APPLICATION_CREDENTIALS` is set. All others are optional. If a mandatory variable is unset or empty, or `TFLITE_MODEL_PATH`, `OUTPUT_IMAGE_DIR` or `GOOGLE_APPLICATION_CREDENTIALS` does not exist, the detector prints an `Error:` line for each problem and exits with code 1 without restarting.
 
 | Variable | Description                                                                                                                                                                                                        | Example                                                                                   |
 |---|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|-------------------------------------------------------------------------------------------|
 | `GOOGLE_APPLICATION_CREDENTIALS` | Path to your Google Cloud service account credentials file (optional).  Required only for GCS uploads.                                                                                                             | `confidential/secrets/person-detection-logger@gcp-project-id.iam.gserviceaccount.com`     |
 | `RTSP_URL` | **Mandatory.** URL of the RTSP or FFMPEG HTTP/CGI video stream.                                                                                                                                                                   | `rtsp://user:password@192.168.111.42:554`, http://admin:pass@192.168.123.123:82/video.cgi |
-| `TFLITE_MODEL_PATH` | **Mandatory.** Path to the TensorFlow Lite model file.                                                                                                                                                                            | `$HOME/git/enterprise-solutions/googlecloud/ml-person-detector/efficientdet_lite2.tflite` |
+| `TFLITE_MODEL_PATH` | **Mandatory.** Path to the TensorFlow Lite model file.                                                                                                                                                                            | `$HOME/git/enterprise-solutions/googlecloud/ml-vision-language/efficientdet_lite2.tflite` |
 | `MAX_WORKERS` | Number of threads for asynchronous GCS uploads (optional, defaults to `auto`: Python's `ThreadPoolExecutor` default for I/O-bound work, the number of CPU threads + 4, at most 32, so 20 on a Ryzen 7 7700X). Keep this number reasonably low (64 or less) to avoid overwhelming the router if also used as edge deployment. | `auto`, `24` |
 | `OUTPUT_IMAGE_DIR` | **Mandatory.** Path to the directory where annotated images will be saved.                                                                                                                                                        | `/mnt/1tb/ftp/ipcam/autodelete/person-detector`                                           |
 | `SKIP_X_FRAMES` | Number of frames to skip between detections (optional, defaults to `auto`). Higher values reduce processing load. `auto` starts at `3`, then every 10 seconds measures the stream's frame rate and the average time per detection, and skips just enough frames that detection takes at most `DETECTION_DUTY_CYCLE` of the time. A busy CPU or a bigger model makes detection slower, so `auto` skips more frames and leaves the RTSP reader and other detectors their share of the CPU. The status line shows the current value, e.g. `skip 4 (auto)`. | `auto`, `3` |
@@ -32,7 +44,7 @@ Environment variables are used to configure the script. These are set within the
 
 ## Running the Detector
 
-1. **Set Environment Variables:**  Copy the `run_detector.sh` template to `run_detector_<camera>.sh` and edit the values; the README section at the top of the script explains each variable. The copies hold the camera password, so keep them out of git.
+1. **Set Environment Variables:**  Copy `run_detector_template.sh` to `run_detector_<camera>.sh` and edit the values; the README section at the top of the script explains each variable. The copies hold the camera password, so keep them out of git.
 2. **Download the model**
 
 Download an off-the-shelf model. Check out the [MediaPipe documentation](https://ai.google.dev/edge/mediapipe/solutions/vision/object_detector#efficientdet-lite2_model) for more image classification models that you can use.
@@ -44,12 +56,12 @@ wget  -O efficientdet.tflite https://storage.googleapis.com/mediapipe-models/obj
 wget  -O efficientdet_lite2.tflite  https://storage.googleapis.com/mediapipe-models/object_detector/efficientdet_lite2/float32/latest/efficientdet_lite2.tflite
 ```
 
-3. **Execute the Script:**  Run the script, e.g. `./run_detector_<camera>.sh`. It creates `OUTPUT_IMAGE_DIR` if missing, then replaces itself (`exec`) with the virtual environment's `bin/python` running `mediapipe_detector.py` from the script's folder.
+3. **Execute the Script:**  Run the script, e.g. `./run_detector_<camera>.sh`. It creates `OUTPUT_IMAGE_DIR` if missing, then replaces itself (`exec`) with the virtual environment's `bin/python` running `person_detector.py` from the script's folder.
 4. **Monitoring:** The script will print status updates to the console.
 
 ## Hang protection
 
-Earlier versions used MediaPipe `LIVE_STREAM` mode with a `result_callback`, and after a few hours the process could hang: CPU idle, no new output, Ctrl+C ignored, only `kill` worked. The suspected cause (not confirmed) is the callback, which runs on a MediaPipe-owned thread, deadlocking with `detect_async()` on the main thread over the Python GIL. `mediapipe_detector.py` now:
+Earlier versions used MediaPipe `LIVE_STREAM` mode with a `result_callback`, and after a few hours the process could hang: CPU idle, no new output, Ctrl+C ignored, only `kill` worked. The suspected cause (not confirmed) is the callback, which runs on a MediaPipe-owned thread, deadlocking with `detect_async()` on the main thread over the Python GIL. `person_detector.py` now:
 
 * Runs detection synchronously in `VIDEO` mode (`detect_for_video`) on a dedicated worker thread, so MediaPipe never calls back into Python.
 * Reads frames continuously on the main thread and hands only the latest frame to the worker, so a slow detection never starves the RTSP reader.
@@ -57,25 +69,25 @@ Earlier versions used MediaPipe `LIVE_STREAM` mode with a `result_callback`, and
 * Arms a `faulthandler` watchdog: if no detection completes within `WATCHDOG_SECONDS`, it prints every thread's stack trace to stderr and exits with code 1. The watchdog runs in C, so it works even if Python threads are deadlocked.
 * Prints every thread's stack trace on demand without stopping: `kill -USR1 <pid>`.
 * Reports liveness every `HEARTBEAT_SECONDS`, for example `| 2026-10-31 11:53:16 OK | 30.0 frames/s read, 6.0 detections/s, skip 4 (auto) | threads: 3 Python, 35 OS`. On a terminal, this is one status line redrawn in place with a spinning `|/-\` prefix, cut to the terminal width so it never wraps; when output is redirected (e.g. to a log file), a new `Heartbeat ...` line is printed instead. `OK` becomes `STALLED: no detection for N s, ...` after 10 seconds without a completed detection (camera down or detection stuck); when redirected, stalled lines go to stderr as `WARNING: ...`. The heartbeat needs the Python GIL, so if the spinner freezes, Python is stuck and the watchdog fires.
-* On Ctrl+C, cleans up and then exits by SIGINT rather than with status 0, so neither the supervisor (see [Automatic restart](#automatic-restart)) nor a calling shell loop such as `while true; do ./run_detector.sh; done` starts a new detector.
+* On Ctrl+C, cleans up and then exits by SIGINT rather than with status 0, so neither the supervisor (see [Automatic restart](#automatic-restart)) nor a calling shell loop such as `while true; do ./run_detector_<camera>.sh; done` starts a new detector.
 
 When the watchdog fires, stderr shows `Timeout (0:02:00)!` followed by a `Thread 0x... (most recent call first):` block per thread, then the detector process exits with code 1 and is restarted, see [Automatic restart](#automatic-restart). A camera outage longer than `WATCHDOG_SECONDS` also triggers it, because no detection can complete. So does CPU starvation: on 2026-10-29, a 4K YouTube video playing on the same machine slowed the detector until frames/s read fell to 1-3 and the watchdog fired. `SKIP_X_FRAMES=auto` skips more frames when detection slows down, and the supervisor restarts the detector after the watchdog fires. The thread whose stack ends in a lock acquire or a native MediaPipe/OpenCV call is where the hang is.
 
 ## Automatic restart
 
-`mediapipe_detector.py` restarts itself after the watchdog exits it, so a shell loop around it is no longer needed. The watchdog has to exit the whole process, because a hung detector may hold the Python GIL, so the script runs the detector in a child process and supervises it:
+`person_detector.py` restarts itself after the watchdog exits it, so a shell loop around it is no longer needed. The watchdog has to exit the whole process, because a hung detector may hold the Python GIL, so the script runs the detector in a child process and supervises it with `restart_supervisor.py`:
 
-* When the detector fails (the watchdog fired, it crashed, or it was killed with SIGKILL, e.g. by the out-of-memory killer), the supervisor waits `RESTART_BACKOFF_SECONDS` and starts a new one, doubling the wait after each further failure: 5, 10, 20, 40, then 80 seconds by default. stderr shows, for example, `Supervisor: mediapipe_detector.py exited with code 1; restart 1 of 5 in 5 s`.
+* When the detector fails (the watchdog fired, it crashed, or it was killed with SIGKILL, e.g. by the out-of-memory killer), the supervisor waits `RESTART_BACKOFF_SECONDS` and starts a new one, doubling the wait after each further failure: 5, 10, 20, 40, then 80 seconds by default. stderr shows, for example, `Supervisor: person_detector.py exited with code 1; restart 1 of 5 in 5 s`.
 * A restarted detector that completes its first detection resets the count, so after a failure hours later the wait starts again at 5 seconds.
 * After `RESTART_RETRIES` restarts in a row that failed before their first detection (camera unreachable, wrong password, bad model path), the supervisor gives up and exits with the detector's status. With the defaults, that is about 15 minutes of failures: 6 runs that each last about `WATCHDOG_SECONDS`, plus 155 seconds of waits.
-* The detector stops for good, without a restart, when it exits with status 0, on Ctrl+C, and on SIGTERM or SIGHUP, whether sent to the supervisor or the detector. The supervisor passes SIGTERM and SIGHUP on to the detector, and `kill -USR1` too, so stack traces can be printed through either process ID. Each start logs `Supervisor: started mediapipe_detector.py as process <pid>`.
+* The detector stops for good, without a restart, when it exits with status 0, on Ctrl+C, and on SIGTERM or SIGHUP, whether sent to the supervisor or the detector. The supervisor passes SIGTERM and SIGHUP on to the detector, and `kill -USR1` too, so stack traces can be printed through either process ID. Each start logs `Supervisor: started person_detector.py as process <pid>`.
 * Missing environment variables are reported before the supervisor starts, so a configuration error is not retried.
 
 Set `RESTART_RETRIES=0` to run the detector in a single process without restarts, as before.
 
 ## Asynchronous Uploads (Optional)
 
-If `GOOGLE_APPLICATION_CREDENTIALS`, `GCS_BUCKET`, and `GCS_FOLDER` are set, annotated images containing detected persons will be asynchronously uploaded to your specified Google Cloud Storage bucket. The upload tasks are managed by a thread pool to avoid blocking the detection worker. The files are organised within the GCS bucket in the format:  `GCS_FOLDER/YYYY-MM-DD/HH/annotated_YYYY-MM-DD_HH-MM-SS.ffffff.png`. Public URL can be generated with `gcp_utils.gcs_path_to_http_url(gs://bucket-name/full/path/to/file.png)`
+If `GOOGLE_APPLICATION_CREDENTIALS`, `GCS_BUCKET`, and `GCS_FOLDER` are set, annotated images containing detected persons will be asynchronously uploaded to your specified Google Cloud Storage bucket. The upload tasks are managed by a thread pool to avoid blocking the detection worker. The files are organised within the GCS bucket in the format:  `GCS_FOLDER/YYYY-MM-DD/HH/annotated_YYYY-MM-DD_HH-MM-SS.ffffff.png`. The detector logs each frame's browser URL, built with `gcs_upload.gcs_path_to_browser_url("gs://bucket-name/full/path/to/file.png")`; opening it needs read access to the object.
 
 ## Additional Notes
 

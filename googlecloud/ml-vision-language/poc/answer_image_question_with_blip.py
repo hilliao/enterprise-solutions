@@ -1,3 +1,8 @@
+"""Answer a question about an image with the Salesforce BLIP visual question answering model.
+
+Usage: IMAGE_PATH=/home/user/picture-dog-0.png QUESTION="how many dogs are in the picture?" \\
+       python poc/answer_image_question_with_blip.py
+"""
 import requests
 from PIL import Image
 from transformers import BlipProcessor, BlipForQuestionAnswering
@@ -6,7 +11,7 @@ import os
 import sys
 
 
-def process_image_and_question(image_path, question):
+def answer_image_question(image_path, question):
     """
     Processes an image and answers a question about it using the BLIP model.
 
@@ -19,11 +24,11 @@ def process_image_and_question(image_path, question):
 
     # Check for CUDA availability
     if torch.cuda.is_available():
-        num_gpus = torch.cuda.device_count()
-        print(f"CUDA is available, using {num_gpus} GPU(s).")
-        for i in range(num_gpus):
-            print(f"  GPU {i}: {torch.cuda.get_device_name(i)}")
-            print(f"    Memory: {torch.cuda.get_device_properties(i).total_memory / 1e9:.2f} GB")
+        gpu_count = torch.cuda.device_count()
+        print(f"CUDA is available, using {gpu_count} GPU(s).")
+        for gpu_index in range(gpu_count):
+            print(f"  GPU {gpu_index}: {torch.cuda.get_device_name(gpu_index)}")
+            print(f"    Memory: {torch.cuda.get_device_properties(gpu_index).total_memory / 1e9:.2f} GB")
 
         model = model.to("cuda")  # Move the entire model to CUDA directly
 
@@ -35,13 +40,13 @@ def process_image_and_question(image_path, question):
     else:
         raise ValueError("Invalid image path. Please provide a valid URL or local file path.")
 
-    inputs = processor(raw_image, question, return_tensors="pt")
+    model_inputs = processor(raw_image, question, return_tensors="pt")
 
     if torch.cuda.is_available():
-        inputs = inputs.to("cuda")  # only move inputs to cuda if cuda is available
+        model_inputs = model_inputs.to("cuda")  # only move inputs to cuda if cuda is available
 
-    generated_ids = model.generate(**inputs)
-    return processor.decode(generated_ids[0], skip_special_tokens=True)
+    answer_token_ids = model.generate(**model_inputs)
+    return processor.decode(answer_token_ids[0], skip_special_tokens=True)
 
 
 if __name__ == "__main__":
@@ -58,5 +63,5 @@ if __name__ == "__main__":
         print("Error: QUESTION environment variable not set.", file=sys.stderr)
         sys.exit(1)
 
-    answer = process_image_and_question(image_path, question)
+    answer = answer_image_question(image_path, question)
     print(answer)

@@ -1,3 +1,7 @@
+"""Load a GPU with ResNet50 inference and a tensor that fills it to --mem MB, e.g. to check its cooling and memory.
+
+Usage: python poc/gpu_stress_test_resnet50.py --mem 3500
+"""
 import torch
 import torchvision.models as models
 import time
@@ -64,26 +68,26 @@ def run_gpu_stress_test(target_memory_mb):
     print("Check 'nvidia-smi' in another terminal to monitor GPU usage.")
 
     try:
-        iteration = 0
+        passes = 0
         start_time = time.time()
         while True:
             with torch.no_grad():
                 output = model(dummy_input)
             
-            probabilities = torch.nn.functional.softmax(output, dim=1)
+            torch.nn.functional.softmax(output, dim=1)
 
-            iteration += 1
-            if iteration % 10 == 0:
+            passes += 1
+            if passes % 10 == 0:
                 elapsed = time.time() - start_time
-                fps = iteration / elapsed
-                print(f"\rCompleted {iteration} inference passes ({fps:.2f} FPS). "
+                passes_per_second = passes / elapsed
+                print(f"\rCompleted {passes} inference passes ({passes_per_second:.2f} FPS). "
                       f"GPU memory: {torch.cuda.memory_allocated(0) / 1024 ** 2:.2f} MB", end="")
 
     except KeyboardInterrupt:
         print("\n\nInference stopped by user.")
         elapsed = time.time() - start_time
         if elapsed > 0:
-            print(f"Ran {iteration} inference passes in {elapsed:.2f} seconds ({iteration / elapsed:.2f} FPS).")
+            print(f"Ran {passes} inference passes in {elapsed:.2f} seconds ({passes / elapsed:.2f} FPS).")
 
     except torch.cuda.OutOfMemoryError:
         print("\n\nERROR: Out of memory during inference.")
