@@ -32,7 +32,7 @@ Set the following environment variables to customize the behavior:
 *   `PORTFOLIO_DIR`: Directory containing your portfolio `.json` files.
 *   `GOOGLE_APPLICATION_CREDENTIALS`: Path to your Google Cloud service account key.
 *   `MARKET_COMMENTARY_FILE`: (For daily reports) Path to a text file containing market commentary.
-*   `NEWS_FILE`: (For flash insights) Path to a text file containing breaking news/insights.
+*   `NEWS_FILES`: (For flash insights) Comma-separated news files; defaults to every `news-<SITE>_YYYY-MM-DD.txt` for today in `PORTFOLIO_DIR`, written by `scripts/fetch-news.sh --site <SITE>`.
 *   `OLLAMA_MODEL`: Ollama model used for the reports (default `gemma4:12b-it-qat`). Use `scripts/compare-models.sh` to compare candidate models on the same prompt.
 
 ### Portfolio Format
@@ -56,7 +56,7 @@ Generates a comprehensive daily analysis. It searches for all `.json` portfolios
 ### 2. Flash Insights reports
 **Script**: `scripts/report-news-impact.sh`
 
-Designed for rapid analysis of breaking news. It uses a specific "flash insights" template and injects content from `NEWS_FILE` to analyze how current events might impact your specific holdings.
+Designed for rapid analysis of breaking news. It uses a specific "flash insights" template and injects each of today's news files from `scripts/fetch-news.sh` to analyze how current events might impact your specific holdings, producing one report per portfolio and news site (e.g. `flash-insights-yang-cnbc.html`).
 
 ### 3. Realtime Continuous Monitoring
 **Script**: `scripts/run-market-hours.sh`
