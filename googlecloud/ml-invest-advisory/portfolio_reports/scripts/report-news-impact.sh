@@ -1,7 +1,7 @@
 #!/bin/bash
 #
 # Purpose:
-#   Generates a breaking-news ("flash insights") impact report per portfolio with
+#   Generates a breaking-news ("flash insights") impact report per portfolio and news site with
 #   a local Ollama LLM. For every *.json portfolio file in PORTFOLIO_DIR:
 #     1) Builds an LLM prompt from LLM_PROMPT_TEMPLATE via build_portfolio_prompt.py,
 #        which fetches current quotes from STOCK_QUOTES_CLOUD_RUN_URL (once per portfolio).
@@ -20,14 +20,15 @@
 #   for today's date is used. The script exits with status 1 if none is found.
 #
 # Requirements:
-#   - python with build_portfolio_prompt.py's dependencies installed
+#   - python3 with build_portfolio_prompt.py's dependencies installed
 #   - GOOGLE_APPLICATION_CREDENTIALS set (required by build_portfolio_prompt.py)
 #   - `ollama` CLI with the OLLAMA_MODEL model available
 #   - `pandoc` (optional; HTML reports are skipped without it)
+#   - report-common.sh next to this script
 #
 # Environment variables (all optional; defaults shown):
-#   PORTFOLIO_DIR              ~/git/enterprise-solutions/googlecloud/ml-invest-advisory/portfolio_reports/test-portfolios
-#   LLM_PROMPT_TEMPLATE        .../portfolio_reports/prompt_templates/flash-insights-report-template.txt
+#   PORTFOLIO_DIR              <portfolio_reports>/test-portfolios
+#   LLM_PROMPT_TEMPLATE        <portfolio_reports>/prompt_templates/flash-insights-report-template.txt
 #   USE_CASE                   flash-insights (prefix of the output file names)
 #   NEWS_FILES                 every $PORTFOLIO_DIR/news-*_YYYY-MM-DD.txt for today's date; set it to a
 #                              comma-separated list of files to use those instead
@@ -50,7 +51,7 @@
 #   OLLAMA_TIMEOUT_SECONDS twice (first attempt and its retry)).
 #
 # Callers:
-#   run-market-hours.sh runs both report scripts in PORTFOLIO_SCRIPT on every
+#   run-market-hours.sh runs both report scripts in REPORT_COMMAND on every
 #   loop iteration during the 08:00-18:00 ET window,
 #   then uploads $PORTFOLIO_DIR/*.html to GCS:
 #
@@ -63,47 +64,25 @@ set -e # exit the script when execution hits any error
 set -o pipefail # ensure exit code of pipe is the rightmost non-zero exit code
 [[ -n "${DEBUG:-}" ]] && set -x # print the executing lines if DEBUG is set
 
-export PORTFOLIO_DIR="${PORTFOLIO_DIR:-$HOME/git/enterprise-solutions/googlecloud/ml-invest-advisory/portfolio_reports/test-portfolios}"
-export LLM_PROMPT_TEMPLATE="${LLM_PROMPT_TEMPLATE:-$HOME/git/enterprise-solutions/googlecloud/ml-invest-advisory/portfolio_reports/prompt_templates/flash-insights-report-template.txt}"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$SCRIPT_DIR/report-common.sh"
+
+# ---------------------------------------------------------------------------
+# Settings (environment variables, see the header for their defaults)
+# ---------------------------------------------------------------------------
+
+# Portfolio *.json input files and news-<SITE>_YYYY-MM-DD.txt files, and the folder the reports are written to.
+export PORTFOLIO_DIR="${PORTFOLIO_DIR:-$PORTFOLIO_REPORTS_DIR/test-portfolios}"
+# Prompt template with {{PORTFOLIO_HOLDING_DATA_JSON}} and {{FLASH_INSIGHTS}}, and the output file name prefix.
+export LLM_PROMPT_TEMPLATE="${LLM_PROMPT_TEMPLATE:-$PORTFOLIO_REPORTS_DIR/prompt_templates/flash-insights-report-template.txt}"
 export USE_CASE="${USE_CASE:-flash-insights}"
-
-# News files are named news-<SITE>_YYYY-MM-DD.txt (e.g. news-wsj_2026-11-01.txt), one per site written by
-# `fetch-news.sh --site <SITE>`. NEWS_FILES (comma-separated) replaces the default of all of today's files.
-# Unreadable files are skipped with a warning; the script stops if no news file is left.
-NEWS_DATE="$(date +%Y-%m-%d)"
-if [ -n "${NEWS_FILES:-}" ]; then
-  IFS=',' read -r -a NEWS_FILE_CANDIDATES <<< "$NEWS_FILES"
-else
-  shopt -s nullglob
-  NEWS_FILE_CANDIDATES=("$PORTFOLIO_DIR"/news-*_"$NEWS_DATE".txt)
-  shopt -u nullglob
-fi
-FOUND_NEWS_FILES=()
-for news_file in "${NEWS_FILE_CANDIDATES[@]}"; do
-  if [ -r "$news_file" ]; then
-    echo "Found news file: $news_file"
-    FOUND_NEWS_FILES+=("$news_file")
-  else
-    echo "Warning: news file is missing or not readable, skipping: $news_file" >&2
-  fi
-done
-if [ "${#FOUND_NEWS_FILES[@]}" -eq 0 ]; then
-  echo "Error: no news files found (expected $PORTFOLIO_DIR/news-<SITE>_$NEWS_DATE.txt or NEWS_FILES). Stopping script." >&2
-  exit 1
-fi
-
-# Holds each portfolio's prompt before {{FLASH_INSIGHTS}} is replaced.
-WORK_DIR="$(mktemp -d /tmp/report-news-impact-XXXXXX)"
-trap 'rm -rf "$WORK_DIR"' EXIT
-
+# Comma-separated news files; empty means every news-*_<today>.txt in PORTFOLIO_DIR.
+export NEWS_FILES="${NEWS_FILES:-}"
+# Stock quotes Cloud Run endpoint read by build_portfolio_prompt.py.
 export STOCK_QUOTES_CLOUD_RUN_URL="${STOCK_QUOTES_CLOUD_RUN_URL:-https://us-central1-my-gcp-project.cloudfunctions.net/get-us-ticker-quotes}"
+# Ollama model, and how long one report may take before `ollama run` is killed and retried once.
 export OLLAMA_MODEL="${OLLAMA_MODEL:-gemma4:12b-it-qat}"
 export OLLAMA_TIMEOUT_SECONDS="${OLLAMA_TIMEOUT_SECONDS:-600}"
-
-if ! [[ "$OLLAMA_TIMEOUT_SECONDS" =~ ^[1-9][0-9]*$ ]]; then
-  echo "ERROR: OLLAMA_TIMEOUT_SECONDS must be a positive integer number of seconds, got: $OLLAMA_TIMEOUT_SECONDS" >&2
-  exit 1
-fi
 
 # Prints the site name of a news file: news-<SITE>_YYYY-MM-DD.txt -> <SITE> (other names: the base name).
 news_site_name() {
@@ -113,79 +92,70 @@ news_site_name() {
   echo "${site%_*}"
 }
 
-# Runs PROMPT_FILE through ollama, printing the output and writing it to OUTPUT_FILE. Kills ollama if it runs longer
-# than OLLAMA_TIMEOUT_SECONDS (e.g. the model is stuck repeating itself) and retries once, overwriting OUTPUT_FILE.
-# If the retry also times out, returns timeout's exit code (124, or 137 if ollama ignored SIGTERM for 10 seconds).
-# Other failures are returned immediately without a retry. Exit codes are handled explicitly because set -e doesn't
-# apply inside a function called as part of a && list.
-run_ollama() {
-  local prompt_file="$1" output_file="$2" exit_code attempt
-  for attempt in 1 2; do
-    exit_code=0
-    timeout --foreground --kill-after=10s "${OLLAMA_TIMEOUT_SECONDS}s" ollama run --nowordwrap --hidethinking "$OLLAMA_MODEL" < "$prompt_file" \
-      | tee "$output_file" || exit_code=$?
-    if [ "$exit_code" -ne 124 ] && [ "$exit_code" -ne 137 ]; then
-      return "$exit_code"
-    fi
-    if [ "$attempt" -eq 1 ]; then
-      echo -e "\nWARNING: ollama run did not finish within ${OLLAMA_TIMEOUT_SECONDS}s for $prompt_file; retrying once at $(date)" >&2
-    fi
-  done
-  echo "ERROR: ollama run did not finish within ${OLLAMA_TIMEOUT_SECONDS}s for $prompt_file after a retry; aborting at $(date)" >&2
-  return "$exit_code"
-}
+# ---------------------------------------------------------------------------
+# Input checks
+# ---------------------------------------------------------------------------
+require_valid_ollama_timeout
 
-
-# Check for dependencies at the start, outside the loop
-if ! command -v pandoc &> /dev/null; then
-  echo "Warning: pandoc is not installed. HTML reports will not be generated."
-  PANDOC_EXISTS=false
+# Find the news files: NEWS_FILES, or else today's news-<SITE>_YYYY-MM-DD.txt files. Unreadable files are skipped
+# with a warning; the script stops if no news file is left.
+today="$(date +%Y-%m-%d)"
+if [ -n "$NEWS_FILES" ]; then
+  IFS=',' read -r -a candidate_news_files <<< "$NEWS_FILES"
 else
-  PANDOC_EXISTS=true
+  shopt -s nullglob
+  candidate_news_files=("$PORTFOLIO_DIR"/news-*_"$today".txt)
+  shopt -u nullglob
+fi
+news_files=()
+for news_file in "${candidate_news_files[@]}"; do
+  if [ -r "$news_file" ]; then
+    echo "Found news file: $news_file"
+    news_files+=("$news_file")
+  else
+    echo "Warning: news file is missing or not readable, skipping: $news_file" >&2
+  fi
+done
+if [ "${#news_files[@]}" -eq 0 ]; then
+  echo "Error: no news files found (expected $PORTFOLIO_DIR/news-<SITE>_$today.txt or NEWS_FILES). Stopping script." >&2
+  exit 1
 fi
 
-PORTFOLIO_FILES=$(find "$PORTFOLIO_DIR" -maxdepth 1 -type f -name "*.json")
+check_pandoc
+find_portfolio_files
 
-# Loop through each portfolio file and print its name and first x lines
-for file in $PORTFOLIO_FILES; do
-  echo "Found portfolio file: $file. Showing top 6 lines:"
-  head -n 6 "$file"
-  echo "" # Add a blank line for readability
+# Holds each portfolio's prompt before {{FLASH_INSIGHTS}} is replaced.
+work_dir="$(mktemp -d /tmp/report-news-impact-XXXXXX)"
+trap 'rm -rf "$work_dir"' EXIT
 
-  PORTFOLIO_NAME=$(basename "$file" .json)
+# ---------------------------------------------------------------------------
+# One report per portfolio and news file
+# ---------------------------------------------------------------------------
+for portfolio_file in "${PORTFOLIO_FILES[@]}"; do
+  print_portfolio_header "$portfolio_file"
+
   # Fetch the quotes once per portfolio; a failure (e.g. exit 69) stops the script via set -e.
-  BASE_PROMPT_FILE="$WORK_DIR/$USE_CASE-${PORTFOLIO_NAME}.txt"
-  export GET_QUOTES_CMD="python $HOME/git/enterprise-solutions/googlecloud/ml-invest-advisory/portfolio_reports/build_portfolio_prompt.py \
-    --portfolio_file=$file \
-    --llm_prompt_template=$LLM_PROMPT_TEMPLATE \
-    --output_prompt=$BASE_PROMPT_FILE"
-  $GET_QUOTES_CMD
+  portfolio_name="$(basename "$portfolio_file" .json)"
+  portfolio_prompt_file="$work_dir/$USE_CASE-$portfolio_name.txt"
+  build_portfolio_prompt "$portfolio_file" "$portfolio_prompt_file"
 
   # One report per news file, so each site's news is analyzed on its own.
-  for news_file in "${FOUND_NEWS_FILES[@]}"; do
-    SITE="$(news_site_name "$news_file")"
-    REPORT_NAME="$USE_CASE-${PORTFOLIO_NAME}-${SITE}"
-    OUTPUT_PROMPT_FILE="$PORTFOLIO_DIR/$REPORT_NAME.txt"
-    MD_OUTPUT_FILE="$PORTFOLIO_DIR/$REPORT_NAME.md"
-    echo "--- Generating $REPORT_NAME from $news_file ---"
+  for news_file in "${news_files[@]}"; do
+    site="$(news_site_name "$news_file")"
+    report_name="$USE_CASE-$portfolio_name-$site"
+    prompt_file="$PORTFOLIO_DIR/$report_name.txt"
+    report_md="$PORTFOLIO_DIR/$report_name.md"
+    report_html="$PORTFOLIO_DIR/$report_name.html"
+    echo "--- Generating $report_name from $news_file ---"
 
-    # Replace the {{FLASH_INSIGHTS}} placeholder keyword with this site's news, using python for multi-line string
-    # replacement to avoid sed escaping issues.
+    # Replace {{FLASH_INSIGHTS}} with this site's news under a "### <SITE>" heading.
+    # Python avoids sed's escaping issues with multi-line text.
     python3 -c 'import sys; text=open(sys.argv[1]).read(); news="### " + sys.argv[3] + "\n\n" + open(sys.argv[2]).read(); open(sys.argv[4], "w").write(text.replace("{{FLASH_INSIGHTS}}", news))' \
-      "$BASE_PROMPT_FILE" "$news_file" "$SITE" "$OUTPUT_PROMPT_FILE"
-    run_ollama "$OUTPUT_PROMPT_FILE" "$MD_OUTPUT_FILE"
+      "$portfolio_prompt_file" "$news_file" "$site" "$prompt_file"
 
-    # Append the prompt to the markdown file
-    echo -e "\n# <span style=\"color: brown;\">Input Prompt for LLM</span>" >> "$MD_OUTPUT_FILE"
-    cat "$OUTPUT_PROMPT_FILE" >> "$MD_OUTPUT_FILE"
-
-    # Convert markdown to HTML if pandoc is available
-    if [ "$PANDOC_EXISTS" = true ]; then
-      HTML5_OUTPUT_FILE="${PORTFOLIO_DIR}/$REPORT_NAME.html"
-      echo -e "\n--- Generating HTML report using pandoc at $HTML5_OUTPUT_FILE ---"
-      DATETIME_NOW="Breaking News Impact Report for $PORTFOLIO_NAME from $SITE at $(date +"%Y-%m-%d %H:%M:%S %Z")"
-      pandoc -s -f gfm -t html5 -o "$HTML5_OUTPUT_FILE" "$MD_OUTPUT_FILE" \
-      --metadata title="$DATETIME_NOW" --include-in-header <(echo '<style>body { max-width: 80%; margin: 0 auto; } p, li, td, th { line-height: 1.5; }</style>')
-    fi
+    run_ollama "$prompt_file" "$report_md"
+    append_prompt_to_report "$prompt_file" "$report_md"
+    write_html_report "$report_md" "$report_html" \
+      "Breaking News Impact Report for $portfolio_name from $site at $(date +"%Y-%m-%d %H:%M:%S %Z")"
   done
 done

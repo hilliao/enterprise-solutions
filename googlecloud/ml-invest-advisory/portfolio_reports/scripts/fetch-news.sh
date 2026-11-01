@@ -80,14 +80,22 @@
 set -euo pipefail
 
 # ---------------------------------------------------------------------------
-# Environment & Path Configuration
+# Settings (environment variables, see the header for their defaults)
 # ---------------------------------------------------------------------------
+
+# --- Folders ---
+# Chrome profile logged in to fundstratdirect.com; every site is fetched with it.
 PROFILE_DIR="${PROFILE_DIR:-$HOME/workspace/chrome-flashinsights-profile}"
+# Every run writes <name>.txt (page text), <name>-summary.md and <name>-summary.txt here.
 OUTPUT_DIR="${OUTPUT_DIR:-$HOME/Documents/news-aggregate}"
+# --site runs also write news-<SITE>_YYYY-MM-DD.txt here for report-news-impact.sh.
 PORTFOLIO_DIR="${PORTFOLIO_DIR:-$HOME/workspace/portfolios}"
+
+# --- Copy of the news files to the host that runs the reports (an empty REMOTE_HOST skips it) ---
 REMOTE_HOST="${REMOTE_HOST-hil@hil-fr-dc.freeddns.org}"
 REMOTE_PORT="${REMOTE_PORT:-23}"
 
+# --- Ollama server and model that write the summaries ---
 export OLLAMA_HOST="${OLLAMA_HOST:-8400f:11434}"
 # gemma3:4b fits the 6 GB A380 and is ~6x faster, but it invented stock moves (e.g. REGN +109%) in
 # CNBC summaries; gemma4:12b-it-qat takes ~4-7 minutes per page, well inside DEFAULT_POLL_MINUTES.
@@ -95,37 +103,41 @@ OLLAMA_MODEL="${OLLAMA_MODEL:-gemma4:12b-it-qat}"
 OLLAMA_THINK="${OLLAMA_THINK:-false}"
 OLLAMA_MAX_ATTEMPTS=3
 
+# --- Defaults of --lines and --poll ---
 # Measured 12-19 tokens per line on WSJ/CNBC/Flash Insights pages, so 600 lines stays under ~11.5k
 # tokens and fits the 16384-token context (OLLAMA_CONTEXT_LENGTH on 8400f) with room for the summary.
 DEFAULT_PROMPT_LINES=600
-DEFAULT_VIRTUAL_TIME_BUDGET=15000
+# WSJ serves a captcha after a few fetches in quick succession, so poll conservatively by default.
+DEFAULT_POLL_MINUTES=30
+
+# --- Headless Chrome ---
+# Milliseconds of page time (scripts, timers) Chrome waits before dumping the DOM.
+CHROME_VIRTUAL_TIME_BUDGET_MS=15000
 # --virtual-time-budget does not bound wall-clock time, and headless Chrome has hung on cnbc.com for
 # over 10 minutes, which would stall --poll forever; kill it after this many seconds.
 CHROME_TIMEOUT_SECONDS=120
-# WSJ serves a captcha after a few fetches in quick succession, so poll conservatively by default.
-DEFAULT_POLL_MINUTES=30
 # Some sites answer "403 Forbidden" when the user agent says HeadlessChrome, so present
 # the installed Chrome version as a regular desktop browser.
 CHROME_USER_AGENT="Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/$(google-chrome --version | sed -E 's/[^0-9]*([0-9]+).*/\1/').0.0.0 Safari/537.36"
 
-# Registry of built-in sites: key -> URL
+# --- Built-in sites (--site <key>) ---
 declare -A SITE_URLS=(
   [wsj]="https://www.wsj.com/"
   [cnbc]="https://www.cnbc.com/"
   [fundstrat]="https://fundstratdirect.com/members/flashinsights/"
 )
-
 # html2text renders <h2> as "***** ... *****"; the first one marks the end of the site navigation
 # menus (WSJ "Top Stories", CNBC lead headline), which would otherwise fill the Ollama prompt.
 CONTENT_START_PATTERN='^\*{5} '
 
+# --- Fundstrat ---
 # Text rendered by fundstratdirect.com instead of member content when the session is not authenticated.
-PAYWALL_MARKER="You need a Fundstrat Direct subscription"
+FUNDSTRAT_PAYWALL_MARKER="You need a Fundstrat Direct subscription"
 FUNDSTRAT_LOGIN_URL="https://fundstratdirect.com/members/"
 # Flash Insights are posted up to 1 hour before the 09:30 ET open and 1.5 hours after the 16:00 ET close,
 # so --poll only fetches fundstrat inside this window on trading days.
-POLL_START_TIME="08:30" # America/New_York
-POLL_END_TIME="17:30"   # America/New_York
+FUNDSTRAT_POLL_START_ET="08:30"
+FUNDSTRAT_POLL_END_ET="17:30"
 # NYSE/NASDAQ full-day market holidays; fundstrat polling is skipped on these dates.
 # Keep in sync with HOLIDAYS in run-market-hours.sh.
 HOLIDAYS=(
@@ -134,6 +146,7 @@ HOLIDAYS=(
   "2028-01-17" "2028-02-21" "2028-04-14" "2028-05-29" "2028-06-19" "2028-07-04" "2028-09-04" "2028-11-23" "2028-12-25"
 )
 
+# --- Ollama prompts ---
 # The whole prompt goes through stdin as "<head> <article>text</article> <tail>"; ollama would
 # otherwise place stdin before a prompt argument.
 NEWS_PROMPT_HEAD="You are a financial analyst writing for a portfolio manager and certified financial planner. The news page content is between the <article> tags below."
@@ -152,8 +165,60 @@ trap 'echo "ERROR: interrupted." >&2; exit 130' INT
 trap 'echo "ERROR: terminated." >&2; exit 143' TERM
 
 # ---------------------------------------------------------------------------
-# Helper functions
+# Fundstrat polling window
 # ---------------------------------------------------------------------------
+
+# Returns 0 if the given YYYY-MM-DD date is in HOLIDAYS.
+is_market_holiday() {
+  local candidate_date="$1" holiday
+  for holiday in "${HOLIDAYS[@]}"; do
+    if [[ "$candidate_date" == "$holiday" ]]; then
+      return 0
+    fi
+  done
+  return 1
+}
+
+# Returns 0 if now is inside the fundstrat polling window (Mon-Fri FUNDSTRAT_POLL_START_ET -
+# FUNDSTRAT_POLL_END_ET US/Eastern, excluding HOLIDAYS).
+is_fundstrat_poll_window() {
+  local weekday hour minute now_minutes start_minutes end_minutes
+  if is_market_holiday "$(TZ="America/New_York" date +%Y-%m-%d)"; then
+    return 1
+  fi
+  weekday="$(TZ="America/New_York" date +%u)" # 1=Mon, ..., 7=Sun
+  hour="$(TZ="America/New_York" date +%-H)"    # 0..23 (no leading zero)
+  minute="$(TZ="America/New_York" date +%-M)"  # 0..59 (no leading zero)
+  now_minutes=$((hour * 60 + minute))
+  start_minutes=$((10#${FUNDSTRAT_POLL_START_ET%:*} * 60 + 10#${FUNDSTRAT_POLL_START_ET#*:}))
+  end_minutes=$((10#${FUNDSTRAT_POLL_END_ET%:*} * 60 + 10#${FUNDSTRAT_POLL_END_ET#*:}))
+
+  [[ "$weekday" -le 5 && "$now_minutes" -ge "$start_minutes" && "$now_minutes" -lt "$end_minutes" ]]
+}
+
+# ---------------------------------------------------------------------------
+# Fetch, extract, summarize and publish one page
+# ---------------------------------------------------------------------------
+
+# Writes URL's DOM, after its scripts ran, to HTML_FILE with headless Chrome.
+fetch_page_html() {
+  local url="$1" html_file="$2"
+  if ! timeout --kill-after=10 "$CHROME_TIMEOUT_SECONDS" google-chrome \
+    --headless=new \
+    --disable-gpu \
+    --user-data-dir="$PROFILE_DIR" \
+    --user-agent="$CHROME_USER_AGENT" \
+    --virtual-time-budget="$CHROME_VIRTUAL_TIME_BUDGET_MS" \
+    --dump-dom \
+    "$url" 2>/dev/null > "$html_file"; then
+    echo "ERROR: google-chrome failed or exceeded ${CHROME_TIMEOUT_SECONDS}s for $url." >&2
+    return 1
+  fi
+  if [[ ! -s "$html_file" ]]; then
+    echo "ERROR: DOM dump for $url is empty." >&2
+    return 1
+  fi
+}
 
 # Fails if the DOM dump is a captcha, paywall, or HTTP error page instead of the requested content.
 check_page() {
@@ -163,7 +228,7 @@ check_page() {
     echo "ERROR: $url returned a bot-detection captcha page; try again later." >&2
     return 1
   fi
-  if grep -q "$PAYWALL_MARKER" "$html_file"; then
+  if grep -q "$FUNDSTRAT_PAYWALL_MARKER" "$html_file"; then
     echo "ERROR: $url returned the subscription paywall — Chrome profile session expired." >&2
     echo "  Re-authenticate: run the command below, log in, confirm the members page loads, then close Chrome completely:" >&2
     echo "    google-chrome --user-data-dir=\"$PROFILE_DIR\" \"$FUNDSTRAT_LOGIN_URL\"" >&2
@@ -178,107 +243,12 @@ check_page() {
   fi
 }
 
-# Returns 0 if the given YYYY-MM-DD date is in HOLIDAYS.
-is_market_holiday() {
-  local candidate_date="$1" holiday
-  for holiday in "${HOLIDAYS[@]}"; do
-    if [[ "$candidate_date" == "$holiday" ]]; then
-      return 0
-    fi
-  done
-  return 1
-}
-
-# Returns 0 if now is inside the fundstrat polling window (Mon-Fri POLL_START_TIME - POLL_END_TIME
-# US/Eastern, excluding HOLIDAYS).
-is_poll_window() {
-  local day_of_week hour min total_min start_min end_min
-  if is_market_holiday "$(TZ="America/New_York" date +%Y-%m-%d)"; then
-    return 1
-  fi
-  day_of_week="$(TZ="America/New_York" date +%u)" # 1=Mon, ..., 7=Sun
-  hour="$(TZ="America/New_York" date +%-H)"        # 0..23 (no leading zero)
-  min="$(TZ="America/New_York" date +%-M)"         # 0..59 (no leading zero)
-  total_min=$((hour * 60 + min))
-  start_min=$((10#${POLL_START_TIME%:*} * 60 + 10#${POLL_START_TIME#*:}))
-  end_min=$((10#${POLL_END_TIME%:*} * 60 + 10#${POLL_END_TIME#*:}))
-
-  [[ "$day_of_week" -le 5 && "$total_min" -ge "$start_min" && "$total_min" -lt "$end_min" ]]
-}
-
-# Copies a site's summary to PORTFOLIO_DIR/news-<name>_YYYY-MM-DD.txt, which report-news-impact.sh
-# reads, and to the same path on REMOTE_HOST. Args: <name> <summary_txt>
-mirror_news_dated_file() {
-  local name="$1" summary_txt="$2"
-  local news_dated_file
-  news_dated_file="$PORTFOLIO_DIR/news-${name}_$(date +%Y-%m-%d).txt"
-
-  mkdir -p "$PORTFOLIO_DIR"
-  cp "$summary_txt" "$news_dated_file"
-  echo "OK: wrote news file $news_dated_file"
-
-  if [[ -z "$REMOTE_HOST" ]]; then
-    echo "INFO: REMOTE_HOST is empty; skipped copying $news_dated_file to a remote host."
-    return 0
-  fi
-  if ! scp -P "$REMOTE_PORT" "$news_dated_file" "$REMOTE_HOST:$PORTFOLIO_DIR/"; then
-    echo "ERROR: scp of $news_dated_file to $REMOTE_HOST failed." >&2
-    return 1
-  fi
-  echo "OK: copied news file $news_dated_file to $REMOTE_HOST"
-}
-
-# Fetch a page's DOM via headless Chrome, convert to text, and summarize it
-# with Ollama. Args: <name> <url> <prompt_lines>
-process_site() {
-  local name="$1"
-  local url="$2"
-  local prompt_lines="$3"
-  local now_str
-  now_str="$(date '+%Y-%m-%d %H:%M:%S %Z')"
-
-  local raw_html
-  raw_html="$(mktemp "/tmp/news-${name}-XXXXXX.html")"
-  # A RETURN trap outlives the function, so reset it once it has run; otherwise it fires on every
-  # later function return with $raw_html unset, which `set -u` turns into an error.
-  trap 'rm -f "$raw_html"; trap - RETURN' RETURN
-
-  local text_file="$OUTPUT_DIR/${name}.txt"
-  local summary_md="$OUTPUT_DIR/${name}-summary.md"
-  local summary_txt="$OUTPUT_DIR/${name}-summary.txt"
-
-  local prompt_head="$NEWS_PROMPT_HEAD"
-  local prompt_tail="$NEWS_PROMPT_TAIL"
-  if [[ "$name" == "fundstrat" ]]; then
-    prompt_head="$FUNDSTRAT_PROMPT_HEAD"
-    prompt_tail="$FUNDSTRAT_PROMPT_TAIL"
-  fi
-
-  echo "[$now_str] Fetching $name ($url)..."
-
-  if ! timeout --kill-after=10 "$CHROME_TIMEOUT_SECONDS" google-chrome \
-    --headless=new \
-    --disable-gpu \
-    --user-data-dir="$PROFILE_DIR" \
-    --user-agent="$CHROME_USER_AGENT" \
-    --virtual-time-budget="$DEFAULT_VIRTUAL_TIME_BUDGET" \
-    --dump-dom \
-    "$url" 2>/dev/null > "$raw_html"; then
-    echo "ERROR: google-chrome failed or exceeded ${CHROME_TIMEOUT_SECONDS}s for $url." >&2
-    return 1
-  fi
-
-  if [[ ! -s "$raw_html" ]]; then
-    echo "ERROR: DOM dump for $url is empty." >&2
-    return 1
-  fi
-
-  check_page "$raw_html" "$url" || return 1
-
-  local content_start=1
+# Converts HTML_FILE to text in TEXT_FILE; for fundstrat, keeps only the Flash Insights posts.
+extract_page_text() {
+  local name="$1" html_file="$2" text_file="$3"
   if [[ "$name" == "fundstrat" ]]; then
     # Keep only the Flash Insights posts, between the "⚡ FlashInsights" heading and the share buttons.
-    html2text "$raw_html" | \
+    html2text "$html_file" | \
       awk '/^[⚡âš¡]* FlashInsights$/{f=1} f&&/click="shareOpen/{f=0; next} f{print} f&&/\[FlashInsights\]/{f=0}' \
       > "$text_file"
     if ! grep -q "[⚡âš¡]* FlashInsights" "$text_file"; then
@@ -286,7 +256,7 @@ process_site() {
       return 1
     fi
   else
-    html2text "$raw_html" > "$text_file"
+    html2text "$html_file" > "$text_file"
   fi
 
   if [[ ! -s "$text_file" ]]; then
@@ -294,49 +264,64 @@ process_site() {
     return 1
   fi
   echo "OK: wrote $(wc -l < "$text_file") lines to $text_file"
+}
 
-  if [[ "$name" != "fundstrat" ]]; then
-    content_start="$(grep -n -m 1 -E "$CONTENT_START_PATTERN" "$text_file" | cut -d: -f1 || true)"
-    if [[ -z "$content_start" ]]; then
-      echo "WARNING: no '*****' heading found in $text_file; sending text from line 1 to Ollama." >&2
-      content_start=1
-    fi
+# Prints the line number where TEXT_FILE's content starts after the site navigation (1 for fundstrat,
+# whose text holds only the posts, and when no CONTENT_START_PATTERN heading is found).
+find_content_start_line() {
+  local name="$1" text_file="$2" start_line
+  if [[ "$name" == "fundstrat" ]]; then
+    echo 1
+    return
+  fi
+  start_line="$(grep -n -m 1 -E "$CONTENT_START_PATTERN" "$text_file" | cut -d: -f1 || true)"
+  if [[ -z "$start_line" ]]; then
+    echo "WARNING: no '*****' heading found in $text_file; sending text from line 1 to Ollama." >&2
+    start_line=1
+  fi
+  echo "$start_line"
+}
+
+# Summarizes LINE_COUNT lines of TEXT_FILE from START_LINE into SUMMARY_MD with OLLAMA_MODEL, retrying up to
+# OLLAMA_MAX_ATTEMPTS times on a failure, an empty summary, or a summary containing CJK characters.
+summarize_with_ollama() {
+  local name="$1" text_file="$2" start_line="$3" line_count="$4" summary_md="$5"
+  local prompt_head="$NEWS_PROMPT_HEAD" prompt_tail="$NEWS_PROMPT_TAIL" attempt
+  if [[ "$name" == "fundstrat" ]]; then
+    prompt_head="$FUNDSTRAT_PROMPT_HEAD"
+    prompt_tail="$FUNDSTRAT_PROMPT_TAIL"
   fi
 
-  echo "Generating summary for $name with $OLLAMA_MODEL (using $prompt_lines lines from line $content_start)..."
-  local ollama_success=false
-  local attempt=1
-
-  while [[ "$ollama_success" == "false" ]]; do
-    if [[ "$attempt" -gt "$OLLAMA_MAX_ATTEMPTS" ]]; then
-      echo "ERROR: Ollama summary generation failed for $name after $OLLAMA_MAX_ATTEMPTS attempts." >&2
-      return 1
-    fi
+  echo "Generating summary for $name with $OLLAMA_MODEL (using $line_count lines from line $start_line)..."
+  for ((attempt = 1; attempt <= OLLAMA_MAX_ATTEMPTS; attempt++)); do
     if [[ "$attempt" -gt 1 ]]; then
+      sleep 2
       echo "Retrying Ollama generation for $name (attempt $attempt of $OLLAMA_MAX_ATTEMPTS)..."
     fi
 
-    if ollama run --nowordwrap --think="$OLLAMA_THINK" "$OLLAMA_MODEL" \
+    if ! ollama run --nowordwrap --think="$OLLAMA_THINK" "$OLLAMA_MODEL" \
       < <(printf '%s\n<article>\n' "$prompt_head"
-          tail -n "+$content_start" "$text_file" | head -n "$prompt_lines"
+          tail -n "+$start_line" "$text_file" | head -n "$line_count"
           printf '</article>\n\n%s\n' "$prompt_tail") \
-      > "$summary_md" && [[ -s "$summary_md" ]]; then
-      # Some models (e.g. qwen2.5) drift into Chinese; reject output containing CJK characters/punctuation and retry.
-      if LC_ALL=C.UTF-8 grep -qP '[\x{3000}-\x{303F}\x{3400}-\x{9FFF}\x{F900}-\x{FAFF}\x{FF00}-\x{FFEF}]' "$summary_md"; then
-        echo "ERROR: Ollama summary for $name contains CJK characters." >&2
-        attempt=$((attempt + 1))
-        sleep 2
-        continue
-      fi
-      ollama_success=true
-      echo "OK: wrote summary markdown to $summary_md"
-    else
+      > "$summary_md" || [[ ! -s "$summary_md" ]]; then
       echo "ERROR: Ollama summary generation failed for $name." >&2
-      attempt=$((attempt + 1))
-      sleep 2
+      continue
     fi
+    # Some models (e.g. qwen2.5) drift into Chinese; reject output containing CJK characters/punctuation and retry.
+    if LC_ALL=C.UTF-8 grep -qP '[\x{3000}-\x{303F}\x{3400}-\x{9FFF}\x{F900}-\x{FAFF}\x{FF00}-\x{FFEF}]' "$summary_md"; then
+      echo "ERROR: Ollama summary for $name contains CJK characters." >&2
+      continue
+    fi
+    echo "OK: wrote summary markdown to $summary_md"
+    return 0
   done
+  echo "ERROR: Ollama summary generation failed for $name after $OLLAMA_MAX_ATTEMPTS attempts." >&2
+  return 1
+}
 
+# Converts SUMMARY_MD to plain text in SUMMARY_TXT with pandoc, or copies it as-is without pandoc.
+convert_summary_to_text() {
+  local summary_md="$1" summary_txt="$2"
   if command -v pandoc >/dev/null 2>&1; then
     pandoc "$summary_md" -f markdown -t plain -o "$summary_txt" --wrap=none
     echo "OK: wrote summary text to $summary_txt"
@@ -344,40 +329,86 @@ process_site() {
     cp "$summary_md" "$summary_txt"
     echo "WARNING: pandoc not found; copied markdown as-is to $summary_txt" >&2
   fi
+}
+
+# Copies a site's summary to PORTFOLIO_DIR/news-<name>_YYYY-MM-DD.txt, which report-news-impact.sh
+# reads, and to the same path on REMOTE_HOST.
+publish_news_file() {
+  local name="$1" summary_txt="$2" news_file
+  news_file="$PORTFOLIO_DIR/news-${name}_$(date +%Y-%m-%d).txt"
+
+  mkdir -p "$PORTFOLIO_DIR"
+  cp "$summary_txt" "$news_file"
+  echo "OK: wrote news file $news_file"
+
+  if [[ -z "$REMOTE_HOST" ]]; then
+    echo "INFO: REMOTE_HOST is empty; skipped copying $news_file to a remote host."
+    return 0
+  fi
+  if ! scp -P "$REMOTE_PORT" "$news_file" "$REMOTE_HOST:$PORTFOLIO_DIR/"; then
+    echo "ERROR: scp of $news_file to $REMOTE_HOST failed." >&2
+    return 1
+  fi
+  echo "OK: copied news file $news_file to $REMOTE_HOST"
+}
+
+# Fetches URL, extracts its text, summarizes PROMPT_LINES lines of it with Ollama, and for --site runs publishes
+# the summary as a news file.
+fetch_and_summarize() {
+  local name="$1" url="$2" prompt_lines="$3"
+  local text_file="$OUTPUT_DIR/${name}.txt"
+  local summary_md="$OUTPUT_DIR/${name}-summary.md"
+  local summary_txt="$OUTPUT_DIR/${name}-summary.txt"
+  local html_file start_line
+
+  html_file="$(mktemp "/tmp/news-${name}-XXXXXX.html")"
+  # A RETURN trap outlives the function, so reset it once it has run; otherwise it fires on every
+  # later function return with $html_file unset, which `set -u` turns into an error.
+  trap 'rm -f "$html_file"; trap - RETURN' RETURN
+
+  echo "[$(date '+%Y-%m-%d %H:%M:%S %Z')] Fetching $name ($url)..."
+  fetch_page_html "$url" "$html_file" || return 1
+  check_page "$html_file" "$url" || return 1
+  extract_page_text "$name" "$html_file" "$text_file" || return 1
+  start_line="$(find_content_start_line "$name" "$text_file")"
+  summarize_with_ollama "$name" "$text_file" "$start_line" "$prompt_lines" "$summary_md" || return 1
+  convert_summary_to_text "$summary_md" "$summary_txt"
 
   # Only registered sites feed the portfolio reports; ad-hoc --url pages stay in OUTPUT_DIR.
   if [[ -n "${SITE_URLS[$name]+x}" ]]; then
-    mirror_news_dated_file "$name" "$summary_txt" || return 1
+    publish_news_file "$name" "$summary_txt" || return 1
   fi
 }
 
-# Processes TARGET_NAME/TARGET_URL once; under --poll, fundstrat is skipped outside its trading-day window.
+# ---------------------------------------------------------------------------
+# Polling and command line
+# ---------------------------------------------------------------------------
+
+# Fetches TARGET_NAME/TARGET_URL once; under --poll, fundstrat is skipped outside its trading-day window.
 run_cycle() {
-  if [[ -n "$POLL_MINUTES" && "$TARGET_NAME" == "fundstrat" ]] && ! is_poll_window; then
-    echo "[$(TZ="America/New_York" date '+%Y-%m-%d %H:%M:%S %Z')] Skipping fundstrat outside the $POLL_START_TIME-$POLL_END_TIME ET trading-day window."
+  if [[ -n "$POLL_MINUTES" && "$TARGET_NAME" == "fundstrat" ]] && ! is_fundstrat_poll_window; then
+    echo "[$(TZ="America/New_York" date '+%Y-%m-%d %H:%M:%S %Z')] Skipping fundstrat outside the $FUNDSTRAT_POLL_START_ET-$FUNDSTRAT_POLL_END_ET ET trading-day window."
     return 0
   fi
-  process_site "$TARGET_NAME" "$TARGET_URL" "$PROMPT_LINES"
+  fetch_and_summarize "$TARGET_NAME" "$TARGET_URL" "$PROMPT_LINES"
 }
 
 # Sleeps for the given number of minutes with a live countdown on a single line.
 sleep_with_countdown() {
-  local remaining="$1"
-  while [[ "$remaining" -gt 0 ]]; do
-    printf "\r\033[KSleeping %d minute(s) until next fetch..." "$remaining"
+  local remaining_minutes="$1"
+  while [[ "$remaining_minutes" -gt 0 ]]; do
+    printf "\r\033[KSleeping %d minute(s) until next fetch..." "$remaining_minutes"
     sleep 60
-    remaining=$((remaining - 1))
+    remaining_minutes=$((remaining_minutes - 1))
   done
   printf "\n"
 }
 
-# Derives a filesystem-safe name from a URL when --name is not given.
+# Prints a filesystem-safe name derived from a URL, for --url without --name.
 derive_name_from_url() {
-  local url="$1"
-  local name
+  local url="$1" name
   name="$(echo "$url" | sed -E 's#^[a-zA-Z]+://##; s#/$##' | tr '/.:?&=' '-----')"
-  name="${name:0:80}"
-  echo "$name"
+  echo "${name:0:80}"
 }
 
 print_usage() {
@@ -395,7 +426,7 @@ print_usage() {
   echo "                       (default: \$REMOTE_HOST or hil@hil-fr-dc.freeddns.org; \"\" skips the copy)"
   echo "  --poll [MINUTES]     Repeat forever, sleeping MINUTES (default: $DEFAULT_POLL_MINUTES) after each fetch & summarize cycle;"
   echo "                       combine with --site <key> or --url."
-  echo "                       fundstrat is only fetched $POLL_START_TIME-$POLL_END_TIME ET on trading days."
+  echo "                       fundstrat is only fetched $FUNDSTRAT_POLL_START_ET-$FUNDSTRAT_POLL_END_ET ET on trading days."
   echo "  --list               List available registered site keys and their URLs"
   echo "  -h, --help           Display this help message"
   echo ""

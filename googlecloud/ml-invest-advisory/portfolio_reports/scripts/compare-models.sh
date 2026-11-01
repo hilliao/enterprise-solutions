@@ -38,30 +38,44 @@ set -e # exit the script when execution hits any error
 set -o pipefail # ensure exit code of pipe is the rightmost non-zero exit code
 [[ -n "${DEBUG:-}" ]] && set -x # print the executing lines if DEBUG is set
 
+# ---------------------------------------------------------------------------
+# Arguments and settings (environment variables, see the header for their defaults)
+# ---------------------------------------------------------------------------
+
+# Models compared when none is given on the command line.
+DEFAULT_MODELS=(gemma4:12b-it-qat qwen3.5:9b-q8_0)
+
 if [ $# -lt 1 ] || [ "$1" = "-h" ] || [ "$1" = "--help" ]; then
   sed -n '2,/^$/s/^# \{0,1\}//p' "$0"
   exit 1
 fi
-
 PROMPT_FILE="$1"
 shift
+MODELS=("$@")
+if [ ${#MODELS[@]} -eq 0 ]; then
+  MODELS=("${DEFAULT_MODELS[@]}")
+fi
+
+# Parent folder of the timestamped run folder.
+OUTPUT_DIR="${OUTPUT_DIR:-$(dirname "$PROMPT_FILE")/model-comparison}"
+# How long one model may take before `ollama run` is killed (no retry).
+OLLAMA_TIMEOUT_SECONDS="${OLLAMA_TIMEOUT_SECONDS:-1800}"
+# Passed as --think=$OLLAMA_THINK when set (e.g. false, low, medium, high).
+OLLAMA_THINK="${OLLAMA_THINK:-}"
+
+# ---------------------------------------------------------------------------
+# Input checks
+# ---------------------------------------------------------------------------
 if [ ! -r "$PROMPT_FILE" ]; then
   echo "ERROR: Prompt file is missing or not readable at: $PROMPT_FILE" >&2
   exit 1
 fi
-MODELS=("$@")
-if [ ${#MODELS[@]} -eq 0 ]; then
-  MODELS=(gemma4:12b-it-qat qwen3.5:9b-q8_0)
-fi
-
-OUTPUT_DIR="${OUTPUT_DIR:-$(dirname "$PROMPT_FILE")/model-comparison}"
-OLLAMA_TIMEOUT_SECONDS="${OLLAMA_TIMEOUT_SECONDS:-1800}"
 if ! [[ "$OLLAMA_TIMEOUT_SECONDS" =~ ^[1-9][0-9]*$ ]]; then
   echo "ERROR: OLLAMA_TIMEOUT_SECONDS must be a positive integer number of seconds, got: $OLLAMA_TIMEOUT_SECONDS" >&2
   exit 1
 fi
 THINK_ARGS=()
-if [ -n "${OLLAMA_THINK:-}" ]; then
+if [ -n "$OLLAMA_THINK" ]; then
   THINK_ARGS=("--think=$OLLAMA_THINK")
 fi
 
@@ -73,6 +87,9 @@ for model in "${MODELS[@]}"; do
   fi
 done
 
+# ---------------------------------------------------------------------------
+# Run every model
+# ---------------------------------------------------------------------------
 PROMPT_NAME=$(basename "$PROMPT_FILE" .txt)
 RUN_DIR="$OUTPUT_DIR/${PROMPT_NAME}_$(date +%Y%m%d-%H%M%S)"
 mkdir -p "$RUN_DIR"
@@ -90,46 +107,50 @@ model_file_name() {
   echo "$1" | tr ':/' '__'
 }
 
+# The model's outputs are $RUN_DIR/<model file name>.md (report) and .stats (timings).
 final_exit_code=0
 for model in "${MODELS[@]}"; do
-  base="$RUN_DIR/$(model_file_name "$model")"
+  output_base="$RUN_DIR/$(model_file_name "$model")"
   echo -e "\n=== $model: started at $(date) ==="
   exit_code=0
   start_seconds=$SECONDS
   # stdout is the report. stderr carries the spinner's terminal escape codes and the --verbose timings.
   timeout --foreground --kill-after=10s "${OLLAMA_TIMEOUT_SECONDS}s" \
     ollama run --nowordwrap --hidethinking --verbose "${THINK_ARGS[@]}" "$model" < "$PROMPT_FILE" \
-    > "$base.md" 2> "$base.stderr" || exit_code=$?
+    > "$output_base.md" 2> "$output_base.stderr" || exit_code=$?
   wall_seconds=$((SECONDS - start_seconds))
 
   # Strip the escape codes and spinner characters so only the timing lines remain.
-  sed -e 's/\x1b\[[0-9;?]*[a-zA-Z]//g' -e 's/[⠀-⣿]//g' -e 's/^ *//' "$base.stderr" | grep -v '^$' > "$base.stats" || true
-  rm -f "$base.stderr"
+  sed -e 's/\x1b\[[0-9;?]*[a-zA-Z]//g' -e 's/[⠀-⣿]//g' -e 's/^ *//' "$output_base.stderr" | grep -v '^$' > "$output_base.stats" || true
+  rm -f "$output_base.stderr"
   {
     echo "wall clock: ${wall_seconds}s"
     echo "exit code: $exit_code"
     # The model stays loaded after `ollama run` returns, so `ollama ps` still shows how it was split.
     # Columns: NAME ID SIZE(2 fields) PROCESSOR(2 fields, e.g. "27%/73% CPU/GPU" or "100% GPU") CONTEXT ...
     ollama ps | awk -v m="$model" '$1 == m { print "processor: " $5 " " $6; print "context: " $7 }'
-  } >> "$base.stats"
+  } >> "$output_base.stats"
   ollama stop "$model" || true
 
   if [ "$exit_code" -ne 0 ]; then
     echo "WARNING: ollama run exited with $exit_code for $model after ${wall_seconds}s (124 or 137 means it exceeded ${OLLAMA_TIMEOUT_SECONDS}s)" >&2
     final_exit_code=$exit_code
   fi
-  echo "=== $model: finished in ${wall_seconds}s, $(wc -w < "$base.md") words, $(stat_value "eval rate" "$base.stats") ==="
+  echo "=== $model: finished in ${wall_seconds}s, $(wc -w < "$output_base.md") words, $(stat_value "eval rate" "$output_base.stats") ==="
 done
 
+# ---------------------------------------------------------------------------
+# Summary table and side-by-side HTML
+# ---------------------------------------------------------------------------
 SUMMARY_FILE="$RUN_DIR/summary.md"
 {
   echo "| Model | Exit code | Wall clock | Words | Prompt tokens | Output tokens | Output rate | CPU/GPU | Context |"
   echo "|---|---|---|---|---|---|---|---|---|"
   for model in "${MODELS[@]}"; do
-    base="$RUN_DIR/$(model_file_name "$model")"
-    echo "| $model | $(stat_value "exit code" "$base.stats") | $(stat_value "wall clock" "$base.stats") | $(wc -w < "$base.md") \
-| $(stat_value "prompt eval count" "$base.stats") | $(stat_value "eval count" "$base.stats") | $(stat_value "eval rate" "$base.stats") \
-| $(stat_value "processor" "$base.stats") | $(stat_value "context" "$base.stats") |"
+    output_base="$RUN_DIR/$(model_file_name "$model")"
+    echo "| $model | $(stat_value "exit code" "$output_base.stats") | $(stat_value "wall clock" "$output_base.stats") | $(wc -w < "$output_base.md") \
+| $(stat_value "prompt eval count" "$output_base.stats") | $(stat_value "eval count" "$output_base.stats") | $(stat_value "eval rate" "$output_base.stats") \
+| $(stat_value "processor" "$output_base.stats") | $(stat_value "context" "$output_base.stats") |"
   done
 } > "$SUMMARY_FILE"
 echo -e "\n--- Summary ($SUMMARY_FILE) ---"
