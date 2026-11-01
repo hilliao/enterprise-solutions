@@ -16,6 +16,12 @@ Key env vars: `PORTFOLIO_DIR`, `LLM_PROMPT_TEMPLATE`, `USE_CASE`,
 `MARKET_COMMENTARY_FILE`, `STOCK_QUOTES_CLOUD_RUN_URL`, `OLLAMA_MODEL`, `OLLAMA_TIMEOUT_SECONDS`
 (default 600; kills a stuck `ollama run`, retries it once, then fails the script).
 
+### report-common.sh
+Helper functions shared by `report-daily.sh` and `report-news-impact.sh`
+(building the prompt with `build_portfolio_prompt.py`, `run_ollama` with its
+timeout and retry, appending the input prompt to the report, and the pandoc
+HTML conversion). Sourced by those scripts; not run on its own.
+
 ### report-news-impact.sh
 Same pipeline as `report-daily.sh`, but generates a "flash
 insights" / breaking-news impact report per portfolio and news site. It
@@ -80,8 +86,10 @@ resulting HTML reports to a GCS bucket, repeatedly, during this script's
 execution window (Mon-Fri, 08:00-18:00 America/New_York, excluding configured
 holidays — intentionally ~1.5h before the actual 09:30-16:00 ET market
 session and a few hours after it, to also catch pre-market/after-hours
-activity). The paths, GCS bucket and gcloud config are set in its
-`CONFIGURATION` section; the checked-in version is a generic template.
+activity). The paths, Python virtual environment, GCS bucket and gcloud
+config are set in its `CONFIGURATION` section; the checked-in version is a
+generic template to copy (e.g. to `~/workspace/ml-invest-report.sh`) and fill
+in.
 ```
 ./run-market-hours.sh [--immediate] [--active-sleep SEC] [--idle-sleep SEC] [-h|--help]
 ```
@@ -97,9 +105,11 @@ command's exit code, instead of repeating the failing step every
 quotes Cloud Run request with exponential backoff (1, 2, 4, 8, 16 seconds),
 printing each failure's status code and response body (e.g. the 500 with
 TradeStation's 403 in `detail`) to stderr, then exits with code 69. The
-flash-insights step stays optional (`|| true` in `PORTFOLIO_SCRIPT`), so its
+flash-insights step stays optional (`|| true` in `REPORT_COMMAND`), so its
 failures don't abort the loop.
 
 Before running, edit the `CONFIGURATION` section for
-`GOOGLE_APPLICATION_CREDENTIALS`, the portfolio script paths, `PORTFOLIO_DIR`,
-and the GCS bucket/`gcloud` configuration.
+`GOOGLE_APPLICATION_CREDENTIALS`, `PORTFOLIO_DIR`, `STOCK_QUOTES_CLOUD_RUN_URL`,
+`PYTHON_VENV` (activated by the script, so no `source <venv>/bin/activate` is
+needed first; empty uses the `python3` on `PATH`), `REPORT_SCRIPTS_DIR`, and the
+GCS bucket/`gcloud` configuration.

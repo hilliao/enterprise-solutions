@@ -61,7 +61,7 @@ Designed for rapid analysis of breaking news. It uses a specific "flash insights
 ### 3. Realtime Continuous Monitoring
 **Script**: `scripts/run-market-hours.sh`
 
-A continuous monitoring loop that executes during market hours (08:00 - 18:00 ET, Mon-Fri). It runs the daily report generator at a specified interval and can be configured to upload output files to a Google Cloud Storage (GCS) bucket for remote access.
+A continuous monitoring loop that executes during market hours (08:00 - 18:00 ET, Mon-Fri). It runs the daily and flash insights report generators at a specified interval and uploads the HTML reports to a Google Cloud Storage (GCS) bucket for remote access. Set `PYTHON_VENV` in its `CONFIGURATION` section to the virtual environment above; the script activates it, so `source py-venv/bin/activate` isn't needed first.
 
 ## Usage
 
