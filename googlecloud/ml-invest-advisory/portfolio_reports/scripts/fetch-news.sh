@@ -25,6 +25,8 @@
 #   ./fetch-news.sh --site cnbc                       # Fetch & summarize CNBC into PORTFOLIO_DIR/news-cnbc_YYYY-MM-DD.txt
 #   ./fetch-news.sh --site fundstrat                  # Fetch & summarize Fundstrat Flash Insights into
 #                                                      # PORTFOLIO_DIR/news-fundstrat_YYYY-MM-DD.txt
+#   ./fetch-news.sh --site cnbc,fundstrat             # Fetch & summarize several sites, one after another
+#   ./fetch-news.sh --site wsj,cnbc,fundstrat         # (comma-separated keys from wsj, cnbc, fundstrat)
 #   ./fetch-news.sh --url <URL> --name <label>        # Fetch & summarize an arbitrary URL
 #   ./fetch-news.sh --url <URL> --name <label> --lines 400
 #                                                      # Use first 400 lines of extracted text as the Ollama prompt input (default 600)
@@ -32,11 +34,15 @@
 #   ./fetch-news.sh --site wsj --output-dir <DIR>     # Write output files to DIR instead of ~/Documents/news-aggregate
 #   ./fetch-news.sh --site wsj --remote-host <USER@HOST>
 #                                                      # Copy news-wsj_YYYY-MM-DD.txt to another host ("" skips the copy)
-#   ./fetch-news.sh --site wsj --poll [MINUTES]       # Poll only WSJ forever, sleeping MINUTES (default 30) after each cycle
-#   ./fetch-news.sh --site cnbc --poll [MINUTES]      # Poll only CNBC forever
-#   ./fetch-news.sh --site fundstrat --poll [MINUTES] # Poll Fundstrat only from 08:30 to 17:30 ET on trading days
+#   ./fetch-news.sh --site wsj --poll [MINUTES]       # Poll WSJ, sleeping MINUTES (default 30) after each cycle
+#   ./fetch-news.sh --site cnbc --poll [MINUTES]      # Poll CNBC
+#   ./fetch-news.sh --site fundstrat --poll [MINUTES] # Poll Fundstrat
+#   ./fetch-news.sh --site wsj,cnbc,fundstrat --poll [MINUTES]
+#                                                      # Poll all three sites, one after another in each cycle
 #   ./fetch-news.sh --url <URL> --name <label> --poll [MINUTES]
-#                                                      # Poll an arbitrary URL forever
+#                                                      # Poll an arbitrary URL
+#                                                      # --poll only fetches from 08:00 to 18:00 ET on trading days
+#                                                      # (POLL_START_ET-POLL_END_ET) and sleeps outside that window
 #   ./fetch-news.sh --list                            # List available site keys
 #   ./fetch-news.sh -h|--help                         # Show help
 #
@@ -46,6 +52,7 @@
 #   ./fetch-news.sh --site wsj --poll                 # Poll WSJ every 30 minutes (after each cycle ends)
 #   ./fetch-news.sh --site cnbc --poll 15             # Poll CNBC every 15 minutes (after each cycle ends)
 #   ./fetch-news.sh --site fundstrat --poll 15        # Poll Flash Insights every 15 minutes during market hours
+#   ./fetch-news.sh --site cnbc,fundstrat --poll      # Poll CNBC, then Fundstrat, every 30 minutes
 #
 # Environment variables (all optional; defaults shown):
 #   PROFILE_DIR             ~/workspace/chrome-flashinsights-profile (overridden by --profile-dir)
@@ -104,7 +111,7 @@ OLLAMA_THINK="${OLLAMA_THINK:-false}"
 OLLAMA_MAX_ATTEMPTS=3
 
 # --- Defaults of --lines and --poll ---
-# Measured 12-19 tokens per line on WSJ/CNBC/Flash Insights pages, so 600 lines stays under ~11.5k
+# Measured 12-19 tokens per line on WSJ|CNBC|Flash Insights pages, so 600 lines stays under ~11.5k
 # tokens and fits the 16384-token context (OLLAMA_CONTEXT_LENGTH on 8400f) with room for the summary.
 DEFAULT_PROMPT_LINES=600
 # WSJ serves a captcha after a few fetches in quick succession, so poll conservatively by default.
@@ -120,25 +127,31 @@ CHROME_TIMEOUT_SECONDS=120
 # the installed Chrome version as a regular desktop browser.
 CHROME_USER_AGENT="Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/$(google-chrome --version | sed -E 's/[^0-9]*([0-9]+).*/\1/').0.0.0 Safari/537.36"
 
-# --- Built-in sites (--site <key>) ---
+# --- Built-in sites (--site <key>[,<key>...]) ---
+# Keys in the order they're listed in messages.
+SITE_KEYS=(wsj cnbc fundstrat)
 declare -A SITE_URLS=(
-  [wsj]="https://www.wsj.com/"
+  [wsj]="https://www.wsj.com/finance"
   [cnbc]="https://www.cnbc.com/"
   [fundstrat]="https://fundstratdirect.com/members/flashinsights/"
 )
-# html2text renders <h2> as "***** ... *****"; the first one marks the end of the site navigation
-# menus (WSJ "Top Stories", CNBC lead headline), which would otherwise fill the Ollama prompt.
-CONTENT_START_PATTERN='^\*{5} '
+# html2text renders <h1> as "****** ... ******" and <h2> as "***** ... *****"; the first one marks the end of the
+# site navigation menus (the "Markets & Finance" <h1> on wsj.com/finance, the lead headline <h2> on cnbc.com),
+# which would otherwise fill the Ollama prompt. The wsj.com home page can't use this: its first line is an <h1>.
+CONTENT_START_PATTERN='^\*{5,6} '
 
 # --- Fundstrat ---
 # Text rendered by fundstratdirect.com instead of member content when the session is not authenticated.
 FUNDSTRAT_PAYWALL_MARKER="You need a Fundstrat Direct subscription"
 FUNDSTRAT_LOGIN_URL="https://fundstratdirect.com/members/"
-# Flash Insights are posted up to 1 hour before the 09:30 ET open and 1.5 hours after the 16:00 ET close,
-# so --poll only fetches fundstrat inside this window on trading days.
-FUNDSTRAT_POLL_START_ET="08:30"
-FUNDSTRAT_POLL_END_ET="17:30"
-# NYSE/NASDAQ full-day market holidays; fundstrat polling is skipped on these dates.
+
+# --- Polling window (--poll), America/New_York ---
+# --poll only fetches on trading days from POLL_START_ET to POLL_END_ET: 1.5 hours before the 09:30 ET NYSE open
+# until 2 hours after the 16:00 ET close, to catch pre-market and after-hours news. Same window as
+# run-market-hours.sh (WINDOW_START_HOUR_ET-WINDOW_END_HOUR_ET), which turns the news into reports.
+POLL_START_ET="08:00"
+POLL_END_ET="18:00"
+# NYSE/NASDAQ full-day market holidays; polling is skipped on these dates.
 # Keep in sync with HOLIDAYS in run-market-hours.sh.
 HOLIDAYS=(
   "2026-01-01" "2026-01-19" "2026-02-16" "2026-04-03" "2026-05-25" "2026-06-19" "2026-07-03" "2026-09-07" "2026-11-26" "2026-12-25"
@@ -165,7 +178,7 @@ trap 'echo "ERROR: interrupted." >&2; exit 130' INT
 trap 'echo "ERROR: terminated." >&2; exit 143' TERM
 
 # ---------------------------------------------------------------------------
-# Fundstrat polling window
+# Polling window
 # ---------------------------------------------------------------------------
 
 # Returns 0 if the given YYYY-MM-DD date is in HOLIDAYS.
@@ -179,9 +192,9 @@ is_market_holiday() {
   return 1
 }
 
-# Returns 0 if now is inside the fundstrat polling window (Mon-Fri FUNDSTRAT_POLL_START_ET -
-# FUNDSTRAT_POLL_END_ET US/Eastern, excluding HOLIDAYS).
-is_fundstrat_poll_window() {
+# Returns 0 if now is inside the polling window: Mon-Fri from POLL_START_ET (08:00) until POLL_END_ET (18:00)
+# America/New_York, excluding HOLIDAYS.
+is_poll_window() {
   local weekday hour minute now_minutes start_minutes end_minutes
   if is_market_holiday "$(TZ="America/New_York" date +%Y-%m-%d)"; then
     return 1
@@ -190,8 +203,8 @@ is_fundstrat_poll_window() {
   hour="$(TZ="America/New_York" date +%-H)"    # 0..23 (no leading zero)
   minute="$(TZ="America/New_York" date +%-M)"  # 0..59 (no leading zero)
   now_minutes=$((hour * 60 + minute))
-  start_minutes=$((10#${FUNDSTRAT_POLL_START_ET%:*} * 60 + 10#${FUNDSTRAT_POLL_START_ET#*:}))
-  end_minutes=$((10#${FUNDSTRAT_POLL_END_ET%:*} * 60 + 10#${FUNDSTRAT_POLL_END_ET#*:}))
+  start_minutes=$((10#${POLL_START_ET%:*} * 60 + 10#${POLL_START_ET#*:}))
+  end_minutes=$((10#${POLL_END_ET%:*} * 60 + 10#${POLL_END_ET#*:}))
 
   [[ "$weekday" -le 5 && "$now_minutes" -ge "$start_minutes" && "$now_minutes" -lt "$end_minutes" ]]
 }
@@ -276,7 +289,7 @@ find_content_start_line() {
   fi
   start_line="$(grep -n -m 1 -E "$CONTENT_START_PATTERN" "$text_file" | cut -d: -f1 || true)"
   if [[ -z "$start_line" ]]; then
-    echo "WARNING: no '*****' heading found in $text_file; sending text from line 1 to Ollama." >&2
+    echo "WARNING: no '*****' or '******' heading found in $text_file; sending text from line 1 to Ollama." >&2
     start_line=1
   fi
   echo "$start_line"
@@ -384,13 +397,21 @@ fetch_and_summarize() {
 # Polling and command line
 # ---------------------------------------------------------------------------
 
-# Fetches TARGET_NAME/TARGET_URL once; under --poll, fundstrat is skipped outside its trading-day window.
+# Fetches every TARGET_NAMES/TARGET_URLS entry once, one after another; a failed site doesn't stop the others.
+# Under --poll, nothing is fetched outside the polling window. Returns 1 if any site failed.
 run_cycle() {
-  if [[ -n "$POLL_MINUTES" && "$TARGET_NAME" == "fundstrat" ]] && ! is_fundstrat_poll_window; then
-    echo "[$(TZ="America/New_York" date '+%Y-%m-%d %H:%M:%S %Z')] Skipping fundstrat outside the $FUNDSTRAT_POLL_START_ET-$FUNDSTRAT_POLL_END_ET ET trading-day window."
+  local i status=0
+  if [[ -n "$POLL_MINUTES" ]] && ! is_poll_window; then
+    echo "[$(TZ="America/New_York" date '+%Y-%m-%d %H:%M:%S %Z')] Skipping ${TARGET_NAMES[*]} outside the $POLL_START_ET-$POLL_END_ET ET trading-day window."
     return 0
   fi
-  fetch_and_summarize "$TARGET_NAME" "$TARGET_URL" "$PROMPT_LINES"
+  for i in "${!TARGET_NAMES[@]}"; do
+    if ! fetch_and_summarize "${TARGET_NAMES[$i]}" "${TARGET_URLS[$i]}" "$PROMPT_LINES"; then
+      echo "WARNING: ${TARGET_NAMES[$i]} failed this cycle." >&2
+      status=1
+    fi
+  done
+  return "$status"
 }
 
 # Sleeps for the given number of minutes with a live countdown on a single line.
@@ -412,10 +433,11 @@ derive_name_from_url() {
 }
 
 print_usage() {
-  echo "Usage: $0 --site <key>|--url <URL> [OPTION]..."
+  echo "Usage: $0 --site <key>[,<key>...]|--url <URL> [OPTION]..."
   echo ""
   echo "Options:"
-  echo "  --site <key>         Fetch & summarize a registered site. Valid keys: ${!SITE_URLS[*]}"
+  echo "  --site <keys>        Fetch & summarize registered sites, comma-separated, one after another."
+  echo "                       Valid keys: ${SITE_KEYS[*]} (e.g. --site cnbc,fundstrat)"
   echo "                       The summary is also written to \$PORTFOLIO_DIR/news-<key>_YYYY-MM-DD.txt and copied to the remote host"
   echo "  --url <URL>          Fetch & summarize an arbitrary URL (any site/page, e.g. Bloomberg)"
   echo "  --name <label>       Output file name/label to use with --url (default: derived from URL)"
@@ -425,8 +447,7 @@ print_usage() {
   echo "  --remote-host <U@H>  Host that --site copies news-<key>_YYYY-MM-DD.txt to with scp -P \$REMOTE_PORT"
   echo "                       (default: \$REMOTE_HOST or hil@hil-fr-dc.freeddns.org; \"\" skips the copy)"
   echo "  --poll [MINUTES]     Repeat forever, sleeping MINUTES (default: $DEFAULT_POLL_MINUTES) after each fetch & summarize cycle;"
-  echo "                       combine with --site <key> or --url."
-  echo "                       fundstrat is only fetched $FUNDSTRAT_POLL_START_ET-$FUNDSTRAT_POLL_END_ET ET on trading days."
+  echo "                       combine with --site <keys> or --url. Only fetches $POLL_START_ET-$POLL_END_ET ET on trading days."
   echo "  --list               List available registered site keys and their URLs"
   echo "  -h, --help           Display this help message"
   echo ""
@@ -437,7 +458,8 @@ print_usage() {
   echo "  $0 --site fundstrat"
   echo "  $0 --site wsj --poll                  # poll WSJ every $DEFAULT_POLL_MINUTES minutes"
   echo "  $0 --site cnbc --poll 15              # poll CNBC every 15 minutes"
-  echo "  $0 --site fundstrat --poll 15         # poll Flash Insights every 15 minutes during market hours"
+  echo "  $0 --site fundstrat --poll 15         # poll Flash Insights every 15 minutes"
+  echo "  $0 --site wsj,cnbc,fundstrat --poll   # poll all three sites every $DEFAULT_POLL_MINUTES minutes"
   echo "  $0 --url \"https://www.bloomberg.com/markets\" --name bloomberg-markets"
   echo "  $0 --url \"https://www.bloomberg.com/news/articles/xxxx\" --name bbg-article --lines 500"
 }
@@ -445,7 +467,7 @@ print_usage() {
 # ---------------------------------------------------------------------------
 # Argument parsing
 # ---------------------------------------------------------------------------
-SELECTED_SITE=""
+SELECTED_SITES=""
 CUSTOM_URL=""
 CUSTOM_NAME=""
 PROMPT_LINES="$DEFAULT_PROMPT_LINES"
@@ -454,8 +476,8 @@ POLL_MINUTES=""
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --site)
-      [[ $# -ge 2 ]] || { echo "ERROR: --site requires an argument (${!SITE_URLS[*]})." >&2; exit 1; }
-      SELECTED_SITE="$2"
+      [[ $# -ge 2 ]] || { echo "ERROR: --site requires comma-separated keys (${SITE_KEYS[*]})." >&2; exit 1; }
+      SELECTED_SITES="$2"
       shift 2
       ;;
     --url)
@@ -502,7 +524,7 @@ while [[ $# -gt 0 ]]; do
       ;;
     --list)
       echo "Available site keys:"
-      for key in "${!SITE_URLS[@]}"; do
+      for key in "${SITE_KEYS[@]}"; do
         echo "  $key -> ${SITE_URLS[$key]}"
       done
       exit 0
@@ -518,12 +540,12 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-if [[ -n "$CUSTOM_URL" && -n "$SELECTED_SITE" ]]; then
+if [[ -n "$CUSTOM_URL" && -n "$SELECTED_SITES" ]]; then
   echo "ERROR: --url and --site are mutually exclusive; pass only one." >&2
   exit 1
 fi
-if [[ -z "$CUSTOM_URL" && -z "$SELECTED_SITE" ]]; then
-  echo "ERROR: pass --site <key> (${!SITE_URLS[*]}) or --url <URL>. Use -h or --help for usage." >&2
+if [[ -z "$CUSTOM_URL" && -z "$SELECTED_SITES" ]]; then
+  echo "ERROR: pass --site <keys> (${SITE_KEYS[*]}) or --url <URL>. Use -h or --help for usage." >&2
   exit 1
 fi
 
@@ -532,25 +554,35 @@ if [[ ! -d "$PROFILE_DIR" ]]; then
   exit 1
 fi
 
-# Resolve the arguments into the output name and URL to fetch each cycle.
+# Resolve the arguments into the output names and URLs to fetch each cycle, in the given order.
+TARGET_NAMES=()
+TARGET_URLS=()
 if [[ -n "$CUSTOM_URL" ]]; then
-  TARGET_NAME="$CUSTOM_NAME"
-  if [[ -z "$TARGET_NAME" ]]; then
-    TARGET_NAME="$(derive_name_from_url "$CUSTOM_URL")"
-    echo "INFO: --name not given; derived name '$TARGET_NAME' from URL."
+  custom_name="$CUSTOM_NAME"
+  if [[ -z "$custom_name" ]]; then
+    custom_name="$(derive_name_from_url "$CUSTOM_URL")"
+    echo "INFO: --name not given; derived name '$custom_name' from URL."
   fi
-  if [[ -n "${SITE_URLS[$TARGET_NAME]+x}" ]]; then
-    echo "ERROR: --name $TARGET_NAME is reserved for --site $TARGET_NAME." >&2
+  if [[ -n "${SITE_URLS[$custom_name]+x}" ]]; then
+    echo "ERROR: --name $custom_name is reserved for --site $custom_name." >&2
     exit 1
   fi
-  TARGET_URL="$CUSTOM_URL"
+  TARGET_NAMES=("$custom_name")
+  TARGET_URLS=("$CUSTOM_URL")
 else
-  if [[ -z "${SITE_URLS[$SELECTED_SITE]+x}" ]]; then
-    echo "ERROR: Unknown site key '$SELECTED_SITE'. Valid keys: ${!SITE_URLS[*]}" >&2
-    exit 1
-  fi
-  TARGET_NAME="$SELECTED_SITE"
-  TARGET_URL="${SITE_URLS[$SELECTED_SITE]}"
+  IFS=',' read -r -a selected_keys <<< "$SELECTED_SITES"
+  for key in "${selected_keys[@]}"; do
+    if [[ -z "$key" || -z "${SITE_URLS[$key]+x}" ]]; then
+      echo "ERROR: Unknown site key '$key' in --site $SELECTED_SITES. Valid keys: ${SITE_KEYS[*]} (comma-separated)" >&2
+      exit 1
+    fi
+    if [[ " ${TARGET_NAMES[*]} " == *" $key "* ]]; then
+      echo "ERROR: Site key '$key' is repeated in --site $SELECTED_SITES." >&2
+      exit 1
+    fi
+    TARGET_NAMES+=("$key")
+    TARGET_URLS+=("${SITE_URLS[$key]}")
+  done
 fi
 
 mkdir -p "$OUTPUT_DIR"
@@ -564,9 +596,10 @@ if [[ -z "$POLL_MINUTES" ]]; then
   exit 0
 fi
 
-echo "Starting news polling for $TARGET_NAME (sleeping $POLL_MINUTES minute(s) after each cycle)..."
+echo "Starting news polling for ${TARGET_NAMES[*]} (sleeping $POLL_MINUTES minute(s) after each cycle," \
+  "fetching only $POLL_START_ET-$POLL_END_ET ET on trading days)..."
 while true; do
   # A failed fetch (e.g. a captcha page) is retried on the next cycle instead of stopping the poll.
-  run_cycle || echo "WARNING: $TARGET_NAME failed this cycle; retrying after the sleep." >&2
+  run_cycle || echo "WARNING: retrying the failed site(s) after the sleep." >&2
   sleep_with_countdown "$POLL_MINUTES"
 done

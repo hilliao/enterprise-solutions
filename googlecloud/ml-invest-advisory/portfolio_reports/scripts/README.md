@@ -59,20 +59,24 @@ and, with `scp -P $REMOTE_PORT`, to the same path on `--remote-host` (default
 `OUTPUT_DIR`.
 ```
 ./fetch-news.sh --site wsj|cnbc|fundstrat
+./fetch-news.sh --site wsj,cnbc,fundstrat         # several sites, one after another
 ./fetch-news.sh --url <URL> --name <label> [--lines N]
 ./fetch-news.sh --site wsj --profile-dir DIR      # use another Chrome profile
 ./fetch-news.sh --site wsj --output-dir DIR       # write to DIR
 ./fetch-news.sh --site wsj --remote-host U@H       # copy news-wsj_YYYY-MM-DD.txt to another host
-./fetch-news.sh --site wsj|cnbc|fundstrat --poll [MIN]  # repeat forever, sleeping MIN (default 30) after each cycle
+./fetch-news.sh --site cnbc,fundstrat --poll [MIN]  # repeat forever, sleeping MIN (default 30) after each cycle
 ./fetch-news.sh --list
 ./fetch-news.sh -h|--help
 ```
 Requires `google-chrome`, `html2text`, `ollama` (optionally `pandoc`). Writes
-to `OUTPUT_DIR` (default `~/Documents/news-aggregate/`). The site navigation before the first `*****`
-heading (html2text `<h2>`) is skipped, and the next `--lines` lines (default
-600) go to Ollama. With `--poll`, a failed fetch (e.g. a WSJ captcha page) is
-retried next cycle instead of stopping the loop, and `fundstrat` is only
-fetched 08:30-17:30 ET on trading days. Key env vars: `PROFILE_DIR`,
+to `OUTPUT_DIR` (default `~/Documents/news-aggregate/`). The site navigation before the first `******`
+or `*****` heading (html2text `<h1>` or `<h2>`) is skipped, and the next `--lines` lines (default
+600) go to Ollama. Several `--site` keys are fetched one after another; a
+failed site (e.g. a WSJ captcha page) doesn't stop the others, and the run then
+exits 1. `--poll` only fetches 08:00-18:00 ET on trading days (1.5 hours before
+the NYSE open until 2 hours after the close, the same window as
+`run-market-hours.sh`), and a failed site is retried next
+cycle instead of stopping the loop. Key env vars: `PROFILE_DIR`,
 `OUTPUT_DIR`, `PORTFOLIO_DIR`, `REMOTE_HOST`, `REMOTE_PORT`, `OLLAMA_HOST`,
 `OLLAMA_MODEL` (default `gemma4:12b-it-qat` for every site), `OLLAMA_THINK`.
 
