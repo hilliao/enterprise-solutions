@@ -1,11 +1,11 @@
 #!/bin/bash
 # ======================================================================================================================
-# run_detector.sh: template; copy it to run_detector_<camera>.sh and edit the values
+# run_detector_template.sh: template; copy it to run_detector_<camera>.sh and edit the values
 # ======================================================================================================================
-# Runs mediapipe_detector.py on the camera's video stream. Frames with a person are annotated, saved to
+# Runs person_detector.py on the camera's video stream. Frames with a person are annotated, saved to
 # OUTPUT_IMAGE_DIR, and uploaded to gs://GCS_BUCKET/GCS_FOLDER/YYYY-MM-DD/HH/. Full documentation: README.md.
 #
-# Usage: ./run_detector.sh
+# Usage: ./run_detector_<camera>.sh, after copying this template
 #   Ctrl+C stops the detector. After a failure, e.g. when the watchdog exits a detector starved of CPU, it restarts by
 #   itself with exponential back-off (5, 10, 20, 40, 80 s), so no `while true` loop is needed.
 #
@@ -59,4 +59,4 @@ export IS_GPU=0
 
 mkdir -p "$OUTPUT_IMAGE_DIR"
 # exec replaces this shell with the detector, so Ctrl+C and kill reach it directly
-exec "$SCRIPT_DIR/bin/python" "$SCRIPT_DIR/mediapipe_detector.py"
+exec "$SCRIPT_DIR/bin/python" "$SCRIPT_DIR/person_detector.py"

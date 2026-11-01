@@ -1,13 +1,14 @@
 #!/usr/bin/env python3
+# Describe live camera frames with a vision language model served by Ollama, one frame at a time, and log the answers.
 
 # Install required packages:
 # pip install opencv-python ollama
 
 # Example usage on Linux Bash shell:
 # export RTSP_URL=rtsp://username:password@server-hostname-example.com:554/stream1
-# python3 analyze-videos.py -i $RTSP_URL --frame-filename images/saved_frame --model-timeout 600
+# python3 describe_camera_frames_with_ollama.py -i $RTSP_URL --frame-filename images/saved_frame --model-timeout 600
 # Or with virtual environment:
-# ~/workspace/ml-ollama/.venv/bin/python3 ~/path/to/analyze-videos.py -i $RTSP_URL --frame-filename images/2/tpe-mucha-1 --model-timeout 600 --output ~/Documents/tw-mucha-stream_analysis.txt
+# ~/workspace/ml-ollama/.venv/bin/python3 ~/path/to/poc/describe_camera_frames_with_ollama.py -i $RTSP_URL --frame-filename images/2/tpe-mucha-1 --model-timeout 600 --output ~/Documents/tw-mucha-stream_analysis.txt
 
 import argparse
 import cv2
@@ -19,47 +20,47 @@ import signal
 MODEL_NAME = "minicpm-v"
 
 
-class TimeoutError(Exception):
-    """Custom timeout exception."""
+class ModelTimeoutError(Exception):
+    """The model did not answer within --model-timeout seconds."""
     pass
 
 
-def timeout_handler(signum, frame):
-    """Signal handler for timeout."""
-    raise TimeoutError("Operation timed out")
+def raise_model_timeout(signum, frame):
+    """SIGALRM handler: interrupt the model call."""
+    raise ModelTimeoutError("Operation timed out")
 
 
 def capture_frame(rtsp_url, rtsp_timeout):
     """Captures a single frame from the RTSP stream with timeout."""
     # Set RTSP timeout options
-    cap = cv2.VideoCapture(rtsp_url, cv2.CAP_FFMPEG)
-    cap.set(cv2.CAP_PROP_OPEN_TIMEOUT_MSEC, rtsp_timeout * 1000)
-    cap.set(cv2.CAP_PROP_READ_TIMEOUT_MSEC, rtsp_timeout * 1000)
+    video_capture = cv2.VideoCapture(rtsp_url, cv2.CAP_FFMPEG)
+    video_capture.set(cv2.CAP_PROP_OPEN_TIMEOUT_MSEC, rtsp_timeout * 1000)
+    video_capture.set(cv2.CAP_PROP_READ_TIMEOUT_MSEC, rtsp_timeout * 1000)
     
-    if not cap.isOpened():
+    if not video_capture.isOpened():
         print(f"Error: Could not connect to RTSP stream (timeout: {rtsp_timeout}s)")
         return None, None
     
     # Read a single frame
-    ret, frame = cap.read()
-    cap.release()  # Immediately release to avoid buffering
+    frame_read, frame = video_capture.read()
+    video_capture.release()  # Immediately release to avoid buffering
     
-    if not ret:
+    if not frame_read:
         print("Error: Could not read frame from stream.")
         return None, None
     
     # Convert to bytes for Ollama
-    _, buffer = cv2.imencode('.jpg', frame)
-    return frame, buffer.tobytes()
+    _, jpeg = cv2.imencode('.jpg', frame)
+    return frame, jpeg.tobytes()
 
 
-def analyze_frame(frame_bytes, frame_number, prompt, model_timeout):
+def describe_frame(frame_bytes, frame_number, prompt, model_timeout):
     """Analyzes a single frame using the Gen AI model with timeout."""
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     print(f"[{timestamp}] Analyzing frame {frame_number}...")
     
     # Set timeout alarm
-    signal.signal(signal.SIGALRM, timeout_handler)
+    signal.signal(signal.SIGALRM, raise_model_timeout)
     signal.alarm(model_timeout)
     
     try:
@@ -74,7 +75,7 @@ def analyze_frame(frame_bytes, frame_number, prompt, model_timeout):
         signal.alarm(0)  # Cancel the alarm
         return response['message']['content']
     
-    except TimeoutError:
+    except ModelTimeoutError:
         signal.alarm(0)  # Cancel the alarm
         return f"[TIMEOUT] Model did not respond within {model_timeout} seconds. Skipping frame."
 
@@ -139,27 +140,27 @@ def main():
     timeout_count = 0
     
     try:
-        with open(output_file, "a") as f:
+        with open(output_file, "a") as log_file:
             while True:
                 frame_number += 1
                 
                 # Step 1: Capture a single frame with timeout
                 try:
                     frame, frame_bytes = capture_frame(rtsp_url, rtsp_timeout)
-                except Exception as e:
+                except Exception as error:
                     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                    error_msg = f"[{timestamp}] Frame {frame_number}: RTSP capture error - {e}\n"
+                    error_msg = f"[{timestamp}] Frame {frame_number}: RTSP capture error - {error}\n"
                     print(error_msg)
-                    f.write(error_msg)
-                    f.flush()
+                    log_file.write(error_msg)
+                    log_file.flush()
                     continue
                 
                 if frame_bytes is None or frame is None:
                     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                     error_msg = f"[{timestamp}] Frame {frame_number}: Failed to capture frame, skipping...\n"
                     print(error_msg)
-                    f.write(error_msg)
-                    f.flush()
+                    log_file.write(error_msg)
+                    log_file.flush()
                     continue
                 
                 # Save the frame to disk
@@ -167,7 +168,7 @@ def main():
                 cv2.imwrite(frame_filename, frame)
                 
                 # Step 2: Analyze the frame with Gen AI (with timeout)
-                analysis = analyze_frame(frame_bytes, frame_number, args.prompt, model_timeout)
+                analysis = describe_frame(frame_bytes, frame_number, args.prompt, model_timeout)
                 
                 # Track timeouts
                 if "[TIMEOUT]" in analysis:
@@ -180,8 +181,8 @@ def main():
                 log_entry += "-" * 40 + "\n"
                 
                 print(log_entry)
-                f.write(log_entry)
-                f.flush()  # Ensure immediate write to file
+                log_file.write(log_entry)
+                log_file.flush()  # Ensure immediate write to file
                 
                 # Step 4: Loop back to capture next real-time frame
                 # No buffering - the next frame captured will be the current live frame
