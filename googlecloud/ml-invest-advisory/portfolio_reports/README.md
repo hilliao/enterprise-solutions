@@ -44,6 +44,19 @@ Each portfolio should be a `.json` file in the `PORTFOLIO_DIR`:
 }
 ```
 
+### Ticker Names
+`build_portfolio_prompt.py` gives every holding a `"Name"` in the prompt. Names come from `ticker_names.json`
+(or the file passed with `--ticker_names_file`) first, then from SEC EDGAR. SEC EDGAR names ETFs by the trust that
+issues them, e.g. `iSHARES TRUST` for IVV, SOXX and IGV alike, so the LLM can't tell what an ETF holds. Add every ETF
+you hold to `ticker_names.json`, with what it holds in parentheses:
+```json
+{
+  "EWT": "iShares MSCI Taiwan ETF (Taiwanese stocks)",
+  "SOXX": "iShares Semiconductor ETF (US-listed semiconductor stocks)"
+}
+```
+A missing or invalid file only prints a warning; the SEC EDGAR names are used instead.
+
 ## Executors
 
 The `scripts/` directory contains different scripts tailored for specific reporting needs:

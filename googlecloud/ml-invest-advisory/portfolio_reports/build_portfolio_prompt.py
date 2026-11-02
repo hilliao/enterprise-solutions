@@ -7,14 +7,17 @@ Workflow:
    authenticating with the service account in GOOGLE_APPLICATION_CREDENTIALS.
 3. Calculates each holding's current value (shares * Last), previous value (shares * PreviousClose)
    and portfolio weight, plus the portfolio's total values and daily change in percentage.
-4. Adds each ticker's full name ("Name") from SEC EDGAR, caching the SEC JSON files next to this
-   script for 24 hours.
+4. Adds each ticker's name ("Name"): from the ticker names file (--ticker_names_file, by default
+   ticker_names.json next to this script) if the ticker is in it, otherwise from SEC EDGAR, caching the
+   SEC JSON files next to this script for 24 hours. The ticker names file names ETFs by fund and holdings,
+   e.g. "iShares MSCI Taiwan ETF (Taiwanese stocks)", where SEC EDGAR only has the issuing trust
+   ("iShares, Inc.").
 5. Replaces {{PORTFOLIO_HOLDING_DATA_JSON}} in the LLM prompt template with that data and writes the
    prompt to the output file.
 
 Usage:
     python build_portfolio_prompt.py --portfolio_file <portfolio.json> --llm_prompt_template <template.txt> \
-        [--output_prompt <prompt.txt>]
+        [--output_prompt <prompt.txt>] [--ticker_names_file <ticker_names.json>]
 
 Environment variables:
     GOOGLE_APPLICATION_CREDENTIALS  Path to the service account key file (required).
@@ -58,9 +61,12 @@ CLOUD_RUN_REQUEST_TIMEOUT = 60
 # scripts/run-market-hours.sh reports this exit code as a quotes endpoint failure.
 EXIT_CODE_QUOTES_UNAVAILABLE = 69
 
-# --- SEC EDGAR ticker names ---
-# Company tickers (NVDA) have a title; ETF and mutual fund tickers (QQQ) only have a CIK, whose submissions have
-# the registrant name.
+# --- Ticker names ---
+# Ticker names file: {"TICKER": "Name", ...}, used before SEC EDGAR. Without --ticker_names_file, this file next to
+# this script is used.
+DEFAULT_TICKER_NAMES_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "ticker_names.json")
+# SEC EDGAR: company tickers (NVDA) have a title; ETF and mutual fund tickers (QQQ) only have a CIK, whose
+# submissions have the registrant name.
 SEC_COMPANY_TICKERS_URL = "https://www.sec.gov/files/company_tickers.json"
 SEC_FUND_TICKERS_URL = "https://www.sec.gov/files/company_tickers_mf.json"
 SEC_SUBMISSIONS_URL = "https://data.sec.gov/submissions/CIK{cik}.json"
@@ -335,8 +341,36 @@ def calculate_values_and_weights(quotes_with_shares: dict, cash_amount: float = 
 
 
 # ---------------------------------------------------------------------------
-# SEC EDGAR ticker names
+# Ticker names: ticker names file, then SEC EDGAR
 # ---------------------------------------------------------------------------
+
+def load_ticker_names_file(file_path: str) -> dict:
+    """
+    Loads the names of tickers from a ticker names file, e.g.:
+    {
+      "EWT": "iShares MSCI Taiwan ETF (Taiwanese stocks)",
+      "QQQ": "Invesco QQQ Trust (Nasdaq-100)"
+    }
+
+    Returns:
+        dict: The name of each ticker, with upper-case tickers. Empty if the file is missing or invalid, after a
+        warning, so the names come from SEC EDGAR instead of a typo in the file stopping the reports.
+    """
+    if not os.path.exists(file_path):
+        print(f"WARNING: Ticker names file {file_path} not found; using SEC EDGAR names only", file=sys.stderr)
+        return {}
+    try:
+        with open(file_path, 'r') as f:
+            names_by_ticker = json.load(f)
+        if not isinstance(names_by_ticker, dict) or \
+                not all(isinstance(name, str) and name.strip() for name in names_by_ticker.values()):
+            raise ValueError('expected {"TICKER": "Name", ...} with a non-empty name for every ticker')
+    except ValueError as error:  # json.JSONDecodeError is a ValueError
+        print(f"WARNING: Ignoring invalid ticker names file {file_path}: {error}; using SEC EDGAR names only",
+              file=sys.stderr)
+        return {}
+    return {ticker.upper(): name.strip() for ticker, name in names_by_ticker.items()}
+
 
 def load_sec_json(url: str, cache_file_name: str):
     """
@@ -376,53 +410,81 @@ def load_sec_json(url: str, cache_file_name: str):
     return data
 
 
-def lookup_ticker_names(tickers: list) -> dict:
+def lookup_sec_fund_registrant_name(cik: str):
     """
-    Looks up the full name of each ticker in SEC EDGAR, e.g.
-    {"NVDA": "NVIDIA CORP", "QQQ": "INVESCO QQQ TRUST, SERIES 1"}
+    Returns the registrant name in the SEC EDGAR submissions of a fund's 10-digit CIK, or None if there is none.
+
+    The registrant is often a trust of several funds, e.g. VOO's is "VANGUARD INDEX FUNDS", which is why the ticker
+    names file is used first.
+    """
+    submissions = load_sec_json(SEC_SUBMISSIONS_URL.format(cik=cik), f"sec_submissions_CIK{cik}.json")
+    return (submissions or {}).get("name") or None
+
+
+def lookup_sec_names(tickers: list) -> dict:
+    """
+    Looks up the name of each ticker in SEC EDGAR, e.g. {"NVDA": "NVIDIA CORP", "QQQ": "INVESCO QQQ TRUST, SERIES 1"}
 
     Company tickers are named by their title in company_tickers.json. ETF and mutual fund tickers are only in
-    company_tickers_mf.json, which has no names, so they're named by the registrant name in their CIK's submissions.
-    A fund's registrant is often a trust of several funds, e.g. VOO is named "VANGUARD INDEX FUNDS".
+    company_tickers_mf.json, which has no names, so they're named by their registrant
+    (lookup_sec_fund_registrant_name).
 
     Tickers that aren't in SEC EDGAR are left out of the returned dictionary.
     """
     company_tickers = load_sec_json(SEC_COMPANY_TICKERS_URL, "sec_company_tickers.json") or {}
-    company_names = {item["ticker"].upper(): item["title"] for item in company_tickers.values()}
+    company_names_by_ticker = {item["ticker"].upper(): item["title"] for item in company_tickers.values()}
 
     fund_tickers = load_sec_json(SEC_FUND_TICKERS_URL, "sec_company_tickers_mf.json") or {}
     # Each entry is [CIK, Series ID, Class ID, Ticker]
-    fund_ciks = {entry[3].upper(): str(entry[0]).zfill(10) for entry in fund_tickers.get("data", [])}
+    fund_ciks_by_ticker = {entry[3].upper(): str(entry[0]).zfill(10) for entry in fund_tickers.get("data", [])}
 
     names_by_ticker = {}
     for ticker in tickers:
         # SEC tickers separate the share class with '-', e.g. BRK-B for BRK.B
         sec_ticker = ticker.upper().replace('.', '-')
-        if sec_ticker in company_names:
-            names_by_ticker[ticker] = company_names[sec_ticker]
-        elif sec_ticker in fund_ciks:
-            cik = fund_ciks[sec_ticker]
-            submissions = load_sec_json(SEC_SUBMISSIONS_URL.format(cik=cik), f"sec_submissions_CIK{cik}.json")
-            if submissions and submissions.get("name"):
-                names_by_ticker[ticker] = submissions["name"]
+        if sec_ticker in company_names_by_ticker:
+            names_by_ticker[ticker] = company_names_by_ticker[sec_ticker]
+        elif sec_ticker in fund_ciks_by_ticker:
+            registrant_name = lookup_sec_fund_registrant_name(fund_ciks_by_ticker[sec_ticker])
+            if registrant_name:
+                names_by_ticker[ticker] = registrant_name
     return names_by_ticker
 
 
-def add_ticker_names(values_by_ticker: dict) -> dict:
+def lookup_ticker_names(tickers: list, ticker_names_file: str) -> dict:
     """
-    Returns a copy of values_by_ticker with each ticker's full name from SEC EDGAR as its first attribute, e.g.
-    {"NVDA": {"Name": "NVIDIA CORP", "Current Value": 436959.0, "Previous Value": 438549.82, ...}, ...}
+    Looks up the name of each ticker: from ticker_names_file if the ticker is in it, otherwise from SEC EDGAR.
+    Tickers in ticker_names_file aren't looked up in SEC EDGAR.
 
-    The SUM_KEY and CASH_KEY entries, and tickers without a name in SEC EDGAR, are copied unchanged.
+    Returns:
+        dict: The name of each ticker that has one, e.g. {"EWT": "iShares MSCI Taiwan ETF (Taiwanese stocks)",
+        "NVDA": "NVIDIA CORP"}. Prints a warning listing the tickers without a name.
     """
-    tickers = [ticker for ticker in values_by_ticker if ticker not in (SUM_KEY, CASH_KEY)]
-    names_by_ticker = lookup_ticker_names(tickers)
+    file_names_by_ticker = load_ticker_names_file(ticker_names_file)
+    names_by_ticker = {ticker: file_names_by_ticker[ticker.upper()] for ticker in tickers
+                       if ticker.upper() in file_names_by_ticker}
+
+    tickers_not_in_file = [ticker for ticker in tickers if ticker not in names_by_ticker]
+    sec_names_by_ticker = lookup_sec_names(tickers_not_in_file) if tickers_not_in_file else {}
+    print(f"Ticker names: {len(names_by_ticker)} from {ticker_names_file}, {len(sec_names_by_ticker)} from SEC EDGAR")
+    names_by_ticker.update(sec_names_by_ticker)
 
     unnamed_tickers = [ticker for ticker in tickers if ticker not in names_by_ticker]
     if unnamed_tickers:
-        print(f"WARNING: No SEC EDGAR name found for {len(unnamed_tickers)} tickers: {', '.join(unnamed_tickers)}",
+        print(f"WARNING: No name found for {len(unnamed_tickers)} tickers: {', '.join(unnamed_tickers)}",
               file=sys.stderr)
+    return names_by_ticker
 
+
+def add_ticker_names(values_by_ticker: dict, ticker_names_file: str) -> dict:
+    """
+    Returns a copy of values_by_ticker with each ticker's name (lookup_ticker_names) as its first attribute, e.g.
+    {"NVDA": {"Name": "NVIDIA CORP", "Current Value": 436959.0, "Previous Value": 438549.82, ...}, ...}
+
+    The SUM_KEY and CASH_KEY entries, and tickers without a name, are copied unchanged.
+    """
+    tickers = [ticker for ticker in values_by_ticker if ticker not in (SUM_KEY, CASH_KEY)]
+    names_by_ticker = lookup_ticker_names(tickers, ticker_names_file)
     return {ticker: {'Name': names_by_ticker[ticker], **attributes} if ticker in names_by_ticker else attributes
             for ticker, attributes in values_by_ticker.items()}
 
@@ -451,7 +513,17 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument('--output_prompt', type=str, default=DEFAULT_OUTPUT_PROMPT_FILE, help=
     f'The output file name for the generated LLM prompt. Defaults to "{DEFAULT_OUTPUT_PROMPT_FILE}" '
     f'next to the prompt template.')
+    parser.add_argument('--ticker_names_file', type=str, default=DEFAULT_TICKER_NAMES_FILE, help=
+    'The path to a JSON file of ticker names, {"TICKER": "Name", ...}, used instead of the SEC EDGAR names, '
+    f'which are often only the trust that issues an ETF. Defaults to {DEFAULT_TICKER_NAMES_FILE}.')
     return parser.parse_args()
+
+
+def output_prompt_path(output_prompt: str, llm_prompt_template: str) -> str:
+    """Returns the path to write the prompt to: the default file name goes next to the prompt template."""
+    if output_prompt == DEFAULT_OUTPUT_PROMPT_FILE:
+        return os.path.join(os.path.dirname(llm_prompt_template), output_prompt)
+    return output_prompt
 
 
 def main():
@@ -461,15 +533,13 @@ def main():
     quotes = fetch_stock_quotes(list(shares_by_ticker.keys()))
 
     quotes_with_shares = merge_shares_into_quotes(shares_by_ticker, quotes)
-    portfolio_data = add_ticker_names(calculate_values_and_weights(quotes_with_shares, cash_amount))
+    values_by_ticker = calculate_values_and_weights(quotes_with_shares, cash_amount)
+    portfolio_data = add_ticker_names(values_by_ticker, args.ticker_names_file)
     print(f"\n--- Portfolio value change from last trading day (top {NUM_TICKERS_TO_PRINT} tickers) ---")
     print(condensed_json(portfolio_data, NUM_TICKERS_TO_PRINT))
 
-    if args.output_prompt == DEFAULT_OUTPUT_PROMPT_FILE:
-        output_path = os.path.join(os.path.dirname(args.llm_prompt_template), args.output_prompt)
-    else:
-        output_path = args.output_prompt
-    write_prompt(args.llm_prompt_template, portfolio_data, output_path)
+    write_prompt(args.llm_prompt_template, portfolio_data,
+                 output_prompt_path(args.output_prompt, args.llm_prompt_template))
 
 
 if __name__ == "__main__":

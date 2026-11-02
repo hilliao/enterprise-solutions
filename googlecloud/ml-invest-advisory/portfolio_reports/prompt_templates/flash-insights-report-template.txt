@@ -7,8 +7,8 @@ and every statement about the news on the breaking news between the <breaking_ne
 [PORTFOLIO HOLDINGS DATA TO ANALYZE]
 The portfolio holding data is a JSON dictionary.
 Its keys are ticker symbols, and its values are dictionaries with these properties:
-* "Name": Name of the company or fund registrant
-  (missing for some tickers; see the [TICKER REFERENCE] and accuracy rule 7).
+* "Name": Name of the company, or of the ETF followed by what it holds in parentheses,
+  e.g. "iShares MSCI Taiwan ETF (Taiwanese stocks)" (missing for some tickers; see accuracy rule 7).
 * "Current Value": Real-time valuation of the holding in US dollars.
 * "Previous Value": Valuation of the holding at the prior market close in US dollars.
 * "shares": Number of shares held.
@@ -29,31 +29,6 @@ Do NOT print, copy, or replicate this raw JSON block in your report.
 {{FLASH_INSIGHTS}}
 </breaking_news>
 
-[TICKER REFERENCE]
-The "Name" field of many ETFs is only the trust that issues them. Use this list for what these tickers are:
-* AAAU: Goldman Sachs Physical Gold ETF (gold bullion)
-* BIL: SPDR Bloomberg 1-3 Month T-Bill ETF (short-term US Treasury bills, a cash equivalent)
-* DRAM: Roundhill Memory ETF (memory chip makers such as Micron, Samsung, and SK hynix)
-* EWT: iShares MSCI Taiwan ETF (Taiwanese stocks)
-* EWY: iShares MSCI South Korea ETF (South Korean stocks)
-* FBTC: Fidelity Wise Origin Bitcoin Fund (spot bitcoin)
-* FETH: Fidelity Ethereum Fund (spot ether)
-* GLD: SPDR Gold Shares (gold bullion)
-* GRNY: Fundstrat Granny Shots US Large Cap ETF (actively managed US large-cap stocks)
-* IGV: iShares Expanded Tech-Software Sector ETF (software stocks)
-* IVV: iShares Core S&P 500 ETF (S&P 500)
-* IWM: iShares Russell 2000 ETF (US small-cap stocks)
-* QQQ: Invesco QQQ Trust (Nasdaq-100)
-* SGOV: iShares 0-3 Month Treasury Bond ETF (short-term US Treasury bills, a cash equivalent)
-* SIVR: abrdn Physical Silver Shares ETF (silver bullion)
-* SKHY: SK hynix American Depositary Receipts (a South Korean memory chip maker)
-* SOXX: iShares Semiconductor ETF (US-listed semiconductor stocks)
-* SSK: REX-Osprey SOL + Staking ETF (the Solana cryptocurrency, plus staking rewards)
-* VOO: Vanguard S&P 500 ETF (S&P 500)
-* XLF: Financial Select Sector SPDR Fund (S&P 500 financials)
-* XLI: Industrial Select Sector SPDR Fund (S&P 500 industrials)
-For a ticker that is not in this list, describe it only if you are sure what it is; otherwise say that you are unsure.
-
 [ACCURACY RULES]
 Follow these rules in every section of the report:
 1. Copy numbers exactly from the JSON data or the breaking news. Do not invent prices, price targets,
@@ -61,6 +36,7 @@ Follow these rules in every section of the report:
    The JSON data has no share prices, so do not calculate share prices from it.
 2. A holding's daily move is its "single share change in percentage", and its size is its "weight in percentage".
    Never attach one holding's numbers to another holding.
+   If you state the combined weight of several holdings, add up their "weight in percentage" and double-check the sum.
 3. Only say the news mentions a holding if the holding's ticker or company name appears in the breaking news.
    Any other link between the news and a holding (same sector, index membership, macro exposure) is indirect:
    label it as indirect.
@@ -74,10 +50,10 @@ Follow these rules in every section of the report:
    Point out such mistakes in the report instead of repeating them.
 6. No purchase prices or cost basis are provided. Do not mention gains or losses since purchase,
    "locking in gains", or "taking profits".
-7. Identify each holding by its ticker symbol. The "Name" field can be the legal name of a fund trust
-   (for example "iSHARES TRUST" or "SPDR SERIES TRUST") that issues many different ETFs,
-   so do not infer what an ETF holds from "Name" alone: use the [TICKER REFERENCE] list.
-   If you are unsure what a ticker is or what an ETF tracks, say that you are unsure.
+7. Identify each holding by its ticker symbol, and use its "Name" to say what it is or what the ETF holds.
+   Some "Name" values are only the legal name of a fund trust (for example "iSHARES TRUST" or "SPDR SERIES TRUST")
+   that issues many different ETFs. For those, and for tickers without a "Name", describe the holding only if
+   you are sure what it is; otherwise say that you are unsure.
 8. Only call a holding a hedge, buffer, or cushion for today if its daily change was zero or positive.
    A holding that fell less than the portfolio's "daily performance change in percentage" held up better
    than the portfolio, but it still added to the loss, so do not call it a cushion.
@@ -86,7 +62,8 @@ Follow these rules in every section of the report:
 Write the report in Markdown with exactly these 6 headers, in this order.
 Do NOT copy the breaking news text or the raw JSON data into the report.
 Write in natural sentences, and do not quote the JSON property names:
-for example, write "TICKER is X% of the portfolio and fell (or rose) Y% today" with the numbers from the JSON data.
+for example, write "TICKER (short name) is X% of the portfolio and fell (or rose) Y% today"
+with the ticker first and the numbers from the JSON data.
 
 # Portfolio performance snapshot
 Summarize the overall portfolio performance in 2-3 plain-text sentences:
