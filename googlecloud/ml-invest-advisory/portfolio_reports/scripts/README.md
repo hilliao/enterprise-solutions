@@ -75,7 +75,7 @@ or `*****` heading (html2text `<h1>` or `<h2>`) is skipped, and the next `--line
 failed site (e.g. a WSJ captcha page) doesn't stop the others, and the run then
 exits 1. `--poll` only fetches 08:00-18:00 ET on trading days (1.5 hours before
 the NYSE open until 2 hours after the close, the same window as
-`run-market-hours.sh`), and a failed site is retried next
+`run-market-hours.sh`) and otherwise sleeps until the window opens; a failed site is retried next
 cycle instead of stopping the loop. Key env vars: `PROFILE_DIR`,
 `OUTPUT_DIR`, `PORTFOLIO_DIR`, `REMOTE_HOST`, `REMOTE_PORT`, `OLLAMA_HOST`,
 `OLLAMA_MODEL` (default `gemma4:12b-it-qat` for every site), `OLLAMA_THINK`.
