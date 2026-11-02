@@ -8,14 +8,15 @@ and every statement about the news on the breaking news between the <breaking_ne
 The portfolio holding data is a JSON dictionary.
 Its keys are ticker symbols, and its values are dictionaries with these properties:
 * "Name": Name of the company, or of the ETF followed by what it holds in parentheses,
-  e.g. "iShares MSCI Taiwan ETF (Taiwanese stocks)" (missing for some tickers; see accuracy rule 7).
+  e.g. "iShares MSCI Taiwan ETF (Taiwanese stocks)"
+  (missing for some tickers; see accuracy rule 7).
 * "Current Value": Real-time valuation of the holding in US dollars.
 * "Previous Value": Valuation of the holding at the prior market close in US dollars.
 * "shares": Number of shares held.
 * "single share change in percentage": Price change percentage of a single share in 1 trading day.
 * "weight in percentage": Weight of this holding in the overall portfolio.
-* "__CASH" (special key): Uninvested cash. Its "shares" is the cash amount in US dollars,
-  and it also has "weight in percentage".
+* "__CASH" (special key): Uninvested cash.
+  Its "shares" is the cash amount in US dollars, and it also has "weight in percentage".
 * "__SUM" (special key): Aggregate portfolio performance,
   with "Current Value", "Previous Value", and "daily performance change in percentage".
 
@@ -31,32 +32,49 @@ Do NOT print, copy, or replicate this raw JSON block in your report.
 
 [ACCURACY RULES]
 Follow these rules in every section of the report:
-1. Copy numbers exactly from the JSON data or the breaking news. Do not invent prices, price targets,
-   earnings dates, valuation ratios, returns, or any other figure that is not in this prompt.
+
+1. Copy numbers exactly from the JSON data or the breaking news.
+   Do not invent prices, price targets, earnings dates, valuation ratios, returns,
+   or any other figure that is not in this prompt.
    The JSON data has no share prices, so do not calculate share prices from it.
-2. A holding's daily move is its "single share change in percentage", and its size is its "weight in percentage".
+
+2. A holding's daily move is its "single share change in percentage",
+   and its size is its "weight in percentage".
    Never attach one holding's numbers to another holding.
-   If you state the combined weight of several holdings, add up their "weight in percentage" and double-check the sum.
-3. Only say the news mentions a holding if the holding's ticker or company name appears in the breaking news.
-   Any other link between the news and a holding (same sector, index membership, macro exposure) is indirect:
-   label it as indirect.
+   If you state the combined weight of several holdings,
+   add up their "weight in percentage" and double-check the sum.
+
+3. Only say the news mentions a holding
+   if the holding's ticker or company name appears in the breaking news.
+   Any other link between the news and a holding (same sector, index membership, macro exposure)
+   is indirect: label it as indirect.
+
 4. The news can describe a different trading session than the JSON data.
-   If the news gives a percentage move for a holding that differs from its daily change in the JSON data,
+   If the news gives a percentage move for a holding
+   that differs from its daily change in the JSON data,
    use the JSON data for the portfolio and point out the difference.
    Do not compare index levels or share prices in the news with the dollar values in the JSON data:
    they measure different things.
-5. The breaking news is a machine-written summary and can contain mistakes. Before you use a news item,
-   check that each ticker in it belongs to the company named next to it (for example, "Apple Inc. (MSFT)" is wrong).
+
+5. The breaking news is a machine-written summary and can contain mistakes.
+   Before you use a news item,
+   check that each ticker in it belongs to the company named next to it
+   (for example, "Apple Inc. (MSFT)" is wrong).
    Point out such mistakes in the report instead of repeating them.
-6. No purchase prices or cost basis are provided. Do not mention gains or losses since purchase,
-   "locking in gains", or "taking profits".
-7. Identify each holding by its ticker symbol, and use its "Name" to say what it is or what the ETF holds.
-   Some "Name" values are only the legal name of a fund trust (for example "iSHARES TRUST" or "SPDR SERIES TRUST")
-   that issues many different ETFs. For those, and for tickers without a "Name", describe the holding only if
-   you are sure what it is; otherwise say that you are unsure.
+
+6. No purchase prices or cost basis are provided.
+   Do not mention gains or losses since purchase, "locking in gains", or "taking profits".
+
+7. Identify each holding by its ticker symbol,
+   and use its "Name" to say what it is or what the ETF holds.
+   Some "Name" values are only the legal name of a fund trust
+   (for example "iSHARES TRUST" or "SPDR SERIES TRUST") that issues many different ETFs.
+   For those, and for tickers without a "Name", describe the holding only if you are sure what it is;
+   otherwise say that you are unsure.
+
 8. Only call a holding a hedge, buffer, or cushion for today if its daily change was zero or positive.
-   A holding that fell less than the portfolio's "daily performance change in percentage" held up better
-   than the portfolio, but it still added to the loss, so do not call it a cushion.
+   A holding that fell less than the portfolio's "daily performance change in percentage"
+   held up better than the portfolio, but it still added to the loss, so do not call it a cushion.
 
 [OUTPUT FORMAT]
 Write the report in Markdown with exactly these 6 headers, in this order.
@@ -73,7 +91,8 @@ the total "Current Value" and the "daily performance change in percentage" from 
 List each news item that names a holding (by ticker or company name)
 as "- TICKER: one-sentence summary of the news item".
 If no news item names a holding, write "No news item names a holding directly."
-Then list up to 3 macro or sector news items that are most relevant to the portfolio's largest holdings,
+Then list up to 3 macro or sector news items
+that are most relevant to the portfolio's largest holdings,
 and any mistakes you found in the news (see accuracy rule 5).
 
 ## Direct Holdings Impact
@@ -81,9 +100,11 @@ For each holding named in the news, explain the news and its likely impact on th
 quoting the holding's daily change and weight from the JSON data.
 
 ## Macro & Sector Channels
-Explain how macro developments in the news (e.g., interest rates, oil prices, geopolitics, crypto, elections)
-propagate to the sectors and asset classes in the portfolio (e.g., technology, semiconductors, crypto,
-precious metals, financials, cash and Treasuries). Label these links as indirect.
+Explain how macro developments in the news
+(e.g., interest rates, oil prices, geopolitics, crypto, elections)
+propagate to the sectors and asset classes in the portfolio
+(e.g., technology, semiconductors, crypto, precious metals, financials, cash and Treasuries).
+Label these links as indirect.
 
 ## Resilience vs. Vulnerability
 Evaluate how the portfolio's allocation, including the weights of its top holdings and its cash,
