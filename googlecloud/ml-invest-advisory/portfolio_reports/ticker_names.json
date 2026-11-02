@@ -1,0 +1,23 @@
+{
+  "AAAU": "Goldman Sachs Physical Gold ETF (gold bullion)",
+  "BIL": "SPDR Bloomberg 1-3 Month T-Bill ETF (short-term US Treasury bills, a cash equivalent)",
+  "DRAM": "Roundhill Memory ETF (memory chip makers such as Micron, Samsung, and SK hynix)",
+  "EWT": "iShares MSCI Taiwan ETF (Taiwanese stocks)",
+  "EWY": "iShares MSCI South Korea ETF (South Korean stocks)",
+  "FBTC": "Fidelity Wise Origin Bitcoin Fund (spot bitcoin)",
+  "FETH": "Fidelity Ethereum Fund (spot ether)",
+  "GLD": "SPDR Gold Shares (gold bullion)",
+  "GRNY": "Fundstrat Granny Shots US Large Cap ETF (actively managed US large-cap stocks)",
+  "IGV": "iShares Expanded Tech-Software Sector ETF (software stocks)",
+  "IVV": "iShares Core S&P 500 ETF (S&P 500)",
+  "IWM": "iShares Russell 2000 ETF (US small-cap stocks)",
+  "QQQ": "Invesco QQQ Trust (Nasdaq-100)",
+  "SGOV": "iShares 0-3 Month Treasury Bond ETF (short-term US Treasury bills, a cash equivalent)",
+  "SIVR": "abrdn Physical Silver Shares ETF (silver bullion)",
+  "SKHY": "SK hynix American Depositary Receipts (a South Korean memory chip maker)",
+  "SOXX": "iShares Semiconductor ETF (US-listed semiconductor stocks)",
+  "SSK": "REX-Osprey SOL + Staking ETF (the Solana cryptocurrency, plus staking rewards)",
+  "VOO": "Vanguard S&P 500 ETF (S&P 500)",
+  "XLF": "Financial Select Sector SPDR Fund (S&P 500 financials)",
+  "XLI": "Industrial Select Sector SPDR Fund (S&P 500 industrials)"
+}
