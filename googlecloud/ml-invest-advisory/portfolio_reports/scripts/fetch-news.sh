@@ -209,6 +209,42 @@ is_poll_window() {
   [[ "$weekday" -le 5 && "$now_minutes" -ge "$start_minutes" && "$now_minutes" -lt "$end_minutes" ]]
 }
 
+# Prints the epoch seconds of the next polling window start after now: POLL_START_ET on the next Mon-Fri that isn't
+# in HOLIDAYS (today, if now is before POLL_START_ET on a trading day).
+next_poll_window_start() {
+  local today day_offset candidate_date start_epoch now_epoch
+  today="$(TZ="America/New_York" date +%Y-%m-%d)"
+  now_epoch="$(date +%s)"
+  for day_offset in {0..14}; do
+    candidate_date="$(TZ="America/New_York" date -d "$today +$day_offset day" +%Y-%m-%d)"
+    if [[ "$(TZ="America/New_York" date -d "$candidate_date" +%u)" -gt 5 ]] || is_market_holiday "$candidate_date"; then
+      continue
+    fi
+    start_epoch="$(TZ="America/New_York" date -d "$candidate_date $POLL_START_ET" +%s)"
+    if [[ "$start_epoch" -gt "$now_epoch" ]]; then
+      echo "$start_epoch"
+      return 0
+    fi
+  done
+  return 1
+}
+
+# Sleeps until the next polling window starts, after printing how long that is.
+sleep_until_poll_window() {
+  local resume_epoch remaining_seconds
+  resume_epoch="$(next_poll_window_start)"
+  remaining_seconds=$((resume_epoch - $(date +%s)))
+  printf "[%s] US stock market trading closed. Script resumes in %d h %d m %d s at %s\n" \
+    "$(TZ="America/New_York" date '+%Y-%m-%d %H:%M:%S %Z')" \
+    $((remaining_seconds / 3600)) $((remaining_seconds % 3600 / 60)) $((remaining_seconds % 60)) \
+    "$(TZ="America/New_York" date -d "@$resume_epoch" '+%Y-%m-%d %H:%M:%S %Z')"
+  # Short sleeps against the wall clock, so a suspended machine still resumes on time.
+  while [[ "$(date +%s)" -lt "$resume_epoch" ]]; do
+    remaining_seconds=$((resume_epoch - $(date +%s)))
+    sleep $((remaining_seconds < 60 ? remaining_seconds : 60))
+  done
+}
+
 # ---------------------------------------------------------------------------
 # Fetch, extract, summarize and publish one page
 # ---------------------------------------------------------------------------
@@ -398,13 +434,9 @@ fetch_and_summarize() {
 # ---------------------------------------------------------------------------
 
 # Fetches every TARGET_NAMES/TARGET_URLS entry once, one after another; a failed site doesn't stop the others.
-# Under --poll, nothing is fetched outside the polling window. Returns 1 if any site failed.
+# Returns 1 if any site failed.
 run_cycle() {
   local i status=0
-  if [[ -n "$POLL_MINUTES" ]] && ! is_poll_window; then
-    echo "[$(TZ="America/New_York" date '+%Y-%m-%d %H:%M:%S %Z')] Skipping ${TARGET_NAMES[*]} outside the $POLL_START_ET-$POLL_END_ET ET trading-day window."
-    return 0
-  fi
   for i in "${!TARGET_NAMES[@]}"; do
     if ! fetch_and_summarize "${TARGET_NAMES[$i]}" "${TARGET_URLS[$i]}" "$PROMPT_LINES"; then
       echo "WARNING: ${TARGET_NAMES[$i]} failed this cycle." >&2
@@ -599,6 +631,11 @@ fi
 echo "Starting news polling for ${TARGET_NAMES[*]} (sleeping $POLL_MINUTES minute(s) after each cycle," \
   "fetching only $POLL_START_ET-$POLL_END_ET ET on trading days)..."
 while true; do
+  # Outside the polling window, sleep until it opens instead of waking every POLL_MINUTES.
+  if ! is_poll_window; then
+    sleep_until_poll_window
+    continue
+  fi
   # A failed fetch (e.g. a captcha page) is retried on the next cycle instead of stopping the poll.
   run_cycle || echo "WARNING: retrying the failed site(s) after the sleep." >&2
   sleep_with_countdown "$POLL_MINUTES"
