@@ -10,6 +10,7 @@
 #
 #   Every --site run mirrors its summary to PORTFOLIO_DIR/news-<SITE>_YYYY-MM-DD.txt (e.g.
 #   news-wsj_2026-11-01.txt), which report-news-impact.sh reads, and to the same path on
+#   REMOTE_HOST. It then deletes that site's older news-<SITE>_*.txt files in PORTFOLIO_DIR, locally and on
 #   REMOTE_HOST. --url runs only write to OUTPUT_DIR.
 #
 # Requirements:
@@ -59,7 +60,7 @@
 #   OUTPUT_DIR              ~/Documents/news-aggregate (overridden by --output-dir)
 #   PORTFOLIO_DIR           ~/workspace/portfolios (where --site writes news-<SITE>_YYYY-MM-DD.txt)
 #   REMOTE_HOST             hil@hil-fr-dc.freeddns.org (overridden by --remote-host; empty skips the copy)
-#   REMOTE_PORT             23 (ssh port for the scp to REMOTE_HOST)
+#   REMOTE_PORT             23 (ssh port for the scp to and cleanup on REMOTE_HOST)
 #   OLLAMA_HOST             8400f:11434
 #   OLLAMA_MODEL            gemma4:12b-it-qat (all sites and --url)
 #   OLLAMA_THINK            false (passed as --think=$OLLAMA_THINK; thinking tokens can overflow the
@@ -229,20 +230,22 @@ next_poll_window_start() {
   return 1
 }
 
-# Sleeps until the next polling window starts, after printing how long that is.
+# Sleeps until the next polling window starts, with a live countdown on a single line.
 sleep_until_poll_window() {
-  local resume_epoch remaining_seconds
+  local resume_epoch remaining_seconds resume_at line columns
   resume_epoch="$(next_poll_window_start)"
-  remaining_seconds=$((resume_epoch - $(date +%s)))
-  printf "[%s] US stock market trading closed. Script resumes in %d h %d m %d s at %s\n" \
-    "$(TZ="America/New_York" date '+%Y-%m-%d %H:%M:%S %Z')" \
-    $((remaining_seconds / 3600)) $((remaining_seconds % 3600 / 60)) $((remaining_seconds % 60)) \
-    "$(TZ="America/New_York" date -d "@$resume_epoch" '+%Y-%m-%d %H:%M:%S %Z')"
-  # Short sleeps against the wall clock, so a suspended machine still resumes on time.
-  while [[ "$(date +%s)" -lt "$resume_epoch" ]]; do
-    remaining_seconds=$((resume_epoch - $(date +%s)))
-    sleep $((remaining_seconds < 60 ? remaining_seconds : 60))
+  resume_at="$(TZ="America/New_York" date -d "@$resume_epoch" '+%Y-%m-%d %H:%M:%S %Z')"
+  # 1-second sleeps against the wall clock, so a suspended machine still resumes on time.
+  while remaining_seconds=$((resume_epoch - $(date +%s))); [[ "$remaining_seconds" -gt 0 ]]; do
+    printf -v line "US stock market trading closed. Script resumes in %d h %d m %d s at %s" \
+      $((remaining_seconds / 3600)) $((remaining_seconds % 3600 / 60)) $((remaining_seconds % 60)) \
+      "$resume_at"
+    # Cut the line to the terminal width: a wrapped line can't be overwritten with \r.
+    columns="$(tput cols 2>/dev/null || echo 80)"
+    printf "\r\033[K%s" "${line:0:columns - 1}"
+    sleep 1
   done
+  printf "\n"
 }
 
 # ---------------------------------------------------------------------------
@@ -380,8 +383,44 @@ convert_summary_to_text() {
   fi
 }
 
+# Deletes the site's news-<name>_YYYY-MM-DD.txt files in PORTFOLIO_DIR other than CURRENT_FILE, printing each one.
+delete_old_news_files() {
+  local name="$1" current_file="$2" old_file
+  for old_file in "$PORTFOLIO_DIR/news-${name}_"[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9].txt; do
+    # An unmatched glob stays literal, so skip names that don't exist.
+    [[ -f "$old_file" && "$old_file" != "$current_file" ]] || continue
+    rm -f "$old_file"
+    echo "OK: deleted old news file $old_file"
+  done
+}
+
+# Lists PORTFOLIO_DIR on REMOTE_HOST and deletes the site's news-<name>_YYYY-MM-DD.txt files there other than
+# CURRENT_FILE, printing each one. Returns 1 if the listing or the deletion fails.
+delete_old_remote_news_files() {
+  local name="$1" current_file="$2" remote_listing file_name
+  local -a old_files=()
+  if ! remote_listing="$(ssh -p "$REMOTE_PORT" "$REMOTE_HOST" "ls -1 -- $(printf '%q' "$PORTFOLIO_DIR")")"; then
+    echo "WARNING: could not list $PORTFOLIO_DIR on $REMOTE_HOST; skipped deleting old news files there." >&2
+    return 1
+  fi
+  while IFS= read -r file_name; do
+    if [[ "$file_name" =~ ^news-${name}_[0-9]{4}-[0-9]{2}-[0-9]{2}\.txt$ && "$file_name" != "${current_file##*/}" ]]; then
+      old_files+=("$PORTFOLIO_DIR/$file_name")
+    fi
+  done <<< "$remote_listing"
+  [[ ${#old_files[@]} -gt 0 ]] || return 0
+
+  if ! ssh -p "$REMOTE_PORT" "$REMOTE_HOST" "rm -f -- $(printf '%q ' "${old_files[@]}")"; then
+    echo "WARNING: could not delete old news files on $REMOTE_HOST: ${old_files[*]}" >&2
+    return 1
+  fi
+  for file_name in "${old_files[@]}"; do
+    echo "OK: deleted old news file $file_name on $REMOTE_HOST"
+  done
+}
+
 # Copies a site's summary to PORTFOLIO_DIR/news-<name>_YYYY-MM-DD.txt, which report-news-impact.sh
-# reads, and to the same path on REMOTE_HOST.
+# reads, and to the same path on REMOTE_HOST, then deletes the site's older news files in both places.
 publish_news_file() {
   local name="$1" summary_txt="$2" news_file
   news_file="$PORTFOLIO_DIR/news-${name}_$(date +%Y-%m-%d).txt"
@@ -389,6 +428,7 @@ publish_news_file() {
   mkdir -p "$PORTFOLIO_DIR"
   cp "$summary_txt" "$news_file"
   echo "OK: wrote news file $news_file"
+  delete_old_news_files "$name" "$news_file"
 
   if [[ -z "$REMOTE_HOST" ]]; then
     echo "INFO: REMOTE_HOST is empty; skipped copying $news_file to a remote host."
@@ -399,6 +439,8 @@ publish_news_file() {
     return 1
   fi
   echo "OK: copied news file $news_file to $REMOTE_HOST"
+  # The news file is already delivered, so a failed cleanup only warns.
+  delete_old_remote_news_files "$name" "$news_file" || true
 }
 
 # Fetches URL, extracts its text, summarizes PROMPT_LINES lines of it with Ollama, and for --site runs publishes
