@@ -53,9 +53,12 @@ News aggregator: fetches one news page via headless Chrome (a built-in site
 Ollama. `--site fundstrat` fetches the fundstratdirect.com Flash Insights page
 (reusing a pre-authenticated Chrome profile — see the script header for
 one-time setup) and extracts the posts. Every `--site` run copies its summary
-to `PORTFOLIO_DIR/news-<SITE>_YYYY-MM-DD.txt` (read by `report-news-impact.sh`)
+to `PORTFOLIO_DIR/news-<SITE>_YYYY-MM-DD.txt` (read by `report-news-impact.sh`),
+deletes that site's older `news-<SITE>_*.txt` files there (printing each one)
 and, with `scp -P $REMOTE_PORT`, to the same path on `--remote-host` (default
-`hil@hil-fr-dc.freeddns.org`; `""` skips the copy). `--url` runs only write to
+`hil@hil-fr-dc.freeddns.org`; `""` skips the copy), where it lists `PORTFOLIO_DIR`
+over `ssh` and deletes the site's older `news-<SITE>_*.txt` files too (printing
+each one). `--url` runs only write to
 `OUTPUT_DIR`.
 ```
 ./fetch-news.sh --site wsj|cnbc|fundstrat
