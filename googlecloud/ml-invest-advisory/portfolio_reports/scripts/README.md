@@ -52,7 +52,8 @@ News aggregator: fetches one news page via headless Chrome (a built-in site
 `wsj`, `cnbc` or `fundstrat`, or any ad-hoc `--url`) and summarizes it with
 Ollama. `--site fundstrat` fetches the fundstratdirect.com Flash Insights page
 (reusing a pre-authenticated Chrome profile — see the script header for
-one-time setup) and extracts the posts. Every `--site` run copies its summary
+one-time setup) and extracts the posts. Every summary starts with a "Fetched at
+... from <URL>; summarized at ..." line in Eastern time. Every `--site` run copies its summary
 to `PORTFOLIO_DIR/news-<SITE>_YYYY-MM-DD.txt` (read by `report-news-impact.sh`),
 deletes that site's older `news-<SITE>_*.txt` files there (printing each one)
 and, with `scp -P $REMOTE_PORT`, to the same path on `--remote-host` (default

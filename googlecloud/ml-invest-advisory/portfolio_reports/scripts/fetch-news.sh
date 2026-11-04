@@ -8,6 +8,8 @@
 #
 #   --site fundstrat fetches the fundstratdirect.com Flash Insights page and extracts its posts.
 #
+#   Every summary starts with a "Fetched at ... from <URL>; summarized at ..." line in Eastern time.
+#
 #   Every --site run mirrors its summary to PORTFOLIO_DIR/news-<SITE>_YYYY-MM-DD.txt (e.g.
 #   news-wsj_2026-11-01.txt), which report-news-impact.sh reads, and to the same path on
 #   REMOTE_HOST. It then deletes that site's older news-<SITE>_*.txt files in PORTFOLIO_DIR, locally and on
@@ -383,6 +385,16 @@ convert_summary_to_text() {
   fi
 }
 
+# Prepends a line with the page's fetch time and the summary's completion time (America/New_York) to SUMMARY_TXT,
+# so readers and the news impact reports can tell how recent the news is.
+add_timestamp_line() {
+  local summary_txt="$1" url="$2" fetched_at="$3" summarized_at
+  summarized_at="$(TZ="America/New_York" date '+%Y-%m-%d %H:%M:%S %Z')"
+  { printf 'Fetched at %s from %s; summarized at %s.\n\n' "$fetched_at" "$url" "$summarized_at"
+    cat "$summary_txt"; } > "$summary_txt.tmp"
+  mv "$summary_txt.tmp" "$summary_txt"
+}
+
 # Deletes the site's news-<name>_YYYY-MM-DD.txt files in PORTFOLIO_DIR other than CURRENT_FILE, printing each one.
 delete_old_news_files() {
   local name="$1" current_file="$2" old_file
@@ -450,20 +462,22 @@ fetch_and_summarize() {
   local text_file="$OUTPUT_DIR/${name}.txt"
   local summary_md="$OUTPUT_DIR/${name}-summary.md"
   local summary_txt="$OUTPUT_DIR/${name}-summary.txt"
-  local html_file start_line
+  local html_file start_line fetched_at
 
   html_file="$(mktemp "/tmp/news-${name}-XXXXXX.html")"
   # A RETURN trap outlives the function, so reset it once it has run; otherwise it fires on every
   # later function return with $html_file unset, which `set -u` turns into an error.
   trap 'rm -f "$html_file"; trap - RETURN' RETURN
 
-  echo "[$(date '+%Y-%m-%d %H:%M:%S %Z')] Fetching $name ($url)..."
+  fetched_at="$(TZ="America/New_York" date '+%Y-%m-%d %H:%M:%S %Z')"
+  echo "[$fetched_at] Fetching $name ($url)..."
   fetch_page_html "$url" "$html_file" || return 1
   check_page "$html_file" "$url" || return 1
   extract_page_text "$name" "$html_file" "$text_file" || return 1
   start_line="$(find_content_start_line "$name" "$text_file")"
   summarize_with_ollama "$name" "$text_file" "$start_line" "$prompt_lines" "$summary_md" || return 1
   convert_summary_to_text "$summary_md" "$summary_txt"
+  add_timestamp_line "$summary_txt" "$url" "$fetched_at"
 
   # Only registered sites feed the portfolio reports; ad-hoc --url pages stay in OUTPUT_DIR.
   if [[ -n "${SITE_URLS[$name]+x}" ]]; then
