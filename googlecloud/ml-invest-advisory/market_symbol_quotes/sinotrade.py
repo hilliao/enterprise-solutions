@@ -1,105 +1,142 @@
+import contextlib
 import os
 import tempfile
+import threading
+from collections.abc import Generator, Sequence
+
 import shioaji as sj
 import yaml
 
 from gcp_data_access import get_gcp_secret
+from structured_logging import log, LOG_SEVERITY_DEBUG
+
+# Secret Manager secret in $PROJECT_ID with SinoTrade API keys keyed by Taiwan national ID, in the format:
+# A123456789:
+#   api_key: ...
+#   api_key_secret: ...
+SINOTRADE_API_KEY_SECRET_NAME = 'sinotrade-api-key'
+# Secret Manager secret with the CA certificate (.pfx) that production orders need; market data doesn't.
+SINOTRADE_CA_PFX_SECRET_NAME = 'sinotrade-ca-pfx'
+DEFAULT_STOCK_SYMBOLS = ('2330', '006208', '00662')
+
+# API keys from SINOTRADE_API_KEY_SECRET_NAME, read on first use. Guarded by sinotrade_api_keys_lock.
+sinotrade_api_keys = None
+sinotrade_api_keys_lock = threading.Lock()
 
 
-def get_sinotrade_api_key(secret_id: str = "sinotrade-api-key"):
-    """
-    Accesses a secret's payload from Google Cloud Secret Manager.
-    """
-    payload = get_gcp_secret(secret_id)
-    # Decode the payload to yaml.
-    sino_trade_api_yaml = payload.data.decode("UTF-8")
-
+def get_sinotrade_api_key(secret_id: str = SINOTRADE_API_KEY_SECRET_NAME) -> dict:
+    """Reads the SinoTrade API keys, keyed by Taiwan national ID, from a Secret Manager secret in YAML."""
+    secret_yaml = get_gcp_secret(secret_id).data.decode("UTF-8")
     try:
-        sino_trade_api_dict = yaml.safe_load(sino_trade_api_yaml)
-        return sino_trade_api_dict
-    except yaml.YAMLError as e:
-        raise ValueError("Secret payload is not valid YAML format.") from e
+        return yaml.safe_load(secret_yaml)
+    except yaml.YAMLError as error:
+        raise ValueError(f"Secret {secret_id} is not valid YAML.") from error
 
 
-def get_sinotrade_ca_pfx(secret_id: str = "sinotrade-ca-pfx"):
+def get_sinotrade_ca_pfx(secret_id: str = SINOTRADE_CA_PFX_SECRET_NAME):
     """
-    Accesses the Sinotrade CA PFX file from Google Cloud Secret Manager
-    and saves it to a temporary file.
-    """
-    payload = get_gcp_secret(secret_id)
-    # The payload is the binary content of the PFX file
-    pfx_content = payload.data
+    Saves the SinoTrade CA certificate from Secret Manager to a temporary .pfx file.
 
-    # Save the PFX content to a temporary file
-    # Use tempfile to create a temporary file that will be automatically deleted
+    Returns:
+        The file's path and the open temporary file; the file is deleted when the temporary file is closed or
+        garbage collected, so keep a reference while the path is in use.
+    """
     temp_file = tempfile.NamedTemporaryFile(delete=True, suffix=".pfx")
-    temp_pfx_path = temp_file.name
-    with open(temp_pfx_path, "wb") as f:
-        f.write(pfx_content)
-    return temp_pfx_path, temp_file
+    temp_file.write(get_gcp_secret(secret_id).data)
+    temp_file.flush()
+    return temp_file.name, temp_file
 
 
-_cached_sinotrade_api_key_yaml = None
-_cached_temp_pfx_path = None
-_cached_temp_file_obj = None
+def get_cached_sinotrade_api_key() -> dict:
+    """Returns the api_key and api_key_secret for $TW_NATIONAL_ID; the secret is read once per process."""
+    global sinotrade_api_keys
+
+    with sinotrade_api_keys_lock:
+        if sinotrade_api_keys is None:
+            sinotrade_api_keys = get_sinotrade_api_key()
+            log(text=f"Read SinoTrade API keys from secret {SINOTRADE_API_KEY_SECRET_NAME}.",
+                severity=LOG_SEVERITY_DEBUG)
+    return sinotrade_api_keys[os.environ['TW_NATIONAL_ID']]
+
+
+@contextlib.contextmanager
+def sinotrade_session(simulation: bool) -> Generator[sj.Shioaji, None, None]:
+    """
+    Logs in to SinoTrade with the API key for $TW_NATIONAL_ID and logs out on exit. Each login holds one of the
+    5 connections SinoTrade allows per national ID until logout, so don't keep sessions open between requests.
+    """
+    api_key = get_cached_sinotrade_api_key()
+    api = sj.Shioaji(simulation=simulation)
+    api.login(api_key=api_key['api_key'], secret_key=api_key['api_key_secret'])
+    try:
+        yield api
+    finally:
+        api.logout()
 
 
 def get_stock_positions():
     """
-    Lists current positions for the stock account where API key is cached.
+    Lists the current positions, in shares, of the production stock account for $TW_NATIONAL_ID.
     TODO: change the argument to accept a list of API key, secret.
+    """
+    with sinotrade_session(simulation=False) as api:
+        return api.list_positions(api.stock_account, unit=sj.Unit.Share)
+
+
+def get_sinotrade_snapshots(stock_symbols: Sequence[str] = DEFAULT_STOCK_SYMBOLS):
+    """
+    Gets current quote snapshots for Taiwan stocks and ETFs from the SinoTrade (Shioaji) simulation server.
+    Simulation mode serves market data without a CA certificate and can't place orders.
+
+    Environment variables:
+        PROJECT_ID: Google Cloud project that holds the "sinotrade-api-key" secret; read by gcp_data_access.py.
+            main.py sets it from the Metadata Server on Cloud Run; set it yourself when running locally.
+        TW_NATIONAL_ID: Taiwan national ID that keys the api_key and api_key_secret in the secret's YAML.
+
+    The caller needs roles/secretmanager.secretAccessor on the secret, e.g. Application Default Credentials from
+    `gcloud auth application-default login` when running locally. The secret is read once per process.
+
+    Args:
+        stock_symbols: Taiwan stock codes such as 2330 (TSMC) or 006208 (Fubon Taiwan 50 ETF).
 
     Returns:
-        List of current stock positions
+        A list of shioaji Snapshot objects, one per symbol, with fields such as code, exchange, close, high, low,
+        change_price, buy_price, sell_price and ts (nanoseconds since the epoch, in Taiwan time). For example,
+        get_sinotrade_snapshots(['2330']) after the close on Friday 2026-11-06 returned:
+
+        [Snapshot(ts=1793975400000000000, code='2330', exchange='TSE', open=2020, high=2195, low=2020, close=2135,
+                  tick_type=<TickType.Sell: 'Sell'>, change_price=-105, change_rate=-4.68,
+                  change_type=<ChangeType.Down: 'Down'>, average_price=2093.18, volume=106, total_volume=97065,
+                  amount=226310000, total_amount=203179565000, yesterday_volume=36585, buy_price=2135,
+                  buy_volume=12, sell_price=2140, sell_volume=1039, volume_ratio=2.65)]
+
+        Use snapshot_to_dict() for a JSON-serializable dict.
+
+    Raises:
+        KeyError: PROJECT_ID or TW_NATIONAL_ID isn't set, TW_NATIONAL_ID isn't a key in the secret, or a symbol
+            isn't a known contract.
     """
-    global _cached_sinotrade_api_key_yaml, _cached_temp_pfx_path, _cached_temp_file_obj
-
-    if _cached_sinotrade_api_key_yaml is None:
-        _cached_sinotrade_api_key_yaml = get_sinotrade_api_key()
-        print("Successfully cached SinoTrade API key from Secret Manager.")
-    else:
-        print("Using cached SinoTrade API key.")
-
-    api = sj.Shioaji(simulation=False)
-    tw_national_id = os.environ['TW_NATIONAL_ID']
-    accounts = api.login(api_key=_cached_sinotrade_api_key_yaml[tw_national_id]['api_key'],
-                         secret_key=_cached_sinotrade_api_key_yaml[tw_national_id]['api_key_secret'])
-
-    positions = api.list_positions(api.stock_account, unit=sj.constant.Unit.Share)
-    return positions
+    with sinotrade_session(simulation=True) as api:
+        contracts = []
+        for symbol in stock_symbols:
+            contract = api.contracts.get(symbol)
+            if contract is None:
+                raise KeyError(symbol)
+            contracts.append(contract)
+        return api.snapshots(contracts)
 
 
-def get_sinotrade_snapshots(stock_symbols: list = ['2330', '006208', '00662']):
-    global _cached_sinotrade_api_key_yaml, _cached_temp_pfx_path, _cached_temp_file_obj
-
-    if _cached_sinotrade_api_key_yaml is None:
-        _cached_sinotrade_api_key_yaml = get_sinotrade_api_key()
-        print("Successfully cached SinoTrade API key from Secret Manager.")
-    else:
-        print("Using cached SinoTrade API key.")
-
-    api = sj.Shioaji(simulation=True)
-    tw_national_id = os.environ['TW_NATIONAL_ID']
-    accounts = api.login(api_key=_cached_sinotrade_api_key_yaml[tw_national_id]['api_key'],
-                         secret_key=_cached_sinotrade_api_key_yaml[tw_national_id]['api_key_secret'])
-    
-    contracts = [api.Contracts.Stocks[symbol] for symbol in stock_symbols]
-    snapshots = api.snapshots(contracts)
-    return snapshots
+def snapshot_to_dict(snapshot) -> dict:
+    """Converts a shioaji Snapshot to a JSON-serializable dict; enums such as tick_type become their values."""
+    return {field: getattr(value, 'value', value) for field, value in snapshot.dict().items()}
 
 
 if __name__ == "__main__":
-    snapshots = get_sinotrade_snapshots()
-    for element in snapshots:
-        print(f"{element['exchange']}.{element['code']} "
-              f"has current buy price at "
-              f"{element['buy_price']}")
+    for snapshot in get_sinotrade_snapshots():
+        print(f"{snapshot.exchange}.{snapshot.code} has current buy price at {snapshot.buy_price}")
 
-    # test cached Sinotrade API key, secret
-    snapshots = get_sinotrade_snapshots(['2330'])
-    print(snapshots[0])
+    # The second call uses the cached API key.
+    print(snapshot_to_dict(get_sinotrade_snapshots(['2330'])[0]))
 
-    # list client's account holding positions
-    pos = get_stock_positions()
-    print(pos)
-
+    # List the account's stock positions.
+    print(get_stock_positions())

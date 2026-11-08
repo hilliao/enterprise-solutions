@@ -5,7 +5,7 @@ Two HTTP Cloud Functions (gen2, running on Cloud Run) that return real-time stoc
 | Function | Market | Broker API | Source |
 | :--- | :--- | :--- | :--- |
 | `get_us_ticker_quotes` | US | [Alpaca stock snapshots](https://alpaca.markets/sdks/python/market_data.html) `GET /v2/stocks/snapshots` | [alpaca-quotes.py](alpaca-quotes.py) |
-| `get_tw_stock_quotes` | Taiwan | [SinoTrade Shioaji](https://sinotrade.github.io/) `api.snapshots()` | [sinotrade.py](sinotrade.py) |
+| `get_tw_ticker_quotes` | Taiwan | [SinoTrade Shioaji](https://sinotrade.github.io/) `api.snapshots()` | [sinotrade.py](sinotrade.py) |
 
 > **OBSOLETE: TradeStation.** The TradeStation API is retired and replaced by Alpaca. `get_us_stock_quotes`
 > ([tradestation_obsolete.py](tradestation_obsolete.py), renamed from `tradestation.py`) is no longer deployed:
@@ -28,8 +28,11 @@ parameters and returned the same response format.
 | [alpaca-quotes.py](alpaca-quotes.py) | Alpaca stock snapshots converted to TradeStation's quote fields. Loaded with `importlib` because of the hyphen in its name. |
 | [sinotrade.py](sinotrade.py) | SinoTrade login and snapshots; also `get_stock_positions()` for account holdings. |
 | [gcp_data_access.py](gcp_data_access.py) | Reads the latest version of a Secret Manager secret. |
+| [test_main.py](test_main.py) | Unit tests for the HTTP entry points in `main.py`, with SinoTrade, Alpaca and the Metadata Server mocked. |
+| [test_sinotrade.py](test_sinotrade.py) | Unit tests for `get_sinotrade_snapshots()`, plus a live test against the SinoTrade simulation server. |
 | [structured_logging.py](structured_logging.py) | `log()` writes JSON lines with a severity for Cloud Logging. |
 | [deploy.sh](deploy.sh) | Deploys the Alpaca or the SinoTrade function, one per run (the TradeStation command is commented out). |
+| [.gcloudignore](.gcloudignore) | Leaves `shioaji.log` (it can contain the Taiwan national ID), tests, caches and deploy tooling out of the uploaded source. |
 | [requirements.txt](requirements.txt) | Python dependencies installed by Cloud Build at deploy time. |
 
 ## Secrets
@@ -72,11 +75,31 @@ A123456789:
   api_key_secret: ...
 ```
 
+## Tests
+
+Install the dependencies and pytest, then run the tests from this folder:
+
+```sh
+pip install -r requirements.txt pytest
+python -m pytest -v
+```
+
+The live SinoTrade tests in `test_sinotrade.py` log in to the simulation server and are skipped unless `PROJECT_ID`
+and `TW_NATIONAL_ID` are set and Application Default Credentials can read the `sinotrade-api-key` secret:
+
+```sh
+gcloud auth application-default login
+export PROJECT_ID=my-gcp-project
+export TW_NATIONAL_ID=...
+python -m pytest -v -s test_sinotrade.py
+```
+
 ## Deploy
 
 `deploy.sh` deploys one function per run, chosen with the mandatory `--function`, `--project` and `--region`
 arguments. Add `--configuration NAME` to deploy with a gcloud configuration from
-`gcloud config configurations list` instead of the active one.
+`gcloud config configurations list` instead of the active one. The source folder defaults to the folder of
+`deploy.sh`, so it can run from any working directory; pass `--source DIR` to deploy another copy of this folder.
 
 ```sh
 # US quotes from Alpaca
@@ -86,7 +109,7 @@ export ALPACA_DATA_FEED=sip  # optional, see "Alpaca data feed" below
 
 # Taiwan quotes from SinoTrade
 export TW_NATIONAL_ID=...
-./deploy.sh --function get-tw-stock-quotes --project my-gcp-project --region us-central1
+./deploy.sh --function get-tw-ticker-quotes --project my-gcp-project --region us-central1
 ```
 
 The functions run as `smart-invest@<--project>.iam.gserviceaccount.com`, which needs
@@ -159,12 +182,30 @@ requesting `sip` without a subscription makes Alpaca return an error.
 
 ### Taiwan quotes
 
-`symbols` is a comma-separated list of TWSE/TPEx codes. The response is a JSON list of Shioaji snapshots.
+`symbols` is a comma-separated list of TWSE/TPEx codes. The response is a JSON list of Shioaji snapshots from the
+simulation server, one object per symbol; an unknown symbol returns `500`. Each request logs in to SinoTrade and logs
+out when done, because SinoTrade allows only 5 logged-in connections per national ID.
 
 ```sh
 curl -sS -i -H "Authorization: Bearer $(gcloud auth print-identity-token)" \
-  "https://us-central1-$PROJECT_ID.cloudfunctions.net/get_tw_stock_quotes?symbols=2330,00662,006208"
+  "https://us-central1-$PROJECT_ID.cloudfunctions.net/get-tw-ticker-quotes?symbols=2330,00662,006208"
 ```
+
+```json
+[
+  {
+    "ts": 1793975400000000000, "code": "2330", "exchange": "TSE",
+    "open": 2020.0, "high": 2195.0, "low": 2020.0, "close": 2135.0,
+    "tick_type": "Sell", "change_price": -105.0, "change_rate": -4.68, "change_type": "Down",
+    "average_price": 2093.18, "volume": 106, "total_volume": 97065,
+    "amount": 226310000, "total_amount": 203179565000, "yesterday_volume": 36585.0,
+    "buy_price": 2135.0, "buy_volume": 12.0, "sell_price": 2140.0, "sell_volume": 1039, "volume_ratio": 2.65
+  }
+]
+```
+
+`ts` is nanoseconds since the epoch in Taiwan time, so read it as a naive local time: the sample is 2026-11-06 13:30,
+the close.
 
 ### Errors
 
