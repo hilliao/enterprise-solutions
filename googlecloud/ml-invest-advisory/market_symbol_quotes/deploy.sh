@@ -4,7 +4,7 @@ set -e # exit the script when execution hits any error
 # Deploys one of the market symbol quotes Cloud Functions (gen2, HTTP trigger, Python 3.13) from this folder.
 # See README.md for secret formats, response formats and troubleshooting.
 #
-# 1. get-tw-stock-quotes: Taiwan stock snapshots from the SinoTrade Shioaji API (sinotrade.py).
+# 1. get-tw-ticker-quotes: Taiwan stock snapshots from the SinoTrade Shioaji API (sinotrade.py).
 # 2. get-us-ticker-quotes: US stock quotes from Alpaca stock snapshots
 #    GET https://data.alpaca.markets/v2/stocks/snapshots (alpaca-quotes.py).
 # OBSOLETE, no longer deployed: get_us_stock_quotes, US stock quotes from the retired TradeStation API
@@ -12,7 +12,7 @@ set -e # exit the script when execution hits any error
 #    below is commented out; the Alpaca function returns the same response format.
 #
 # [mandatory arguments]
-#   --function FUNCTION              Function to deploy: get-tw-stock-quotes or get-us-ticker-quotes.
+#   --function FUNCTION              Function to deploy: get-tw-ticker-quotes or get-us-ticker-quotes.
 #   --project PROJECT_ID             GCP project to deploy to, e.g. my-gcp-project.
 #   --region REGION                  Region to deploy to, e.g. us-central1.
 #
@@ -20,10 +20,12 @@ set -e # exit the script when execution hits any error
 #   --configuration NAME             gcloud configuration to deploy with, a NAME from
 #                                    `gcloud config configurations list`. Its account is used; --project overrides its
 #                                    project. Default: the active configuration.
+#   --source DIR                     Folder with main.py and requirements.txt to deploy. Default: the folder of this
+#                                    script, so the script can run from any working directory.
 #
 # [mandatory variables]
 #   TW_NATIONAL_ID                   Key in the "sinotrade-api-key" secret that holds the SinoTrade api_key/api_key_secret.
-#                                    Only for get-tw-stock-quotes.
+#                                    Only for get-tw-ticker-quotes.
 #   (OBSOLETE: TRADE_STATION_OAUTH_SECRET_NAME was only needed by the retired TradeStation function.)
 #
 # [optional variables]
@@ -38,42 +40,49 @@ set -e # exit the script when execution hits any error
 #   - The deployer has roles/cloudfunctions.developer and roles/iam.serviceAccountUser on that service account.
 #
 # [usage]
-#   TW_NATIONAL_ID=... ./deploy.sh --function get-tw-stock-quotes --project my-gcp-project --region us-central1
+#   TW_NATIONAL_ID=... ./deploy.sh --function get-tw-ticker-quotes --project my-gcp-project --region us-central1
 #   ./deploy.sh --function get-us-ticker-quotes --project my-gcp-project --region us-central1
 #   ./deploy.sh --function get-us-ticker-quotes --project my-gcp-project --region us-central1 --configuration default
+#   ./deploy.sh --function get-us-ticker-quotes --project my-gcp-project --region us-central1 --source ~/market_symbol_quotes
 #
 # All functions are deployed with --no-allow-unauthenticated; invoke them with a GCP identity token:
 #   curl -H "Authorization: Bearer $(gcloud auth print-identity-token)" \
-#     "https://$REGION-$PROJECT_ID.cloudfunctions.net/get-tw-stock-quotes?symbols=2330,00662,006208"
+#     "https://$REGION-$PROJECT_ID.cloudfunctions.net/get-tw-ticker-quotes?symbols=2330,00662,006208"
 #   curl -i -H "Authorization: Bearer $(gcloud auth print-identity-token)" \
 #     "https://$REGION-$PROJECT_ID.cloudfunctions.net/get-us-ticker-quotes?tickers=VOO,QQQ"
 # US symbols Alpaca cannot quote are listed in the X-Alpaca-Errors response header.
 
 print_help() {
   cat <<EOF
-Usage: $0 --function FUNCTION --project PROJECT_ID --region REGION [--configuration NAME]
+Usage: $0 --function FUNCTION --project PROJECT_ID --region REGION [--configuration NAME] [--source DIR]
 
 Deploys one market symbol quotes Cloud Function.
 
 Options:
-  --function FUNCTION   Function to deploy: get-tw-stock-quotes (needs
+  --function FUNCTION   Function to deploy: get-tw-ticker-quotes (needs
                         \$TW_NATIONAL_ID) or get-us-ticker-quotes.
   --project PROJECT_ID  GCP project to deploy to, e.g. my-gcp-project.
   --region REGION       Region to deploy to, e.g. us-central1.
   --configuration NAME  Optional gcloud configuration to deploy with, from
                         \`gcloud config configurations list\`. Default: the
                         active configuration.
+  --source DIR          Optional folder with main.py to deploy. Default: the
+                        folder of this script ($SCRIPT_DIR).
   -h, --help            Show this help message and exit.
 EOF
 }
+
+# Folder of this script, the default --source; resolved before parsing so print_help can show it.
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # Parse command line arguments
 FUNCTION=""
 PROJECT_ID=""
 REGION=""
 GCLOUD_CONFIG=""
+SOURCE_DIR="$SCRIPT_DIR"
 while [[ $# -gt 0 ]]; do
-  if [[ "$1" == --function || "$1" == --project || "$1" == --region || "$1" == --configuration ]] && [[ $# -lt 2 ]]; then
+  if [[ "$1" == --function || "$1" == --project || "$1" == --region || "$1" == --configuration || "$1" == --source ]] && [[ $# -lt 2 ]]; then
     echo "Error: $1 needs a value."
     print_help
     exit 1
@@ -95,6 +104,10 @@ while [[ $# -gt 0 ]]; do
       GCLOUD_CONFIG="$2"
       shift 2
       ;;
+    --source)
+      SOURCE_DIR="$2"
+      shift 2
+      ;;
     -h|--help)
       print_help
       exit 0
@@ -108,8 +121,8 @@ while [[ $# -gt 0 ]]; do
 done
 
 # Validate mandatory arguments
-if [ "$FUNCTION" != "get-tw-stock-quotes" ] && [ "$FUNCTION" != "get-us-ticker-quotes" ]; then
-  echo "Error: --function must be get-tw-stock-quotes or get-us-ticker-quotes."
+if [ "$FUNCTION" != "get-tw-ticker-quotes" ] && [ "$FUNCTION" != "get-us-ticker-quotes" ]; then
+  echo "Error: --function must be get-tw-ticker-quotes or get-us-ticker-quotes."
   print_help
   exit 1
 fi
@@ -126,10 +139,16 @@ if [ -z "$REGION" ]; then
   exit 1
 fi
 
+if [ ! -f "$SOURCE_DIR/main.py" ]; then
+  echo "Error: --source $SOURCE_DIR has no main.py; pass the market_symbol_quotes folder."
+  print_help
+  exit 1
+fi
+
 # Validate mandatory variables
 
-if [ "$FUNCTION" = "get-tw-stock-quotes" ] && [ -z "$TW_NATIONAL_ID" ]; then
-  echo "Error: TW_NATIONAL_ID environment variable is not set; get-tw-stock-quotes needs it."
+if [ "$FUNCTION" = "get-tw-ticker-quotes" ] && [ -z "$TW_NATIONAL_ID" ]; then
+  echo "Error: TW_NATIONAL_ID environment variable is not set; get-tw-ticker-quotes needs it."
   exit 1
 fi
 
@@ -146,15 +165,15 @@ GCP_SA="smart-invest@$PROJECT_ID.iam.gserviceaccount.com"
 
 set -x # print the executing lines
 
-if [ "$FUNCTION" = "get-tw-stock-quotes" ]; then
+if [ "$FUNCTION" = "get-tw-ticker-quotes" ]; then
   # Taiwan quotes: SinoTrade API key is read from the "sinotrade-api-key" secret using $TW_NATIONAL_ID.
-  gcloud functions deploy get-tw-stock-quotes \
+  gcloud functions deploy get-tw-ticker-quotes \
     --gen2 --region=$REGION \
     --runtime=python313 \
     --trigger-http \
     --timeout=100 \
-    --source=. \
-    --entry-point=get_tw_stock_quotes \
+    --source="$SOURCE_DIR" \
+    --entry-point=get_tw_ticker_quotes \
     --quiet \
     --service-account=$GCP_SA \
     --no-allow-unauthenticated --project $PROJECT_ID ${GCLOUD_CONFIG:+--configuration=$GCLOUD_CONFIG} \
@@ -169,7 +188,7 @@ fi
 #   --runtime=python313 \
 #   --trigger-http \
 #   --timeout=100 \
-#   --source=. \
+#   --source="$SOURCE_DIR" \
 #   --entry-point=get_us_stock_quotes \
 #   --quiet \
 #   --service-account=$GCP_SA \
@@ -184,7 +203,7 @@ if [ "$FUNCTION" = "get-us-ticker-quotes" ]; then
     --runtime=python313 \
     --trigger-http \
     --timeout=100 \
-    --source=. \
+    --source="$SOURCE_DIR" \
     --entry-point=get_us_ticker_quotes \
     --quiet \
     --service-account=$GCP_SA \

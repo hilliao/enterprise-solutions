@@ -1,0 +1,20 @@
+# Files `gcloud functions deploy` leaves out of the uploaded source (see deploy.sh --source). This file replaces
+# gcloud's default ignore list, so the defaults are repeated here. Check the upload list with:
+#   gcloud meta list-files-for-upload .
+.gcloudignore
+.git
+.gitignore
+
+# Shioaji writes its connection log to the working directory; it can contain the Taiwan national ID.
+*.log
+
+# Python caches and local virtual environments
+__pycache__/
+*.pyc
+.pytest_cache/
+.venv/
+
+# Tests and deploy tooling aren't needed at runtime.
+test_*.py
+deploy.sh
+README.md
