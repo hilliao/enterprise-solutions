@@ -7,31 +7,23 @@ Two HTTP Cloud Functions (gen2, running on Cloud Run) that return real-time stoc
 | `get_us_ticker_quotes` | US | [Alpaca stock snapshots](https://alpaca.markets/sdks/python/market_data.html) `GET /v2/stocks/snapshots` | [alpaca-quotes.py](alpaca-quotes.py) |
 | `get_tw_ticker_quotes` | Taiwan | [SinoTrade Shioaji](https://sinotrade.github.io/) `api.snapshots()` | [sinotrade.py](sinotrade.py) |
 
-> **OBSOLETE: TradeStation.** The TradeStation API is retired and replaced by Alpaca. `get_us_stock_quotes`
-> ([tradestation_obsolete.py](tradestation_obsolete.py), renamed from `tradestation.py`) is no longer deployed:
-> its command in [deploy.sh](deploy.sh) is commented out, and so is its entry point in [main.py](main.py). The code is
-> kept for reference only; no other Python file imports `tradestation_obsolete.py`. A `get-us-stock-quotes` function deployed earlier keeps running until you delete it with
-> `gcloud functions delete get-us-stock-quotes --gen2 --region=us-central1`. The TradeStation sections below are
-> kept as history.
-
 All entry points are in [main.py](main.py). The US quotes (Alpaca) are used by the portfolio reports in
 [portfolio_reports](../portfolio_reports) (`STOCK_QUOTES_CLOUD_RUN_URL`, see [build_portfolio_prompt.py](../portfolio_reports/build_portfolio_prompt.py)).
-Use the `get-us-ticker-quotes` URL as `STOCK_QUOTES_CLOUD_RUN_URL`. The obsolete TradeStation function took the same
-parameters and returned the same response format.
+Use the `get-us-ticker-quotes` URL as `STOCK_QUOTES_CLOUD_RUN_URL`.
 
 ## Files
 
 | File | Purpose |
 | :--- | :--- |
 | [main.py](main.py) | HTTP entry points; validates the query parameters and maps errors to HTTP responses. |
-| [tradestation_obsolete.py](tradestation_obsolete.py) | OBSOLETE (retired TradeStation API, not deployed): OAuth refresh-token flow and quote snapshot request. Not imported by other files. |
-| [alpaca-quotes.py](alpaca-quotes.py) | Alpaca stock snapshots converted to TradeStation's quote fields. Loaded with `importlib` because of the hyphen in its name. |
+| [alpaca-quotes.py](alpaca-quotes.py) | Alpaca stock snapshots converted to quotes by `snapshot_to_quote()`. Loaded with `importlib` because of the hyphen in its name. |
 | [sinotrade.py](sinotrade.py) | SinoTrade login and snapshots; also `get_stock_positions()` for account holdings. |
 | [gcp_data_access.py](gcp_data_access.py) | Reads the latest version of a Secret Manager secret. |
+| [test_alpaca_quotes.py](test_alpaca_quotes.py) | Unit tests for `snapshot_to_quote()` and `get_alpaca_realtime_quotes()`, with Alpaca mocked. |
 | [test_main.py](test_main.py) | Unit tests for the HTTP entry points in `main.py`, with SinoTrade, Alpaca and the Metadata Server mocked. |
 | [test_sinotrade.py](test_sinotrade.py) | Unit tests for `get_sinotrade_snapshots()`, plus a live test against the SinoTrade simulation server. |
 | [structured_logging.py](structured_logging.py) | `log()` writes JSON lines with a severity for Cloud Logging. |
-| [deploy.sh](deploy.sh) | Deploys the Alpaca or the SinoTrade function, one per run (the TradeStation command is commented out). |
+| [deploy.sh](deploy.sh) | Deploys the Alpaca or the SinoTrade function, one per run. |
 | [.gcloudignore](.gcloudignore) | Leaves `shioaji.log` (it can contain the Taiwan national ID), tests, caches and deploy tooling out of the uploaded source. |
 | [requirements.txt](requirements.txt) | Python dependencies installed by Cloud Build at deploy time. |
 
@@ -39,25 +31,6 @@ parameters and returned the same response format.
 
 Secrets are read from Secret Manager in `$PROJECT_ID`. On Cloud Run the project ID is read from the metadata server;
 when running locally, set `PROJECT_ID` yourself.
-
-**TradeStation (OBSOLETE, not needed any more)** (`$TRADE_STATION_OAUTH_SECRET_NAME`, default `TradeStation_OAuth0`): JSON keyed by account.
-Only the first account is used to request quotes.
-
-```json
-{
-  "account_number_0": {
-    "client_id": "...",
-    "client_secret": "...",
-    "refresh_token": "..."
-  }
-}
-```
-
-The refresh token must have been granted the `MarketData` scope. Access tokens are refreshed from it via
-`https://signin.tradestation.com/oauth/token` and cached in memory per instance until 2 minutes before the
-`expires_in` in the token response (20 minutes). If the quotes request returns `401` or `403`, tokens older than
-5 minutes are refreshed and the request is retried once. See the comment at the top of
-[tradestation_obsolete.py](tradestation_obsolete.py) for details.
 
 **Alpaca** (`$ALPACA_SECRET_NAME`, default `alpaca-api-key`): YAML with the API key ID and
 secret key. The key is read once per instance; Alpaca API keys don't expire.
@@ -118,94 +91,89 @@ The functions run as `smart-invest@<--project>.iam.gserviceaccount.com`, which n
 
 ## Usage
 
-### US quotes from TradeStation (OBSOLETE)
-
-The TradeStation API is retired and `get_us_stock_quotes` is no longer deployed; use the Alpaca function below.
-`tickers` (or `symbols`) is a comma-separated list of US symbols.
-
-```sh
-curl -sS -i -H "Authorization: Bearer $(gcloud auth print-identity-token)" \
-  "https://us-central1-$PROJECT_ID.cloudfunctions.net/get_us_stock_quotes?tickers=VOO,QQQ,MSFT"
-```
-
-Success returns `200` with the TradeStation quotes keyed by symbol:
-
-```json
-{
-  "MSFT": {"Symbol": "MSFT", "Last": "509.355", "PreviousClose": "516.16998", "NetChangePct": "-1.32", "...": "..."},
-  "VOO": {"Symbol": "VOO", "...": "..."}
-}
-```
-
-Symbols TradeStation could not quote are left out of the body and listed in the `X-TradeStation-Errors`
-response header, e.g. `[{"Symbol": "XYZ", "Error": "..."}]`. The body shape is kept as `{symbol: quote}`
-because the portfolio report scripts treat every top-level key as a ticker.
-
 ### US quotes from Alpaca
 
 `get_us_ticker_quotes` takes a comma-separated `tickers` (or `symbols`) parameter and returns a `{symbol: quote}` body
-with the field names the TradeStation function used, computed from Alpaca's snapshot:
+computed from Alpaca's snapshot; ticker symbols are upper-cased. Prices and volumes are JSON numbers.
 
 ```sh
 curl -sS -i -H "Authorization: Bearer $(gcloud auth print-identity-token)" \
-  "https://us-central1-$PROJECT_ID.cloudfunctions.net/get-us-ticker-quotes?tickers=VOO,QQQ,MSFT"
+  "https://us-central1-$PROJECT_ID.cloudfunctions.net/get-us-ticker-quotes?tickers=VOO,XYZQ"
+```
+
+```
+HTTP/2 200
+x-alpaca-errors: [{"symbol": "XYZQ", "error": "Alpaca returned no snapshot for the symbol"}]
 ```
 
 ```json
 {
-  "MSFT": {"Symbol": "MSFT", "Last": 509.355, "PreviousClose": 516.17, "NetChange": -6.815, "NetChangePct": -1.32, "...": "..."}
+  "VOO": {
+    "symbol": "VOO", "price": 675.9, "previous-close": 673.94, "net-change": 1.96, "net-change-%": 0.29,
+    "trade-time": "2026-11-06T21:00:03Z",
+    "open": 675.435, "high": 681.44, "low": 675.34, "close": 676.02, "volume": 109275.0,
+    "bid": 655.12, "ask": 696.49
+  }
 }
 ```
 
-| Field | Alpaca source |
-| :--- | :--- |
-| `Last`, `LastSize`, `LastVenue`, `TradeTime` | `latest_trade` |
-| `PreviousClose`, `PreviousVolume` | close and volume of the trading day before the latest trade |
-| `NetChange`, `NetChangePct` | `Last - PreviousClose`; the percentage is in percent, like TradeStation's |
-| `Open`, `High`, `Low`, `Close`, `Volume`, `VWAP` | `daily_bar`; left out in pre-market, before the day has a daily bar |
-| `Bid`, `BidSize`, `Ask`, `AskSize` | `latest_quote` |
+| Field | Meaning | Alpaca source |
+| :--- | :--- | :--- |
+| `symbol` | Ticker symbol, upper-cased | snapshot symbol |
+| `price` | Latest trade price, including pre-market and after-hours trades | `latest_trade` |
+| `previous-close` | Close of the trading day before the latest trade | `previous_daily_bar`, or `daily_bar` in pre-market |
+| `net-change` | `price - previous-close`, rounded to 4 decimals | |
+| `net-change-%` | `net-change` in percent of `previous-close`, rounded to 2 decimals: `0.29` means 0.29% | |
+| `trade-time` | Latest trade time in UTC | `latest_trade` |
+| `open`, `high`, `low`, `close`, `volume` | Regular session's daily bar; left out in pre-market, before the day has one | `daily_bar` |
+| `bid`, `ask` | Latest bid and ask prices; left out when Alpaca has no quote | `latest_quote` |
 
-Differences from the retired TradeStation function:
-
-- Prices are JSON numbers instead of strings; [build_portfolio_prompt.py](../portfolio_reports/build_portfolio_prompt.py) converts
-  both with `float()`.
-- There are no `DailyOpenInterest`, `High52Week`, `High52WeekTimestamp`, `Low52Week`, `Low52WeekTimestamp`,
-  `MarketFlags` or `TickSizeTier` attributes.
-- Ticker symbols are upper-cased.
-- Symbols Alpaca returns no snapshot for (unknown symbols), or that have no last trade or previous close, are left
-  out of the body and listed in the `X-Alpaca-Errors` response header, e.g. `[{"Symbol": "XYZ", "Error": "..."}]`.
+Symbols Alpaca returns no snapshot for (unknown symbols), or that have no last trade or previous close, are left out
+of the body and listed in the `X-Alpaca-Errors` response header.
 
 **Alpaca data feed**: without `ALPACA_DATA_FEED`, Alpaca uses SIP (all US exchanges) if the account has a paid market
-data subscription, and IEX otherwise. IEX is a single exchange, so `Last` can lag the consolidated price for thinly
+data subscription, and IEX otherwise. IEX is a single exchange, so `price` can lag the consolidated price for thinly
 traded symbols. Set `ALPACA_DATA_FEED` (`sip`, `iex`, `delayed_sip`, ...) at deploy time to choose a feed;
 requesting `sip` without a subscription makes Alpaca return an error.
 
 ### Taiwan quotes
 
-`symbols` is a comma-separated list of TWSE/TPEx codes. The response is a JSON list of Shioaji snapshots from the
-simulation server, one object per symbol; an unknown symbol returns `500`. Each request logs in to SinoTrade and logs
-out when done, because SinoTrade allows only 5 logged-in connections per national ID.
+`get_tw_ticker_quotes` takes a comma-separated `symbols` (or `tickers`) parameter of TWSE/TPEx codes and returns a
+`{symbol: quote}` body with the same keys as the US quotes, plus `currency`; see `snapshot_to_quote()` in
+[sinotrade.py](sinotrade.py). Prices are in TWD. The quotes come from SinoTrade's simulation server. Each request
+logs in to SinoTrade and logs out when done, because SinoTrade allows only 5 logged-in connections per national ID.
 
 ```sh
 curl -sS -i -H "Authorization: Bearer $(gcloud auth print-identity-token)" \
-  "https://us-central1-$PROJECT_ID.cloudfunctions.net/get-tw-ticker-quotes?symbols=2330,00662,006208"
+  "https://us-central1-$PROJECT_ID.cloudfunctions.net/get-tw-ticker-quotes?symbols=2330,NOPE99"
+```
+
+```
+HTTP/2 200
+x-sinotrade-errors: [{"symbol": "NOPE99", "error": "SinoTrade has no contract for the symbol"}]
 ```
 
 ```json
-[
-  {
-    "ts": 1793975400000000000, "code": "2330", "exchange": "TSE",
-    "open": 2020.0, "high": 2195.0, "low": 2020.0, "close": 2135.0,
-    "tick_type": "Sell", "change_price": -105.0, "change_rate": -4.68, "change_type": "Down",
-    "average_price": 2093.18, "volume": 106, "total_volume": 97065,
-    "amount": 226310000, "total_amount": 203179565000, "yesterday_volume": 36585.0,
-    "buy_price": 2135.0, "buy_volume": 12.0, "sell_price": 2140.0, "sell_volume": 1039, "volume_ratio": 2.65
+{
+  "2330": {
+    "symbol": "2330", "price": 2135.0, "previous-close": 2240.0, "net-change": -105.0, "net-change-%": -4.68,
+    "trade-time": "2026-11-06T06:30:00Z", "open": 2020.0, "high": 2195.0, "low": 2020.0,
+    "bid": 2135.0, "ask": 2140.0, "currency": "TWD"
   }
-]
+}
 ```
 
-`ts` is nanoseconds since the epoch in Taiwan time, so read it as a naive local time: the sample is 2026-11-06 13:30,
-the close.
+| Field | Shioaji snapshot source |
+| :--- | :--- |
+| `price` | `close`, the latest trade price |
+| `previous-close` | `close - change_price` |
+| `net-change`, `net-change-%` | `change_price`, `change_rate` |
+| `trade-time` | `ts`, Taiwan wall-clock time as nanoseconds since the epoch, converted to UTC; the sample's 06:30Z is 14:30 in Taipei, when the after-hours session ends |
+| `open`, `high`, `low` | `open`, `high`, `low` |
+| `bid`, `ask` | `buy_price`, `sell_price` |
+
+Unlike the US quotes there is no `close`, which would equal `price`, and no `volume`, whose unit Shioaji doesn't
+document. Unknown symbols are left out of the body and listed in the `X-SinoTrade-Errors` response header.
 
 ### Errors
 
@@ -213,16 +181,7 @@ the close.
 | :--- | :--- |
 | `400` | Missing or empty `symbols` / `tickers`. |
 | `405` | Request method is not `GET`. |
-| `500` | TradeStation, Alpaca or SinoTrade call failed. |
-
-When TradeStation returns a non-200 response, the `500` body includes TradeStation's error body as `detail`:
-
-```json
-{
-  "error": "TradeStation API returned 403 for url: https://api.tradestation.com/v3/marketdata/quotes/VOO",
-  "detail": {"Error": "Forbidden", "Message": "..."}
-}
-```
+| `500` | Alpaca or SinoTrade call failed. |
 
 When Alpaca returns a non-200 response, the `500` body is
 `{"error": "Alpaca API returned 403", "detail": "<Alpaca's response body>"}`. alpaca-py retries `429` and `504`
@@ -230,13 +189,14 @@ When Alpaca returns a non-200 response, the `500` body is
 
 ## Logging
 
-[alpaca-quotes.py](alpaca-quotes.py) and the US entry points log JSON lines with `log()` from [structured_logging.py](structured_logging.py) (`{"severity": ..., "message": ...}`),
-which Cloud Logging records at the given severity. TradeStation and Alpaca error responses and unexpected exceptions
-(with traceback) are logged at `ERROR`; per-symbol errors at `WARNING`.
+[alpaca-quotes.py](alpaca-quotes.py), [sinotrade.py](sinotrade.py) and the entry points log JSON lines with `log()` from [structured_logging.py](structured_logging.py) (`{"severity": ..., "message": ...}`),
+which Cloud Logging records at the given severity. Alpaca error responses and unexpected exceptions (with traceback)
+are logged at `ERROR`; per-symbol errors at `WARNING`. A line with only `severity` and `message` is stored with the
+message in `textPayload`.
 
 ```sh
 gcloud logging read \
-  'resource.type="cloud_run_revision" AND resource.labels.service_name="get-us-stock-quotes" AND severity>=WARNING' \
+  'resource.type="cloud_run_revision" AND resource.labels.service_name="get-us-ticker-quotes" AND severity>=WARNING' \
   --project $PROJECT_ID --limit 20 --freshness 1d
 ```
 
@@ -251,30 +211,3 @@ curl -sS "http://localhost:8080/?tickers=VOO,QQQ"
 ```
 
 The Alpaca function only needs `PROJECT_ID`.
-
-## Troubleshooting
-
-**TradeStation `403 Forbidden` (OBSOLETE, the TradeStation API is retired)**: check the `detail` field or the `ERROR` log for TradeStation's message. The log
-also shows `access token issued Ns ago`; a token only seconds or minutes old, especially right after a
-`retrying with a refreshed access token` warning, means the token isn't the cause. Then reproduce outside Cloud Run
-with the same refresh token:
-
-```sh
-CREDS=$(gcloud secrets versions access latest --secret="$TRADE_STATION_OAUTH_SECRET_NAME" --project="$PROJECT_ID" \
-  | jq -c 'to_entries[0].value')
-TS_TOKEN=$(curl -sS -X POST "https://signin.tradestation.com/oauth/token" \
-  -H "content-type: application/x-www-form-urlencoded" \
-  --data-urlencode "grant_type=refresh_token" \
-  --data-urlencode "client_id=$(jq -r .client_id <<<"$CREDS")" \
-  --data-urlencode "client_secret=$(jq -r .client_secret <<<"$CREDS")" \
-  --data-urlencode "refresh_token=$(jq -r .refresh_token <<<"$CREDS")" | jq -r .access_token)
-curl -sS -i -H "Authorization: Bearer $TS_TOKEN" "https://api.tradestation.com/v3/marketdata/quotes/VOO,QQQ"
-```
-
-- Fails locally too: the refresh token is missing the `MarketData` scope, or the account's market data
-  agreement needs to be signed or renewed.
-- Works locally but fails from Cloud Run: TradeStation is likely rejecting Cloud Run's egress IPs; route egress
-  through a static IP (Serverless VPC Access connector + Cloud NAT).
-
-The streaming endpoint `/v3/marketdata/stream/quotes/{symbols}` started returning `403` from Cloud Run in
-September 2026 while the snapshot endpoint kept working, which is why the function uses snapshots.

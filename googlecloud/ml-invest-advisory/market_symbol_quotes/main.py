@@ -7,7 +7,7 @@ import functions_framework
 import requests
 from alpaca.common.exceptions import APIError as AlpacaApiError
 
-from sinotrade import get_sinotrade_snapshots, snapshot_to_dict
+from sinotrade import get_sinotrade_quotes
 from structured_logging import log, LOG_SEVERITY_ERROR
 
 # alpaca-quotes.py has a hyphen in its name, so it can't be imported with an import statement.
@@ -48,29 +48,27 @@ def parse_symbols(symbols_param: str) -> list[str]:
 @functions_framework.http
 def get_tw_ticker_quotes(http_request):
     """
-    Taiwan stock quotes from SinoTrade for ?symbols=2330,006208; needs $TW_NATIONAL_ID, see sinotrade.py.
+    Taiwan stock quotes from SinoTrade for ?symbols=2330,006208, keyed by symbol, with the same keys as
+    get_us_ticker_quotes plus "currency"; see snapshot_to_quote() in sinotrade.py. Needs $TW_NATIONAL_ID.
 
-    Sample request:
+    Sample request; ?tickers= works too:
         curl -sS -i -H "Authorization: Bearer $(gcloud auth print-identity-token)" \
-          "https://us-central1-$PROJECT_ID.cloudfunctions.net/get-tw-ticker-quotes?symbols=2330"
+          "https://us-central1-$PROJECT_ID.cloudfunctions.net/get-tw-ticker-quotes?symbols=2330,NOPE99"
 
-    Sample response, one snapshot_to_dict() per symbol, after the close on Friday 2026-11-06:
+    Sample response after the close on Friday 2026-11-06. Prices are in TWD. Unknown symbols are left out of the
+    body and listed in the X-SinoTrade-Errors header:
         HTTP/2 200
-        [{"ts": 1793975400000000000, "code": "2330", "exchange": "TSE", "open": 2020.0, "high": 2195.0,
-          "low": 2020.0, "close": 2135.0, "tick_type": "Sell", "change_price": -105.0, "change_rate": -4.68,
-          "change_type": "Down", "average_price": 2093.18, "volume": 106, "total_volume": 97065,
-          "amount": 226310000, "total_amount": 203179565000, "yesterday_volume": 36585.0, "buy_price": 2135.0,
-          "buy_volume": 12.0, "sell_price": 2140.0, "sell_volume": 1039, "volume_ratio": 2.65}]
+        x-sinotrade-errors: [{"symbol": "NOPE99", "error": "SinoTrade has no contract for the symbol"}]
 
-    An unknown symbol fails the whole request:
-        HTTP/2 500
-        {"error": "'NOPE99'"}
+        {"2330": {"symbol": "2330", "price": 2135.0, "previous-close": 2240.0, "net-change": -105.0,
+                  "net-change-%": -4.68, "trade-time": "2026-11-06T06:30:00Z", "open": 2020.0, "high": 2195.0,
+                  "low": 2020.0, "bid": 2135.0, "ask": 2140.0, "currency": "TWD"}}
     """
     if http_request.method != 'GET':
         return {'error': 'Invalid request method.'}, 405
 
     set_project_id_on_cloud_run()
-    symbols_param = http_request.args.get('symbols', '')
+    symbols_param = http_request.args.get('symbols', http_request.args.get('tickers', ''))
     if not symbols_param:
         return {'error': 'Missing "symbols" query parameter.'}, 400
     symbols = parse_symbols(symbols_param)
@@ -78,60 +76,33 @@ def get_tw_ticker_quotes(http_request):
         return {'error': 'No valid stock symbols provided.'}, 400
 
     try:
-        snapshots = get_sinotrade_snapshots(stock_symbols=symbols)
-        return [snapshot_to_dict(snapshot) for snapshot in snapshots], 200
+        quotes, symbol_errors = get_sinotrade_quotes(symbols)
+        # Keep the response body as {symbol: quote}; symbols SinoTrade could not quote go in a header.
+        headers = {'X-SinoTrade-Errors': json.dumps(symbol_errors)} if symbol_errors else {}
+        return quotes, 200, headers
     except Exception as error:
         log(text=f"get_tw_ticker_quotes failed: {traceback.format_exc()}", severity=LOG_SEVERITY_ERROR)
         return {'error': str(error)}, 500
 
 
-# OBSOLETE: the TradeStation API is retired; use get_us_ticker_quotes (Alpaca). get_us_stock_quotes is commented
-# out so main.py doesn't import tradestation_obsolete.py, and deploy.sh no longer deploys it. It used:
-# from tradestation_obsolete import get_tradestation_realtime_quotes, TradeStationApiError
-# @functions_framework.http
-# def get_us_stock_quotes(http_request):
-#     if http_request.method != 'GET':
-#         return {'error': 'Invalid request method.'}, 405
-#
-#     set_project_id_on_cloud_run()
-#     symbols_param = http_request.args.get('symbols', http_request.args.get('tickers', ''))
-#     if not symbols_param:
-#         return {'error': 'Missing "symbols" query parameter.'}, 400
-#     symbols = parse_symbols(symbols_param)
-#     if not symbols:
-#         return {'error': 'No valid stock symbols provided.'}, 400
-#
-#     try:
-#         quotes, symbol_errors = get_tradestation_realtime_quotes(tickers=symbols)
-#         # Keep the response body as {symbol: quote}; symbols TradeStation could not quote go in a header.
-#         headers = {'X-TradeStation-Errors': json.dumps(symbol_errors)} if symbol_errors else {}
-#         return quotes, 200, headers
-#     except TradeStationApiError as error:
-#         return {'error': str(error), 'detail': error.detail}, 500
-#     except Exception as error:
-#         log(text=f"get_us_stock_quotes failed: {traceback.format_exc()}", severity=LOG_SEVERITY_ERROR)
-#         return {'error': str(error)}, 500
-
-
 @functions_framework.http
 def get_us_ticker_quotes(http_request):
     """
-    US stock quotes from Alpaca, in the same request and response format as the obsolete get_us_stock_quotes.
+    US stock quotes from Alpaca for ?tickers=VOO,QQQ, keyed by symbol; see snapshot_to_quote() in alpaca-quotes.py.
 
     Sample request; ?symbols= works too:
         curl -sS -i -H "Authorization: Bearer $(gcloud auth print-identity-token)" \
           "https://us-central1-$PROJECT_ID.cloudfunctions.net/get-us-ticker-quotes?tickers=VOO,QQQ"
 
-    Sample response after the close on Friday 2026-11-06. Symbols Alpaca can't quote are left out of the body and
-    listed in the X-Alpaca-Errors header; Open, High, Low, Close, Volume and VWAP are left out in pre-market:
+    Sample response for ?tickers=VOO,XYZQ after the close on Friday 2026-11-06. Symbols Alpaca can't quote are left
+    out of the body and listed in the X-Alpaca-Errors header; open, high, low, close and volume are left out in
+    pre-market:
         HTTP/2 200
-        x-alpaca-errors: [{"Symbol": "XYZQ", "Error": "Alpaca returned no snapshot for the symbol"}]
+        x-alpaca-errors: [{"symbol": "XYZQ", "error": "Alpaca returned no snapshot for the symbol"}]
 
-        {"VOO": {"Symbol": "VOO", "Last": 675.9, "PreviousClose": 673.94, "NetChange": 1.9599999999999227,
-                 "NetChangePct": 0.2908270765943441, "PreviousVolume": 170486.0, "TradeTime": "2026-11-06T21:00:03Z",
-                 "LastSize": 120.0, "LastVenue": "V", "Open": 675.435, "High": 681.44, "Low": 675.34,
-                 "Close": 676.02, "Volume": 109275.0, "VWAP": 678.078609, "Bid": 655.12, "BidSize": 40.0,
-                 "Ask": 696.49, "AskSize": 40.0}}
+        {"VOO": {"symbol": "VOO", "price": 675.9, "previous-close": 673.94, "net-change": 1.96, "net-change-%": 0.29,
+                 "trade-time": "2026-11-06T21:00:03Z", "open": 675.435, "high": 681.44, "low": 675.34, "close": 676.02,
+                 "volume": 109275.0, "bid": 655.12, "ask": 696.49}}
     """
     if http_request.method != 'GET':
         return {'error': 'Invalid request method.'}, 405

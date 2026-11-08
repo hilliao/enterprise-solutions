@@ -1,9 +1,8 @@
 """
 Alpaca real-time US stock quotes for the get_us_ticker_quotes Cloud Function (see main.py and README.md).
 
-The US quotes provider that replaced the retired TradeStation API (tradestation_obsolete.py). The quotes use the same field names as
-TradeStation's quote snapshots ("Last", "PreviousClose", "NetChangePct", ...), so the portfolio report scripts in
-portfolio_reports can consume either function.
+The quotes are read by the portfolio report scripts in portfolio_reports (build_portfolio_prompt.py), which need
+"price" and "previous-close"; see snapshot_to_quote() for all fields.
 
 Flow:
   1. get_alpaca_client() reads the API key and secret from the Secret Manager secret $ALPACA_SECRET_NAME and caches a
@@ -12,17 +11,17 @@ Flow:
   2. get_alpaca_realtime_quotes() requests snapshots for all tickers in one call to
      GET https://data.alpaca.markets/v2/stocks/snapshots via alpaca-py:
      https://alpaca.markets/sdks/python/market_data.html
-  3. Each snapshot is converted to a TradeStation-style quote by snapshot_to_quote().
+  3. Each snapshot is converted to a quote by snapshot_to_quote().
 
 Data feed:
   Without $ALPACA_DATA_FEED, Alpaca picks the feed: SIP (all US exchanges) with an Algo Trader Plus subscription,
-  otherwise IEX. IEX is a single exchange, so "Last" can lag the consolidated price for thinly traded symbols.
+  otherwise IEX. IEX is a single exchange, so "price" can lag the consolidated price for thinly traded symbols.
   Set ALPACA_DATA_FEED to one of alpaca.data.enums.DataFeed's values (e.g. sip, iex, delayed_sip) to pick one.
 
 Errors:
   - alpaca.common.exceptions.APIError: Alpaca returned a non-200 response; alpaca-py already retries 429 and 504.
   - Symbols Alpaca returns no snapshot for (unknown symbols) or no last trade / previous close for are left out of the
-    quotes and returned as per-symbol errors, e.g. [{"Symbol": "XYZ", "Error": "..."}].
+    quotes and returned as per-symbol errors, e.g. [{"symbol": "XYZ", "error": "..."}].
 """
 import datetime
 import json
@@ -73,18 +72,20 @@ def market_date(timestamp: datetime.datetime) -> datetime.date:
 
 def snapshot_to_quote(snapshot: Snapshot) -> dict:
     """
-    Converts an Alpaca snapshot to a quote with TradeStation's field names, e.g. for MSFT:
+    Converts an Alpaca snapshot to a quote, e.g. for VOO after the close on Friday 2026-11-06:
     {
-      "Symbol": "MSFT", "Last": 509.355, "PreviousClose": 516.17, "NetChange": -6.815, "NetChangePct": -1.32,
-      "Open": 515.0, "High": 517.2, "Low": 508.1, "Close": 509.355, "Volume": 12345678.0, "PreviousVolume": 23456789.0,
-      "VWAP": 511.2, "Bid": 509.3, "BidSize": 100.0, "Ask": 509.4, "AskSize": 200.0,
-      "TradeTime": "2026-10-16T19:20:42Z", "LastSize": 100.0, "LastVenue": "V"
+      "symbol": "VOO", "price": 675.9, "previous-close": 673.94, "net-change": 1.96, "net-change-%": 0.29,
+      "trade-time": "2026-11-06T21:00:03Z", "open": 675.435, "high": 681.44, "low": 675.34, "close": 676.02,
+      "volume": 109275.0, "bid": 655.12, "ask": 696.49
     }
-    NetChangePct is in percent, like TradeStation's. Prices are floats rather than TradeStation's strings.
+    price is the latest trade's price, including pre-market and after-hours trades; close is the regular session's.
+    net-change is price - previous-close, rounded to 4 decimals; net-change-% is in percent, rounded to 2 decimals.
+    trade-time is the latest trade's time in UTC.
 
-    PreviousClose is the close of the trading day before the latest trade. Before the first regular-hours bar of a
+    previous-close is the close of the trading day before the latest trade. Before the first regular-hours bar of a
     trading day, e.g. in pre-market, Alpaca's daily_bar is still the previous trading day's, so it is used as the
-    previous close and the current day's Open/High/Low/Close/Volume/VWAP are left out.
+    previous close and the current day's open/high/low/close/volume are left out. bid and ask are left out when
+    Alpaca has no latest quote.
 
     Raises:
         ValueError: If the snapshot has no latest trade or no previous close.
@@ -102,31 +103,25 @@ def snapshot_to_quote(snapshot: Snapshot) -> dict:
 
     net_change = trade.price - previous_bar.close
     quote = {
-        'Symbol': snapshot.symbol,
-        'Last': trade.price,
-        'PreviousClose': previous_bar.close,
-        'NetChange': net_change,
-        'NetChangePct': net_change / previous_bar.close * 100 if previous_bar.close else 0.0,
-        'PreviousVolume': previous_bar.volume,
-        'TradeTime': trade.timestamp.astimezone(datetime.timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ'),
-        'LastSize': trade.size,
-        'LastVenue': getattr(trade.exchange, 'value', trade.exchange),
+        'symbol': snapshot.symbol,
+        'price': trade.price,
+        'previous-close': previous_bar.close,
+        'net-change': round(net_change, 4),
+        'net-change-%': round(net_change / previous_bar.close * 100, 2) if previous_bar.close else 0.0,
+        'trade-time': trade.timestamp.astimezone(datetime.timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ'),
     }
     if session_bar is not None:
         quote.update({
-            'Open': session_bar.open,
-            'High': session_bar.high,
-            'Low': session_bar.low,
-            'Close': session_bar.close,
-            'Volume': session_bar.volume,
-            'VWAP': session_bar.vwap,
+            'open': session_bar.open,
+            'high': session_bar.high,
+            'low': session_bar.low,
+            'close': session_bar.close,
+            'volume': session_bar.volume,
         })
     if snapshot.latest_quote is not None:
         quote.update({
-            'Bid': snapshot.latest_quote.bid_price,
-            'BidSize': snapshot.latest_quote.bid_size,
-            'Ask': snapshot.latest_quote.ask_price,
-            'AskSize': snapshot.latest_quote.ask_size,
+            'bid': snapshot.latest_quote.bid_price,
+            'ask': snapshot.latest_quote.ask_price,
         })
     return quote
 
@@ -139,10 +134,9 @@ def get_alpaca_realtime_quotes(tickers: list[str] = ["VOO", "QQQ"]):
         tickers: A list of ticker symbols (e.g., ["VOO", "QQQ"]).
 
     Returns:
-        A tuple of (symbol_quotes, symbol_errors), like tradestation_obsolete.get_tradestation_realtime_quotes().
-        symbol_quotes is a dictionary where keys are ticker symbols and values are quotes in the format of
-        snapshot_to_quote(). symbol_errors lists the symbols that could not be quoted,
-        e.g. [{"Symbol": "XYZ", "Error": "..."}].
+        A tuple of (symbol_quotes, symbol_errors). symbol_quotes is a dictionary where keys are ticker symbols and
+        values are quotes in the format of snapshot_to_quote(). symbol_errors lists the symbols that could not be
+        quoted, e.g. [{"symbol": "XYZ", "error": "..."}].
 
     Raises:
         alpaca.common.exceptions.APIError: If Alpaca returns a non-200 response.
@@ -156,12 +150,12 @@ def get_alpaca_realtime_quotes(tickers: list[str] = ["VOO", "QQQ"]):
     symbol_errors = []
     for symbol in symbols:
         if symbol not in snapshots:
-            symbol_errors.append({'Symbol': symbol, 'Error': 'Alpaca returned no snapshot for the symbol'})
+            symbol_errors.append({'symbol': symbol, 'error': 'Alpaca returned no snapshot for the symbol'})
             continue
         try:
             symbol_quotes[symbol] = snapshot_to_quote(snapshots[symbol])
         except ValueError as e:
-            symbol_errors.append({'Symbol': symbol, 'Error': str(e)})
+            symbol_errors.append({'symbol': symbol, 'error': str(e)})
     if symbol_errors:
         log(text=f"Alpaca quote errors: {json.dumps(symbol_errors)}", severity=LOG_SEVERITY_WARNING)
 

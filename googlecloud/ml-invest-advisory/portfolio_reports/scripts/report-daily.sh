@@ -4,7 +4,7 @@
 #   Generates the daily portfolio analysis report with a local Ollama LLM. For
 #   every *.json portfolio file in PORTFOLIO_DIR:
 #     1) Builds an LLM prompt from LLM_PROMPT_TEMPLATE via build_portfolio_prompt.py,
-#        which fetches current quotes from STOCK_QUOTES_CLOUD_RUN_URL.
+#        which fetches current quotes from STOCK_QUOTES_CLOUD_RUN_URL and TW_STOCK_QUOTES_CLOUD_RUN_URL.
 #     2) Replaces {{MARKET_COMMENTARY}} in the prompt with MARKET_COMMENTARY_FILE
 #        (an empty string if that file is missing).
 #     3) Runs the prompt through `ollama run $OLLAMA_MODEL` (killed and retried
@@ -26,6 +26,8 @@
 #   MARKET_COMMENTARY_FILE     $PORTFOLIO_DIR/market-commentary_YYYY-MM-DD.txt (today's date)
 #   STOCK_QUOTES_CLOUD_RUN_URL https://us-central1-my-gcp-project.cloudfunctions.net/get-us-ticker-quotes
 #                              (sample project ID; set it to your get-us-ticker-quotes URL)
+#   TW_STOCK_QUOTES_CLOUD_RUN_URL https://us-central1-my-gcp-project.cloudfunctions.net/get-tw-ticker-quotes
+#                              (needed when a portfolio has "TW:" tickers such as "TW:2330")
 #   OLLAMA_MODEL               gemma4:12b-it-qat (any model from `ollama list`)
 #   OLLAMA_TIMEOUT_SECONDS     600 (kill `ollama run` and retry once if a report takes longer)
 #   DEBUG                      set to any value to trace execution (set -x)
@@ -69,6 +71,7 @@ export USE_CASE="${USE_CASE:-daily-report}"
 export MARKET_COMMENTARY_FILE="${MARKET_COMMENTARY_FILE:-$PORTFOLIO_DIR/market-commentary_$(date +%Y-%m-%d).txt}"
 # Stock quotes Cloud Run endpoint read by build_portfolio_prompt.py.
 export STOCK_QUOTES_CLOUD_RUN_URL="${STOCK_QUOTES_CLOUD_RUN_URL:-https://us-central1-my-gcp-project.cloudfunctions.net/get-us-ticker-quotes}"
+export TW_STOCK_QUOTES_CLOUD_RUN_URL="${TW_STOCK_QUOTES_CLOUD_RUN_URL:-https://us-central1-my-gcp-project.cloudfunctions.net/get-tw-ticker-quotes}"
 # Ollama model, and how long one report may take before `ollama run` is killed and retried once.
 export OLLAMA_MODEL="${OLLAMA_MODEL:-gemma4:12b-it-qat}"
 export OLLAMA_TIMEOUT_SECONDS="${OLLAMA_TIMEOUT_SECONDS:-600}"

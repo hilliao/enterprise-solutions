@@ -7,9 +7,6 @@ set -e # exit the script when execution hits any error
 # 1. get-tw-ticker-quotes: Taiwan stock snapshots from the SinoTrade Shioaji API (sinotrade.py).
 # 2. get-us-ticker-quotes: US stock quotes from Alpaca stock snapshots
 #    GET https://data.alpaca.markets/v2/stocks/snapshots (alpaca-quotes.py).
-# OBSOLETE, no longer deployed: get_us_stock_quotes, US stock quotes from the retired TradeStation API
-#    GET https://api.tradestation.com/v3/marketdata/quotes/{symbols} (tradestation_obsolete.py). Its gcloud command
-#    below is commented out; the Alpaca function returns the same response format.
 #
 # [mandatory arguments]
 #   --function FUNCTION              Function to deploy: get-tw-ticker-quotes or get-us-ticker-quotes.
@@ -26,7 +23,6 @@ set -e # exit the script when execution hits any error
 # [mandatory variables]
 #   TW_NATIONAL_ID                   Key in the "sinotrade-api-key" secret that holds the SinoTrade api_key/api_key_secret.
 #                                    Only for get-tw-ticker-quotes.
-#   (OBSOLETE: TRADE_STATION_OAUTH_SECRET_NAME was only needed by the retired TradeStation function.)
 #
 # [optional variables]
 #   ALPACA_SECRET_NAME               Secret Manager secret with the Alpaca API key in YAML with "key" and "secret"
@@ -152,12 +148,6 @@ if [ "$FUNCTION" = "get-tw-ticker-quotes" ] && [ -z "$TW_NATIONAL_ID" ]; then
   exit 1
 fi
 
-# OBSOLETE: only the retired TradeStation function needed TRADE_STATION_OAUTH_SECRET_NAME.
-# if [ -z "$TRADE_STATION_OAUTH_SECRET_NAME" ]; then
-#   echo "Error: TRADE_STATION_OAUTH_SECRET_NAME environment variable is not set."
-#   exit 1
-# fi
-
 ALPACA_SECRET_NAME="${ALPACA_SECRET_NAME:-alpaca-api-key}"
 
 # Runtime identity of all functions; reads the SinoTrade and Alpaca secrets from Secret Manager.
@@ -180,21 +170,6 @@ if [ "$FUNCTION" = "get-tw-ticker-quotes" ]; then
     --set-env-vars TW_NATIONAL_ID=$TW_NATIONAL_ID \
     --memory=1024MiB
 fi
-
-# OBSOLETE: the TradeStation API is retired, so get-us-stock-quotes (tradestation_obsolete.py) is no longer deployed.
-# US quotes: TradeStation access tokens are refreshed from the refresh token in $TRADE_STATION_OAUTH_SECRET_NAME.
-# gcloud functions deploy get-us-stock-quotes \
-#   --gen2 --region=$REGION \
-#   --runtime=python313 \
-#   --trigger-http \
-#   --timeout=100 \
-#   --source="$SOURCE_DIR" \
-#   --entry-point=get_us_stock_quotes \
-#   --quiet \
-#   --service-account=$GCP_SA \
-#   --no-allow-unauthenticated --project $PROJECT_ID \
-#   --set-env-vars TRADE_STATION_OAUTH_SECRET_NAME=$TRADE_STATION_OAUTH_SECRET_NAME \
-#   --memory=512MiB \
 
 if [ "$FUNCTION" = "get-us-ticker-quotes" ]; then
   # US quotes from Alpaca: the API key is read from the $ALPACA_SECRET_NAME secret.

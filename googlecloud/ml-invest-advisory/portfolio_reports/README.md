@@ -36,13 +36,22 @@ Set the following environment variables to customize the behavior:
 *   `OLLAMA_MODEL`: Ollama model used for the reports (default `gemma4:12b-it-qat`). Use `scripts/compare-models.sh` to compare candidate models on the same prompt.
 
 ### Portfolio Format
-Each portfolio should be a `.json` file in the `PORTFOLIO_DIR`:
+Each portfolio should be a `.json` file in the `PORTFOLIO_DIR`. Prefix Taiwan stocks with `TW:`:
 ```json
 {
   "NVDA": { "shares": 117.0 },
-  "GOOG": { "shares": 90.0 }
+  "GOOG": { "shares": 90.0 },
+  "TW:2330": { "shares": 1000.0 }
 }
 ```
+US tickers are quoted by `get-us-ticker-quotes` (`STOCK_QUOTES_CLOUD_RUN_URL`) and `TW:` tickers by
+`get-tw-ticker-quotes` (`TW_STOCK_QUOTES_CLOUD_RUN_URL`); see [market_symbol_quotes](../market_symbol_quotes). The
+service account in `GOOGLE_APPLICATION_CREDENTIALS` needs `roles/run.invoker` on both functions.
+
+Taiwan prices are in TWD and are converted to USD with the day's exchange rate from
+[ExchangeRate-API](https://www.exchangerate-api.com) (Rates By Exchange Rate API: free, no API key, updated once a day),
+so the prompt's values, totals and weights are all in USD. The current rate converts both the price and the previous
+close, so a Taiwan holding's daily change leaves out the exchange rate's own move.
 
 ### Ticker Names
 `build_portfolio_prompt.py` gives every holding a `"Name"` in the prompt. Names come from `ticker_names.json`
@@ -85,3 +94,13 @@ To generate reports, simply execute the desired script from the root of the proj
 ```
 
 The reports will be saved in your `PORTFOLIO_DIR` with filenames prefixing the use-case (e.g., `daily-report-my_portfolio.md`).
+
+## Tests
+
+[test_build_portfolio_prompt.py](test_build_portfolio_prompt.py) unit-tests [build_portfolio_prompt.py](build_portfolio_prompt.py)
+with the stock quotes Cloud Run service, Google ID tokens and SEC EDGAR mocked, so it needs no credentials or network:
+
+```bash
+pip install -r requirements.txt pytest
+python -m pytest -v test_build_portfolio_prompt.py
+```

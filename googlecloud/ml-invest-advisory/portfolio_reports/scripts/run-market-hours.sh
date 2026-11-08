@@ -6,7 +6,9 @@
 #   them to GCS. On every loop iteration it evals LOOP_COMMAND, which:
 #     1) Runs report-daily.sh, then report-news-impact.sh (one flash-insights report
 #        per portfolio and news site; its failure, e.g. no news file yet, is ignored).
-#     2) Copies $PORTFOLIO_DIR/*.html to GCS_BUCKET with `gcloud storage cp`.
+#     2) Copies the $PORTFOLIO_DIR/*.html reports modified within the last
+#        REPORT_MAX_AGE_MINUTES to GCS_BUCKET with `gcloud storage cp`, so outdated
+#        reports with old stock quotes aren't uploaded.
 #   It then sleeps ACTIVE_SLEEP_SECONDS. Outside the window it prints a live
 #   countdown (on a single terminal line) to the next 08:00 ET window start and
 #   rechecks every IDLE_SLEEP_SECONDS. The window is NOT the market session
@@ -28,6 +30,7 @@
 #   PORTFOLIO_DIR                   portfolio *.json and news-<SITE>_YYYY-MM-DD.txt input and report output
 #                                   directory (exported)
 #   STOCK_QUOTES_CLOUD_RUN_URL      stock quotes endpoint (exported to build_portfolio_prompt.py)
+#   TW_STOCK_QUOTES_CLOUD_RUN_URL   Taiwan stock quotes endpoint for "TW:" tickers (exported to build_portfolio_prompt.py)
 #   PYTHON_VENV                     Python virtual environment activated before the reports run
 #                                   (empty: use the python3 on PATH)
 #   REPORT_SCRIPTS_DIR              folder of report-daily.sh and report-news-impact.sh
@@ -61,6 +64,9 @@ export GOOGLE_APPLICATION_CREDENTIALS="/path/to/your/service-account-key.json"
 export PORTFOLIO_DIR="$HOME/path/to/output/portfolios"
 # Stock quotes endpoint (replace 'my-gcp-project' and the region with where get-us-ticker-quotes is deployed).
 export STOCK_QUOTES_CLOUD_RUN_URL="https://europe-west9-my-gcp-project.cloudfunctions.net/get-us-ticker-quotes"
+# Taiwan stock quotes endpoint for "TW:" tickers (replace 'my-gcp-project' and the region with where
+# get-tw-ticker-quotes is deployed).
+export TW_STOCK_QUOTES_CLOUD_RUN_URL="https://us-central1-my-gcp-project.cloudfunctions.net/get-tw-ticker-quotes"
 
 # --- Python virtual environment with build_portfolio_prompt.py's dependencies ---
 # Activated before the loop starts, so `. <venv>/bin/activate` isn't needed first; empty uses the python3 on PATH.
@@ -74,6 +80,9 @@ REPORT_COMMAND="$REPORT_SCRIPTS_DIR/report-daily.sh && ($REPORT_SCRIPTS_DIR/repo
 # --- GCS upload of the HTML reports ---
 GCS_BUCKET="gs://bucket-name/folder/"  # replace 'bucket-name' and 'folder'
 GCLOUD_CONFIG="default"
+# Only HTML reports modified within the last REPORT_MAX_AGE_MINUTES are uploaded. A report that is no longer
+# regenerated, e.g. a flash-insights report whose news file is gone, would otherwise be uploaded with old quotes.
+REPORT_MAX_AGE_MINUTES=60
 
 # --- Timing (defaults; --active-sleep and --idle-sleep override them) ---
 ACTIVE_SLEEP_SECONDS=30  # seconds between consecutive runs during the window
@@ -198,8 +207,22 @@ if [ -n "$PYTHON_VENV" ]; then
   echo "Using Python virtual environment: $VIRTUAL_ENV"
 fi
 
-# Generate the reports, then upload every HTML report in PORTFOLIO_DIR.
-LOOP_COMMAND="$REPORT_COMMAND && gcloud storage cp $PORTFOLIO_DIR/*.html $GCS_BUCKET --configuration=$GCLOUD_CONFIG"
+# Uploads the HTML reports in PORTFOLIO_DIR modified within the last REPORT_MAX_AGE_MINUTES. Older reports are
+# skipped; with no recent report, prints a warning and uploads nothing.
+upload_recent_reports() {
+  local recent_reports=() report
+  while IFS= read -r -d '' report; do
+    recent_reports+=("$report")
+  done < <(find "$PORTFOLIO_DIR" -maxdepth 1 -type f -name '*.html' -mmin "-$REPORT_MAX_AGE_MINUTES" -print0)
+  if [ "${#recent_reports[@]}" -eq 0 ]; then
+    echo "WARNING: no HTML report in $PORTFOLIO_DIR was modified within the last $REPORT_MAX_AGE_MINUTES minutes; nothing to upload" >&2
+    return 0
+  fi
+  gcloud storage cp "${recent_reports[@]}" "$GCS_BUCKET" --configuration="$GCLOUD_CONFIG"
+}
+
+# Generate the reports, then upload the recently modified HTML reports in PORTFOLIO_DIR.
+LOOP_COMMAND="$REPORT_COMMAND && upload_recent_reports"
 
 # ==============================================================================
 # MAIN LOOP
