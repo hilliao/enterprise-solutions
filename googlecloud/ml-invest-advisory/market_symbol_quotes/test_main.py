@@ -18,59 +18,64 @@ def make_request(query_string: str = '', method: str = 'GET') -> flask.Request:
     return flask.Request.from_values(query_string=query_string, method=method)
 
 
-class FakeSnapshot:
-    def __init__(self, code: str):
-        self.code = code
-
-    def dict(self):
-        return {'code': self.code}
-
-
 @pytest.fixture(autouse=True)
 def not_on_cloud_run(monkeypatch):
     monkeypatch.delenv('K_SERVICE', raising=False)
 
 
 @pytest.fixture
-def sinotrade_snapshots(monkeypatch):
-    get_snapshots = mock.Mock(side_effect=lambda stock_symbols: [FakeSnapshot(s) for s in stock_symbols])
-    monkeypatch.setattr(main, 'get_sinotrade_snapshots', get_snapshots)
-    return get_snapshots
+def sinotrade_quotes(monkeypatch):
+    get_quotes = mock.Mock(side_effect=lambda symbols: ({s: {'symbol': s, 'price': 1.0} for s in symbols}, []))
+    monkeypatch.setattr(main, 'get_sinotrade_quotes', get_quotes)
+    return get_quotes
 
 
 @pytest.fixture
 def alpaca_quotes(monkeypatch):
-    get_quotes = mock.Mock(return_value=({'VOO': {'Last': 1.0}}, {}))
+    get_quotes = mock.Mock(return_value=({'VOO': {'price': 1.0}}, {}))
     monkeypatch.setattr(main.alpaca_quotes, 'get_alpaca_realtime_quotes', get_quotes)
     return get_quotes
 
 
 # get_tw_ticker_quotes
 
-def test_tw_quotes_returns_one_snapshot_per_symbol(sinotrade_snapshots):
-    body, status = main.get_tw_ticker_quotes(make_request('symbols=2330, 006208,,'))
+@pytest.mark.parametrize('query_string', ['symbols=2330, 006208,,', 'tickers=2330,006208'])
+def test_tw_quotes_returns_quotes_keyed_by_symbol(sinotrade_quotes, query_string):
+    body, status, headers = main.get_tw_ticker_quotes(make_request(query_string))
 
     assert status == 200
-    assert body == [{'code': '2330'}, {'code': '006208'}]
-    sinotrade_snapshots.assert_called_once_with(stock_symbols=['2330', '006208'])
+    assert body == {'2330': {'symbol': '2330', 'price': 1.0}, '006208': {'symbol': '006208', 'price': 1.0}}
+    assert headers == {}
+    sinotrade_quotes.assert_called_once_with(['2330', '006208'])
+
+
+def test_tw_quotes_puts_symbol_errors_in_header(sinotrade_quotes):
+    errors = [{'symbol': 'NOPE99', 'error': 'SinoTrade has no contract for the symbol'}]
+    sinotrade_quotes.side_effect = None
+    sinotrade_quotes.return_value = ({'2330': {'symbol': '2330'}}, errors)
+
+    body, status, headers = main.get_tw_ticker_quotes(make_request('symbols=2330,NOPE99'))
+
+    assert (body, status) == ({'2330': {'symbol': '2330'}}, 200)
+    assert json.loads(headers['X-SinoTrade-Errors']) == errors
 
 
 @pytest.mark.parametrize('query_string, error', [
     ('', 'Missing "symbols" query parameter.'),
-    ('tickers=2330', 'Missing "symbols" query parameter.'),
+    ('symbol=2330', 'Missing "symbols" query parameter.'),
     ('symbols=, ,', 'No valid stock symbols provided.'),
 ])
-def test_tw_quotes_without_symbols_returns_400(sinotrade_snapshots, query_string, error):
+def test_tw_quotes_without_symbols_returns_400(sinotrade_quotes, query_string, error):
     assert main.get_tw_ticker_quotes(make_request(query_string)) == ({'error': error}, 400)
-    sinotrade_snapshots.assert_not_called()
+    sinotrade_quotes.assert_not_called()
 
 
-def test_tw_quotes_post_returns_405(sinotrade_snapshots):
+def test_tw_quotes_post_returns_405(sinotrade_quotes):
     assert main.get_tw_ticker_quotes(make_request('symbols=2330', 'POST')) == ({'error': 'Invalid request method.'}, 405)
 
 
-def test_tw_quotes_sinotrade_failure_returns_500(sinotrade_snapshots):
-    sinotrade_snapshots.side_effect = KeyError('TW_NATIONAL_ID')
+def test_tw_quotes_sinotrade_failure_returns_500(sinotrade_quotes):
+    sinotrade_quotes.side_effect = KeyError('TW_NATIONAL_ID')
 
     assert main.get_tw_ticker_quotes(make_request('symbols=2330')) == ({'error': "'TW_NATIONAL_ID'"}, 500)
 
@@ -79,16 +84,16 @@ def test_tw_quotes_sinotrade_failure_returns_500(sinotrade_snapshots):
 
 @pytest.mark.parametrize('query_string', ['symbols=VOO', 'tickers=VOO', 'symbols= VOO ,'])
 def test_us_quotes_reads_symbols_or_tickers(alpaca_quotes, query_string):
-    assert main.get_us_ticker_quotes(make_request(query_string)) == ({'VOO': {'Last': 1.0}}, 200, {})
+    assert main.get_us_ticker_quotes(make_request(query_string)) == ({'VOO': {'price': 1.0}}, 200, {})
     alpaca_quotes.assert_called_once_with(tickers=['VOO'])
 
 
 def test_us_quotes_puts_symbol_errors_in_header(alpaca_quotes):
-    alpaca_quotes.return_value = ({'VOO': {'Last': 1.0}}, {'XYZ': 'no snapshot'})
+    alpaca_quotes.return_value = ({'VOO': {'price': 1.0}}, {'XYZ': 'no snapshot'})
 
     body, status, headers = main.get_us_ticker_quotes(make_request('tickers=VOO,XYZ'))
 
-    assert (body, status) == ({'VOO': {'Last': 1.0}}, 200)
+    assert (body, status) == ({'VOO': {'price': 1.0}}, 200)
     assert json.loads(headers['X-Alpaca-Errors']) == {'XYZ': 'no snapshot'}
 
 
@@ -131,7 +136,7 @@ def on_cloud_run_without_project_id(monkeypatch):
     monkeypatch.delenv('PROJECT_ID')
 
 
-def test_cloud_run_sets_project_id_from_metadata_server_once(on_cloud_run_without_project_id, sinotrade_snapshots):
+def test_cloud_run_sets_project_id_from_metadata_server_once(on_cloud_run_without_project_id, sinotrade_quotes):
     metadata_response = mock.Mock(text='my-project\n')
     with mock.patch.object(main.requests, 'get', return_value=metadata_response) as requests_get:
         main.get_tw_ticker_quotes(make_request('symbols=2330'))
@@ -143,15 +148,15 @@ def test_cloud_run_sets_project_id_from_metadata_server_once(on_cloud_run_withou
 
 
 def test_cloud_run_unreachable_metadata_server_leaves_project_id_unset(on_cloud_run_without_project_id,
-                                                                        sinotrade_snapshots):
+                                                                        sinotrade_quotes):
     with mock.patch.object(main.requests, 'get', side_effect=requests.ConnectionError('unreachable')):
-        body, status = main.get_tw_ticker_quotes(make_request('symbols=2330'))
+        body, status, headers = main.get_tw_ticker_quotes(make_request('symbols=2330'))
 
     assert status == 200
     assert 'PROJECT_ID' not in main.os.environ
 
 
-def test_local_run_does_not_call_metadata_server(sinotrade_snapshots):
+def test_local_run_does_not_call_metadata_server(sinotrade_quotes):
     with mock.patch.object(main.requests, 'get') as requests_get:
         main.get_tw_ticker_quotes(make_request('symbols=2330'))
 

@@ -13,7 +13,7 @@ inlining a `market-commentary_YYYY-MM-DD.txt` file), runs it through
 `ollama run $OLLAMA_MODEL` (default `gemma4:12b-it-qat`), and writes a Markdown report
 (plus an HTML version if `pandoc` is installed).
 Key env vars: `PORTFOLIO_DIR`, `LLM_PROMPT_TEMPLATE`, `USE_CASE`,
-`MARKET_COMMENTARY_FILE`, `STOCK_QUOTES_CLOUD_RUN_URL`, `OLLAMA_MODEL`, `OLLAMA_TIMEOUT_SECONDS`
+`MARKET_COMMENTARY_FILE`, `STOCK_QUOTES_CLOUD_RUN_URL`, `TW_STOCK_QUOTES_CLOUD_RUN_URL`, `OLLAMA_MODEL`, `OLLAMA_TIMEOUT_SECONDS`
 (default 600; kills a stuck `ollama run`, retries it once, then fails the script).
 
 ### report-common.sh
@@ -112,12 +112,13 @@ command's exit code, instead of repeating the failing step every
 `--active-sleep` seconds. `build_portfolio_prompt.py` retries a failed stock
 quotes Cloud Run request with exponential backoff (1, 2, 4, 8, 16 seconds),
 printing each failure's status code and response body (e.g. the 500 with
-TradeStation's 403 in `detail`) to stderr, then exits with code 69. The
+Alpaca's error in `detail`) to stderr, then exits with code 69. The
 flash-insights step stays optional (`|| true` in `REPORT_COMMAND`), so its
 failures don't abort the loop.
 
 Before running, edit the `CONFIGURATION` section for
 `GOOGLE_APPLICATION_CREDENTIALS`, `PORTFOLIO_DIR`, `STOCK_QUOTES_CLOUD_RUN_URL`,
+`TW_STOCK_QUOTES_CLOUD_RUN_URL`,
 `PYTHON_VENV` (activated by the script, so no `source <venv>/bin/activate` is
 needed first; empty uses the `python3` on `PATH`), `REPORT_SCRIPTS_DIR`, and the
 GCS bucket/`gcloud` configuration.

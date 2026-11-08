@@ -4,7 +4,7 @@
 #   Generates a breaking-news ("flash insights") impact report per portfolio and news site with
 #   a local Ollama LLM. For every *.json portfolio file in PORTFOLIO_DIR:
 #     1) Builds an LLM prompt from LLM_PROMPT_TEMPLATE via build_portfolio_prompt.py,
-#        which fetches current quotes from STOCK_QUOTES_CLOUD_RUN_URL (once per portfolio).
+#        which fetches current quotes from STOCK_QUOTES_CLOUD_RUN_URL and TW_STOCK_QUOTES_CLOUD_RUN_URL (once per portfolio).
 #     2) For every news file, replaces {{FLASH_INSIGHTS}} in a copy of that prompt with a
 #        "### <SITE>" section holding the news file's contents, writing
 #        $PORTFOLIO_DIR/$USE_CASE-<portfolio>-<SITE>.txt.
@@ -34,6 +34,8 @@
 #                              comma-separated list of files to use those instead
 #   STOCK_QUOTES_CLOUD_RUN_URL https://us-central1-my-gcp-project.cloudfunctions.net/get-us-ticker-quotes
 #                              (sample project ID; set it to your get-us-ticker-quotes URL)
+#   TW_STOCK_QUOTES_CLOUD_RUN_URL https://us-central1-my-gcp-project.cloudfunctions.net/get-tw-ticker-quotes
+#                              (needed when a portfolio has "TW:" tickers such as "TW:2330")
 #   OLLAMA_MODEL               gemma4:12b-it-qat (any model from `ollama list`)
 #   OLLAMA_TIMEOUT_SECONDS     600 (kill `ollama run` and retry once if a report takes longer)
 #   DEBUG                      set to any value to trace execution (set -x)
@@ -80,6 +82,7 @@ export USE_CASE="${USE_CASE:-flash-insights}"
 export NEWS_FILES="${NEWS_FILES:-}"
 # Stock quotes Cloud Run endpoint read by build_portfolio_prompt.py.
 export STOCK_QUOTES_CLOUD_RUN_URL="${STOCK_QUOTES_CLOUD_RUN_URL:-https://us-central1-my-gcp-project.cloudfunctions.net/get-us-ticker-quotes}"
+export TW_STOCK_QUOTES_CLOUD_RUN_URL="${TW_STOCK_QUOTES_CLOUD_RUN_URL:-https://us-central1-my-gcp-project.cloudfunctions.net/get-tw-ticker-quotes}"
 # Ollama model, and how long one report may take before `ollama run` is killed and retried once.
 export OLLAMA_MODEL="${OLLAMA_MODEL:-gemma4:12b-it-qat}"
 export OLLAMA_TIMEOUT_SECONDS="${OLLAMA_TIMEOUT_SECONDS:-600}"
