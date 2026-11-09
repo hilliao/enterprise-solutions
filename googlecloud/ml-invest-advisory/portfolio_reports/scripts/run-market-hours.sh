@@ -9,7 +9,7 @@
 #     2) Copies the $PORTFOLIO_DIR/*.html reports modified within the last
 #        REPORT_MAX_AGE_MINUTES to GCS_BUCKET with `gcloud storage cp`, so outdated
 #        reports with old stock quotes aren't uploaded.
-#   It then sleeps ACTIVE_SLEEP_SECONDS. Outside the window it prints a live
+#   The next iteration starts right away, with no sleep in between. Outside the window it prints a live
 #   countdown (on a single terminal line) to the next 08:00 ET window start and
 #   rechecks every IDLE_SLEEP_SECONDS. The window is NOT the market session
 #   (09:30-16:00 ET); it starts ~1.5h before the open and runs a few hours after
@@ -35,20 +35,21 @@
 #                                   (empty: use the python3 on PATH)
 #   REPORT_SCRIPTS_DIR              folder of report-daily.sh and report-news-impact.sh
 #   GCS_BUCKET / GCLOUD_CONFIG      gs:// destination for the *.html reports and the gcloud configuration
-#   ACTIVE_SLEEP_SECONDS / IDLE_SLEEP_SECONDS
-#                                   defaults 30s / 60s; overridable with the options below
+#   IDLE_SLEEP_SECONDS              default 60s; overridable with --idle-sleep
 #
 # Usage:
 #   ./run-market-hours.sh                      # loop forever
 #   ./run-market-hours.sh --immediate          # run once now, ignoring the window, then exit
-#   ./run-market-hours.sh --active-sleep 300 --idle-sleep 120
+#   ./run-market-hours.sh --idle-sleep 120
 #   ./run-market-hours.sh --help
 #
 # Exit status:
 #   0 after a successful --immediate run. Otherwise the loop aborts on the first
 #   failing LOOP_COMMAND with that command's exit code; 69 means build_portfolio_prompt.py
 #   could not reach the stock quotes endpoint after its retries (exponential
-#   backoff up to 16s). 1 on an unknown option or a missing PYTHON_VENV.
+#   backoff up to 16s). 66 if PORTFOLIO_DIR has no portfolio *.json file (checked before every
+#   run, since runs inside the window have no sleep between them). 1 on an unknown option or a
+#   missing PYTHON_VENV.
 #
 set -euo pipefail
 
@@ -84,9 +85,8 @@ GCLOUD_CONFIG="default"
 # regenerated, e.g. a flash-insights report whose news file is gone, would otherwise be uploaded with old quotes.
 REPORT_MAX_AGE_MINUTES=60
 
-# --- Timing (defaults; --active-sleep and --idle-sleep override them) ---
-ACTIVE_SLEEP_SECONDS=30  # seconds between consecutive runs during the window
-IDLE_SLEEP_SECONDS=60    # seconds between window rechecks outside the window
+# --- Timing (default; --idle-sleep overrides it). Runs inside the window follow each other without a sleep. ---
+IDLE_SLEEP_SECONDS=60  # seconds between window rechecks outside the window
 # Execution window hours, America/New_York: from WINDOW_START_HOUR_ET:00 until WINDOW_END_HOUR_ET:00.
 WINDOW_START_HOUR_ET=8
 WINDOW_END_HOUR_ET=18
@@ -101,6 +101,8 @@ HOLIDAYS=(
 # Exit code of build_portfolio_prompt.py (EXIT_CODE_QUOTES_UNAVAILABLE) when the stock quotes endpoint still fails
 # after its retries; reported with its own error message before aborting.
 QUOTES_UNAVAILABLE_EXIT_CODE=69
+# Exit code (EX_NOINPUT) when PORTFOLIO_DIR has no portfolio *.json file.
+NO_PORTFOLIOS_EXIT_CODE=66
 
 # ==============================================================================
 # FUNCTIONS
@@ -150,14 +152,13 @@ the close, to also catch pre-market and after-hours activity.
 
 If the command fails, an ERROR is printed to stderr and the script exits with
 the command's exit code (69 if the stock quotes Cloud Run endpoint still fails
-after retries with exponential backoff up to 16 seconds).
+after retries with exponential backoff up to 16 seconds). It exits with 66
+if PORTFOLIO_DIR has no portfolio *.json file.
 
 Options:
   --immediate          Run the command once immediately, ignoring the market
                         hours/holiday/weekday window, then exit (non-zero exit
                         if the command fails).
-  --active-sleep SEC    Seconds to sleep between consecutive runs while inside
-                        the active window (default: ${ACTIVE_SLEEP_SECONDS}).
   --idle-sleep SEC      Seconds to sleep between checks while outside the
                         active window (default: ${IDLE_SLEEP_SECONDS}).
   -h, --help            Show this help message and exit.
@@ -174,10 +175,6 @@ while [[ $# -gt 0 ]]; do
     --immediate)
       RUN_ONCE_NOW=true
       shift
-      ;;
-    --active-sleep)
-      ACTIVE_SLEEP_SECONDS="$2"
-      shift 2
       ;;
     --idle-sleep)
       IDLE_SLEEP_SECONDS="$2"
@@ -252,7 +249,14 @@ while :; do
       printf '\n'
       countdown_shown=false
     fi
-    # Execute the command and abort on any failure, so a failing step isn't repeated every ACTIVE_SLEEP_SECONDS.
+    # report-daily.sh does nothing without a portfolio file, so every iteration would finish instantly and the loop
+    # would spin (no sleep between runs), running gcloud many times a second. Stop instead.
+    portfolio_count="$(find "$PORTFOLIO_DIR" -maxdepth 1 -type f -name '*.json' 2>/dev/null | wc -l || true)"
+    if [ "$portfolio_count" -eq 0 ]; then
+      echo "ERROR: no portfolio *.json file in PORTFOLIO_DIR $PORTFOLIO_DIR; add one or fix PORTFOLIO_DIR; aborting at $(date)" >&2
+      exit "$NO_PORTFOLIOS_EXIT_CODE"
+    fi
+    # Execute the command and abort on any failure, so a failing step isn't repeated in a tight loop.
     # build_portfolio_prompt.py already retries the stock quotes Cloud Run endpoint with exponential backoff
     # (1, 2, 4, 8, 16s) before exiting with QUOTES_UNAVAILABLE_EXIT_CODE.
     exit_code=0
@@ -265,7 +269,6 @@ while :; do
       exit "$exit_code"
     fi
     if [ "$RUN_ONCE_NOW" = "true" ]; then exit 0; fi
-    sleep "$ACTIVE_SLEEP_SECONDS"
   else
     # Weekend, holiday, or outside window: show a live countdown until this
     # script's next execution-window start (~1.5h before actual market open).

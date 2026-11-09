@@ -7,10 +7,11 @@
 #        which fetches current quotes from STOCK_QUOTES_CLOUD_RUN_URL and TW_STOCK_QUOTES_CLOUD_RUN_URL.
 #     2) Replaces {{MARKET_COMMENTARY}} in the prompt with MARKET_COMMENTARY_FILE
 #        (an empty string if that file is missing).
+#        The prompt is written to $PORTFOLIO_DIR/$USE_CASE-<portfolio>-llm-prompt.txt.
 #     3) Runs the prompt through `ollama run $OLLAMA_MODEL` (killed and retried
-#        once after OLLAMA_TIMEOUT_SECONDS) and writes
-#        $PORTFOLIO_DIR/$USE_CASE-<portfolio>.md (report + input prompt), plus
-#        $PORTFOLIO_DIR/$USE_CASE-<portfolio>.html if pandoc is installed.
+#        once after OLLAMA_TIMEOUT_SECONDS) and writes the generated report to
+#        $PORTFOLIO_DIR/$USE_CASE-<portfolio>-llm-generated.md (report + input prompt), plus
+#        $PORTFOLIO_DIR/$USE_CASE-<portfolio>-llm-generated.html if pandoc is installed.
 #
 # Requirements:
 #   - python3 with build_portfolio_prompt.py's dependencies installed
@@ -96,9 +97,10 @@ for portfolio_file in "${PORTFOLIO_FILES[@]}"; do
 
   portfolio_name="$(basename "$portfolio_file" .json)"
   report_name="$USE_CASE-$portfolio_name"
-  prompt_file="$PORTFOLIO_DIR/$report_name.txt"
-  report_md="$PORTFOLIO_DIR/$report_name.md"
-  report_html="$PORTFOLIO_DIR/$report_name.html"
+  # The LLM's input prompt, and the report it generates (Markdown, and HTML for GCS).
+  prompt_file="$PORTFOLIO_DIR/$report_name-llm-prompt.txt"
+  report_md="$PORTFOLIO_DIR/$report_name-llm-generated.md"
+  report_html="$PORTFOLIO_DIR/$report_name-llm-generated.html"
 
   # set -e stops the script if any of these steps fails.
   build_portfolio_prompt "$portfolio_file" "$prompt_file"
