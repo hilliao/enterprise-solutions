@@ -31,13 +31,13 @@ reads every `PORTFOLIO_DIR/news-<SITE>_YYYY-MM-DD.txt` file for today
 it found. For each portfolio it fetches quotes once, then writes one report per
 news file, with that file in place of `{{FLASH_INSIGHTS}}`:
 `$USE_CASE-<portfolio>-<SITE>.{txt,md,html}` (e.g.
-`flash-insights-yang-cnbc.html`). Set `NEWS_FILES` to a comma-separated list
+`flash-insights-yang-cnbc-llm-generated.html`). Set `NEWS_FILES` to a comma-separated list
 to use other files. Exits with an error if no news file is found.
 Key env vars: `PORTFOLIO_DIR`, `LLM_PROMPT_TEMPLATE`, `USE_CASE`, `NEWS_FILES`,
 `OLLAMA_MODEL`, `OLLAMA_TIMEOUT_SECONDS`.
 
 ### compare-models.sh
-Runs one prompt (e.g. a `daily-report-<portfolio>.txt` written by
+Runs one prompt (e.g. a `daily-report-<portfolio>-llm-prompt.txt` written by
 `report-daily.sh`) through several Ollama models in turn, unloading each
 before the next, and writes every report plus a timing summary (wall clock,
 tokens/s, CPU/GPU split, context length) and a side-by-side `comparison.html`
@@ -99,17 +99,19 @@ config are set in its `CONFIGURATION` section; the checked-in version is a
 generic template to copy (e.g. to `~/workspace/ml-invest-report.sh`) and fill
 in.
 ```
-./run-market-hours.sh [--immediate] [--active-sleep SEC] [--idle-sleep SEC] [-h|--help]
+./run-market-hours.sh [--immediate] [--idle-sleep SEC] [-h|--help]
 ```
 - `--immediate`: run once now, ignoring the window, then exit.
-- `--active-sleep`: seconds between runs while inside the window (default 30).
 - `--idle-sleep`: seconds between recheck cycles while outside the window
   (default 60); while idle, prints a live single-line countdown to the next
   execution-window start.
 
 If the command fails, the loop prints an `ERROR` to stderr and exits with the
-command's exit code, instead of repeating the failing step every
-`--active-sleep` seconds. `build_portfolio_prompt.py` retries a failed stock
+command's exit code, instead of repeating the failing step in a tight loop.
+Inside the window, each run starts as soon as the previous one finishes, so before
+every run the loop checks that `PORTFOLIO_DIR` has a portfolio `*.json` file and
+exits with code 66 if not; without portfolios each run would finish instantly and
+the loop would spin. `build_portfolio_prompt.py` retries a failed stock
 quotes Cloud Run request with exponential backoff (1, 2, 4, 8, 16 seconds),
 printing each failure's status code and response body (e.g. the 500 with
 Alpaca's error in `detail`) to stderr, then exits with code 69. The

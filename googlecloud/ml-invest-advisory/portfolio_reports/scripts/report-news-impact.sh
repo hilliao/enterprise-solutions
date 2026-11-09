@@ -7,12 +7,12 @@
 #        which fetches current quotes from STOCK_QUOTES_CLOUD_RUN_URL and TW_STOCK_QUOTES_CLOUD_RUN_URL (once per portfolio).
 #     2) For every news file, replaces {{FLASH_INSIGHTS}} in a copy of that prompt with a
 #        "### <SITE>" section holding the news file's contents, writing
-#        $PORTFOLIO_DIR/$USE_CASE-<portfolio>-<SITE>.txt.
+#        $PORTFOLIO_DIR/$USE_CASE-<portfolio>-<SITE>-llm-prompt.txt.
 #     3) Runs each prompt through `ollama run $OLLAMA_MODEL` (killed and retried
-#        once after OLLAMA_TIMEOUT_SECONDS) and writes
-#        $PORTFOLIO_DIR/$USE_CASE-<portfolio>-<SITE>.md (report + input prompt), plus
-#        $PORTFOLIO_DIR/$USE_CASE-<portfolio>-<SITE>.html if pandoc is installed.
-#   So 2 portfolios and 3 news files produce 6 reports, e.g. flash-insights-yang-cnbc.html.
+#        once after OLLAMA_TIMEOUT_SECONDS) and writes the generated report to
+#        $PORTFOLIO_DIR/$USE_CASE-<portfolio>-<SITE>-llm-generated.md (report + input prompt), plus
+#        $PORTFOLIO_DIR/$USE_CASE-<portfolio>-<SITE>-llm-generated.html if pandoc is installed.
+#   So 2 portfolios and 3 news files produce 6 reports, e.g. flash-insights-yang-cnbc-llm-generated.html.
 #
 #   The news files are produced by `fetch-news.sh --site <SITE>`, which writes
 #   $PORTFOLIO_DIR/news-<SITE>_YYYY-MM-DD.txt (e.g. news-fundstrat_2026-11-01.txt,
@@ -146,9 +146,10 @@ for portfolio_file in "${PORTFOLIO_FILES[@]}"; do
   for news_file in "${news_files[@]}"; do
     site="$(news_site_name "$news_file")"
     report_name="$USE_CASE-$portfolio_name-$site"
-    prompt_file="$PORTFOLIO_DIR/$report_name.txt"
-    report_md="$PORTFOLIO_DIR/$report_name.md"
-    report_html="$PORTFOLIO_DIR/$report_name.html"
+    # The LLM's input prompt, and the report it generates (Markdown, and HTML for GCS).
+    prompt_file="$PORTFOLIO_DIR/$report_name-llm-prompt.txt"
+    report_md="$PORTFOLIO_DIR/$report_name-llm-generated.md"
+    report_html="$PORTFOLIO_DIR/$report_name-llm-generated.html"
     echo "--- Generating $report_name from $news_file ---"
 
     # Replace {{FLASH_INSIGHTS}} with this site's news under a "### <SITE>" heading.

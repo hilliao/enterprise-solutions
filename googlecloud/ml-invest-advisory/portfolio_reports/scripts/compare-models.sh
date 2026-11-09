@@ -23,8 +23,8 @@
 #
 # Usage:
 #   ./compare-models.sh PROMPT_FILE [MODEL ...]
-#   ./compare-models.sh $PORTFOLIO_DIR/daily-report-my_portfolio.txt
-#   ./compare-models.sh $PORTFOLIO_DIR/daily-report-my_portfolio.txt gemma3:12b gemma4:12b-it-qat qwen3.5:9b-q8_0
+#   ./compare-models.sh $PORTFOLIO_DIR/daily-report-my_portfolio-llm-prompt.txt
+#   ./compare-models.sh $PORTFOLIO_DIR/daily-report-my_portfolio-llm-prompt.txt gemma3:12b gemma4:12b-it-qat qwen3.5:9b-q8_0
 #
 #   MODEL defaults to gemma4:12b-it-qat and qwen3.5:9b-q8_0. Outputs go to a new
 #   $OUTPUT_DIR/<prompt name>_YYYYMMDD-HHMMSS directory on every run.

@@ -78,7 +78,7 @@ Generates a comprehensive daily analysis. It searches for all `.json` portfolios
 ### 2. Flash Insights reports
 **Script**: `scripts/report-news-impact.sh`
 
-Designed for rapid analysis of breaking news. It uses a specific "flash insights" template and injects each of today's news files from `scripts/fetch-news.sh` to analyze how current events might impact your specific holdings, producing one report per portfolio and news site (e.g. `flash-insights-yang-cnbc.html`).
+Designed for rapid analysis of breaking news. It uses a specific "flash insights" template and injects each of today's news files from `scripts/fetch-news.sh` to analyze how current events might impact your specific holdings, producing one report per portfolio and news site (e.g. `flash-insights-yang-cnbc-llm-generated.html`).
 
 ### 3. Realtime Continuous Monitoring
 **Script**: `scripts/run-market-hours.sh`
@@ -93,7 +93,7 @@ To generate reports, simply execute the desired script from the root of the proj
 ./scripts/report-daily.sh
 ```
 
-The reports will be saved in your `PORTFOLIO_DIR` with filenames prefixing the use-case (e.g., `daily-report-my_portfolio.md`).
+The reports will be saved in your `PORTFOLIO_DIR` with filenames prefixing the use-case: the LLM's input prompt (e.g. `daily-report-my_portfolio-llm-prompt.txt`) and the generated report (e.g. `daily-report-my_portfolio-llm-generated.md` and `.html`).
 
 ## Tests
 
