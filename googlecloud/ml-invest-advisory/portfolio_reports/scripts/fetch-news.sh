@@ -337,7 +337,8 @@ find_content_start_line() {
 }
 
 # Summarizes LINE_COUNT lines of TEXT_FILE from START_LINE into SUMMARY_MD with OLLAMA_MODEL, retrying up to
-# OLLAMA_MAX_ATTEMPTS times on a failure, an empty summary, or a summary containing CJK characters.
+# OLLAMA_MAX_ATTEMPTS times on a failure, an empty summary, or a summary containing CJK characters. --verbose prints
+# each run's stats (total duration, token counts, tokens/s) to stderr, i.e. the terminal, not SUMMARY_MD.
 summarize_with_ollama() {
   local name="$1" text_file="$2" start_line="$3" line_count="$4" summary_md="$5"
   local prompt_head="$NEWS_PROMPT_HEAD" prompt_tail="$NEWS_PROMPT_TAIL" attempt
@@ -353,7 +354,7 @@ summarize_with_ollama() {
       echo "Retrying Ollama generation for $name (attempt $attempt of $OLLAMA_MAX_ATTEMPTS)..."
     fi
 
-    if ! ollama run --nowordwrap --think="$OLLAMA_THINK" "$OLLAMA_MODEL" \
+    if ! ollama run --nowordwrap --verbose --think="$OLLAMA_THINK" "$OLLAMA_MODEL" \
       < <(printf '%s\n<article>\n' "$prompt_head"
           tail -n "+$start_line" "$text_file" | head -n "$line_count"
           printf '</article>\n\n%s\n' "$prompt_tail") \

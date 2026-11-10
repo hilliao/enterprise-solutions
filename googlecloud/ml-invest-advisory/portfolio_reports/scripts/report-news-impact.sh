@@ -53,7 +53,7 @@
 #   OLLAMA_TIMEOUT_SECONDS twice (first attempt and its retry)).
 #
 # Callers:
-#   run-market-hours.sh runs both report scripts in REPORT_COMMAND on every
+#   run-market-hours.sh runs report-daily.sh and then report-news-impact.sh on every
 #   loop iteration during the 08:00-18:00 ET window,
 #   then uploads $PORTFOLIO_DIR/*.html to GCS:
 #
