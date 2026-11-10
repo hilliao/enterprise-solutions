@@ -15,6 +15,9 @@ inlining a `market-commentary_YYYY-MM-DD.txt` file), runs it through
 Key env vars: `PORTFOLIO_DIR`, `LLM_PROMPT_TEMPLATE`, `USE_CASE`,
 `MARKET_COMMENTARY_FILE`, `STOCK_QUOTES_CLOUD_RUN_URL`, `TW_STOCK_QUOTES_CLOUD_RUN_URL`, `OLLAMA_MODEL`, `OLLAMA_TIMEOUT_SECONDS`
 (default 600; kills a stuck `ollama run`, retries it once, then fails the script).
+Every `ollama run` in `report-daily.sh`, `report-news-impact.sh` and `fetch-news.sh`
+uses `--verbose`, so the terminal shows each run's total duration, token counts and
+tokens/s (on stderr; the reports and summaries don't include them).
 
 ### report-common.sh
 Helper functions shared by `report-daily.sh` and `report-news-impact.sh`

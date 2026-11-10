@@ -56,7 +56,9 @@ build_portfolio_prompt() {
     --output_prompt="$prompt_file"
 }
 
-# Runs PROMPT_FILE through ollama, printing the output and writing it to OUTPUT_FILE. Kills ollama if it runs longer
+# Runs PROMPT_FILE through ollama, printing the output and writing it to OUTPUT_FILE. --verbose prints the run's stats
+# (total duration, prompt eval and eval token counts and tokens/s) to stderr, so they show on the terminal but not
+# in OUTPUT_FILE. Kills ollama if it runs longer
 # than OLLAMA_TIMEOUT_SECONDS (e.g. the model is stuck repeating itself) and retries once, overwriting OUTPUT_FILE.
 # If the retry also times out, returns timeout's exit code (124, or 137 if ollama ignored SIGTERM for 10 seconds).
 # Other failures are returned immediately without a retry. Exit codes are handled explicitly because set -e doesn't
@@ -65,7 +67,7 @@ run_ollama() {
   local prompt_file="$1" output_file="$2" exit_code attempt
   for attempt in 1 2; do
     exit_code=0
-    timeout --foreground --kill-after=10s "${OLLAMA_TIMEOUT_SECONDS}s" ollama run --nowordwrap --hidethinking "$OLLAMA_MODEL" < "$prompt_file" \
+    timeout --foreground --kill-after=10s "${OLLAMA_TIMEOUT_SECONDS}s" ollama run --nowordwrap --hidethinking --verbose "$OLLAMA_MODEL" < "$prompt_file" \
       | tee "$output_file" || exit_code=$?
     if [ "$exit_code" -ne 124 ] && [ "$exit_code" -ne 137 ]; then
       return "$exit_code"
