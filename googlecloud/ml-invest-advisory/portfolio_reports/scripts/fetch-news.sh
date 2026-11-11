@@ -80,7 +80,7 @@
 #   AGGREGATE_URLS          https://www.bloomberg.com/markets,https://www.ft.com/markets,https://finance.yahoo.com/,
 #                           https://www.marketwatch.com/,https://www.investing.com/news/,https://www.barrons.com/
 #                           (comma-separated front pages that --aggregate summarizes together)
-#   OLLAMA_HOST             localhost:11434 (the Ollama server on this machine)
+#   OLLAMA_HOST             8400f:11434
 #   OLLAMA_MODEL            gemma4:12b-it-qat (all sites and --url)
 #   OLLAMA_THINK            false (passed as --think=$OLLAMA_THINK; thinking tokens can overflow the
 #                           server's context (OLLAMA_CONTEXT_LENGTH) and truncate the summary)
@@ -125,7 +125,7 @@ REMOTE_HOST="${REMOTE_HOST-hil@hil-fr-dc.freeddns.org}"
 REMOTE_PORT="${REMOTE_PORT:-23}"
 
 # --- Ollama server and model that write the summaries ---
-export OLLAMA_HOST="${OLLAMA_HOST:-localhost:11434}"
+export OLLAMA_HOST="${OLLAMA_HOST:-8400f:11434}"
 # gemma3:4b fits the 6 GB A380 and is ~6x faster, but it invented stock moves (e.g. REGN +109%) in
 # CNBC summaries; gemma4:12b-it-qat takes ~4-7 minutes per page, well inside DEFAULT_POLL_MINUTES.
 OLLAMA_MODEL="${OLLAMA_MODEL:-gemma4:12b-it-qat}"
