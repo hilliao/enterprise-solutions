@@ -8,12 +8,17 @@
 #
 #   --site fundstrat fetches the fundstratdirect.com Flash Insights page and extracts its posts.
 #
+#   --aggregate (experimental) fetches the front pages in AGGREGATE_URLS (Bloomberg, Financial Times, Yahoo Finance,
+#   MarketWatch, Investing.com and Barron's by default), keeps their headlines and teasers, and summarizes them
+#   together in one Ollama run into PORTFOLIO_DIR/news-global-headlines_YYYY-MM-DD.txt. A page that fails to load (e.g. a
+#   captcha page) is left out of the summary; the run fails only if no page loads.
+#
 #   Every summary starts with a "Fetched at ... from <URL>; summarized at ..." line in Eastern time.
 #
 #   Every --site run mirrors its summary to PORTFOLIO_DIR/news-<SITE>_YYYY-MM-DD.txt (e.g.
 #   news-wsj_2026-11-01.txt), which report-news-impact.sh reads, and to the same path on
 #   REMOTE_HOST. It then deletes that site's older news-<SITE>_*.txt files in PORTFOLIO_DIR, locally and on
-#   REMOTE_HOST. --url runs only write to OUTPUT_DIR.
+#   REMOTE_HOST. --aggregate does the same with news-global-headlines_YYYY-MM-DD.txt. --url runs only write to OUTPUT_DIR.
 #
 # Requirements:
 #   - google-chrome installed and on PATH
@@ -23,16 +28,20 @@
 #   - For --site fundstrat: a Chrome profile at PROFILE_DIR logged in to fundstratdirect.com
 #     (see "One-time setup" below)
 #
-# Usage (one of --site or --url is required):
+# Usage (at least one of --site, --url or --aggregate is required):
 #   ./fetch-news.sh --site wsj                        # Fetch & summarize WSJ into PORTFOLIO_DIR/news-wsj_YYYY-MM-DD.txt
 #   ./fetch-news.sh --site cnbc                       # Fetch & summarize CNBC into PORTFOLIO_DIR/news-cnbc_YYYY-MM-DD.txt
 #   ./fetch-news.sh --site fundstrat                  # Fetch & summarize Fundstrat Flash Insights into
 #                                                      # PORTFOLIO_DIR/news-fundstrat_YYYY-MM-DD.txt
 #   ./fetch-news.sh --site cnbc,fundstrat             # Fetch & summarize several sites, one after another
 #   ./fetch-news.sh --site wsj,cnbc,fundstrat         # (comma-separated keys from wsj, cnbc, fundstrat)
+#   ./fetch-news.sh --aggregate                       # Fetch the AGGREGATE_URLS front pages & summarize them together
+#                                                      # into PORTFOLIO_DIR/news-global-headlines_YYYY-MM-DD.txt
+#   ./fetch-news.sh --site wsj,cnbc --aggregate       # Fetch & summarize WSJ, then CNBC, then the aggregate
 #   ./fetch-news.sh --url <URL> --name <label>        # Fetch & summarize an arbitrary URL
 #   ./fetch-news.sh --url <URL> --name <label> --lines 400
-#                                                      # Use first 400 lines of extracted text as the Ollama prompt input (default 600)
+#                                                      # Use first 400 lines of extracted text as the Ollama prompt input (default 600;
+#                                                      # --aggregate splits the lines evenly across the pages that load)
 #   ./fetch-news.sh --site wsj --profile-dir <DIR>    # Use a different Chrome profile directory
 #   ./fetch-news.sh --site wsj --output-dir <DIR>     # Write output files to DIR instead of ~/Documents/news-aggregate
 #   ./fetch-news.sh --site wsj --remote-host <USER@HOST>
@@ -56,6 +65,9 @@
 #   ./fetch-news.sh --site cnbc --poll 15             # Poll CNBC every 15 minutes (after each cycle ends)
 #   ./fetch-news.sh --site fundstrat --poll 15        # Poll Flash Insights every 15 minutes during market hours
 #   ./fetch-news.sh --site cnbc,fundstrat --poll      # Poll CNBC, then Fundstrat, every 30 minutes
+#   ./fetch-news.sh --site cnbc --aggregate --poll    # Poll CNBC, then the aggregate, every 30 minutes
+#   AGGREGATE_URLS="https://www.bloomberg.com/markets,https://www.ft.com/markets" ./fetch-news.sh --aggregate
+#                                                      # Aggregate only Bloomberg and FT
 #
 # Environment variables (all optional; defaults shown):
 #   PROFILE_DIR             ~/workspace/chrome-flashinsights-profile (overridden by --profile-dir)
@@ -63,7 +75,10 @@
 #   PORTFOLIO_DIR           ~/workspace/portfolios (where --site writes news-<SITE>_YYYY-MM-DD.txt)
 #   REMOTE_HOST             hil@hil-fr-dc.freeddns.org (overridden by --remote-host; empty skips the copy)
 #   REMOTE_PORT             23 (ssh port for the scp to and cleanup on REMOTE_HOST)
-#   OLLAMA_HOST             8400f:11434
+#   AGGREGATE_URLS          https://www.bloomberg.com/markets,https://www.ft.com/markets,https://finance.yahoo.com/,
+#                           https://www.marketwatch.com/,https://www.investing.com/news/,https://www.barrons.com/
+#                           (comma-separated front pages that --aggregate summarizes together)
+#   OLLAMA_HOST             localhost:11434 (the Ollama server on this machine)
 #   OLLAMA_MODEL            gemma4:12b-it-qat (all sites and --url)
 #   OLLAMA_THINK            false (passed as --think=$OLLAMA_THINK; thinking tokens can overflow the
 #                           server's context (OLLAMA_CONTEXT_LENGTH) and truncate the summary)
@@ -106,7 +121,7 @@ REMOTE_HOST="${REMOTE_HOST-hil@hil-fr-dc.freeddns.org}"
 REMOTE_PORT="${REMOTE_PORT:-23}"
 
 # --- Ollama server and model that write the summaries ---
-export OLLAMA_HOST="${OLLAMA_HOST:-8400f:11434}"
+export OLLAMA_HOST="${OLLAMA_HOST:-localhost:11434}"
 # gemma3:4b fits the 6 GB A380 and is ~6x faster, but it invented stock moves (e.g. REGN +109%) in
 # CNBC summaries; gemma4:12b-it-qat takes ~4-7 minutes per page, well inside DEFAULT_POLL_MINUTES.
 OLLAMA_MODEL="${OLLAMA_MODEL:-gemma4:12b-it-qat}"
@@ -115,7 +130,7 @@ OLLAMA_MAX_ATTEMPTS=3
 
 # --- Defaults of --lines and --poll ---
 # Measured 12-19 tokens per line on WSJ|CNBC|Flash Insights pages, so 600 lines stays under ~11.5k
-# tokens and fits the 16384-token context (OLLAMA_CONTEXT_LENGTH on 8400f) with room for the summary.
+# tokens and fits the 16384-token context (OLLAMA_CONTEXT_LENGTH of the Ollama server) with room for the summary.
 DEFAULT_PROMPT_LINES=600
 # WSJ serves a captcha after a few fetches in quick succession, so poll conservatively by default.
 DEFAULT_POLL_MINUTES=30
@@ -143,6 +158,18 @@ declare -A SITE_URLS=(
 # which would otherwise fill the Ollama prompt. The wsj.com home page can't use this: its first line is an <h1>.
 CONTENT_START_PATTERN='^\*{5,6} '
 
+# --- Aggregate of several front pages (--aggregate, experimental) ---
+# CNBC and WSJ are left out: --site cnbc and --site wsj already summarize them. Reuters
+# (https://www.reuters.com/markets/) and The Economist (https://www.economist.com/finance-and-economics) are left out
+# too: both answer headless Chrome with a DataDome captcha page instead of the news page.
+AGGREGATE_URLS="${AGGREGATE_URLS:-https://www.bloomberg.com/markets,https://www.ft.com/markets,https://finance.yahoo.com/,https://www.marketwatch.com/,https://www.investing.com/news/,https://www.barrons.com/}"
+# Name of the output files: global-headlines.txt, global-headlines-summary.{md,txt} and news-global-headlines_YYYY-MM-DD.txt.
+AGGREGATE_NAME="global-headlines"
+# Front-page lines with fewer words are navigation links, section titles, tickers, bylines and buttons, not news.
+AGGREGATE_MIN_WORDS=5
+# Lines matching this (case-insensitive) awk regex are cookie banners and page chrome, not news.
+AGGREGATE_BOILERPLATE_PATTERN="cookie|consent|privacy|confidentialit|all rights reserved|skip to"
+
 # --- Fundstrat ---
 # Text rendered by fundstratdirect.com instead of member content when the session is not authenticated.
 FUNDSTRAT_PAYWALL_MARKER="You need a Fundstrat Direct subscription"
@@ -168,6 +195,10 @@ HOLIDAYS=(
 NEWS_PROMPT_HEAD="You are a financial analyst writing for a portfolio manager and certified financial planner. The news page content is between the <article> tags below."
 NEWS_PROMPT_TAIL="Task: Summarize the news page above. Highlight the top headlines, key macro/market-moving stories, and any notable stock, sector, or economic developments. Prioritize the most prominent and most recent items.
 Use only facts stated in the page; never invent numbers.
+Format: Markdown headings and bullet points. Be concise."
+AGGREGATE_PROMPT_HEAD="You are a financial analyst writing for a portfolio manager and certified financial planner. The headlines and teasers from the front pages of several financial news sites are between the <article> tags below, each site inside <source> tags that name it."
+AGGREGATE_PROMPT_TAIL="Task: Summarize the news across all the sites above into one briefing. Highlight the top headlines, key macro/market-moving stories, and any notable stock, sector, or economic developments. Merge a story reported by several sites into one item and name its sources in parentheses, e.g. (Bloomberg, FT). Prioritize the stories covered by the most sites and the most recent items.
+Use only facts stated in the pages; never invent numbers.
 Format: Markdown headings and bullet points. Be concise."
 FUNDSTRAT_PROMPT_HEAD="You are a financial analyst writing for portfolio managers and certified financial planners. The FlashInsights posts are between the <article> tags below."
 FUNDSTRAT_PROMPT_TAIL="Task:
@@ -278,7 +309,8 @@ fetch_page_html() {
 check_page() {
   local html_file="$1" url="$2"
   # WSJ answers repeated requests with a DataDome captcha page instead of the news page.
-  if grep -q 'captcha-delivery' "$html_file"; then
+  # Bloomberg answers repeated requests with an "unusual activity ... not a robot" checkbox page instead.
+  if grep -q -e 'captcha-delivery' -e 'unusual activity from your computer network' "$html_file"; then
     echo "ERROR: $url returned a bot-detection captcha page; try again later." >&2
     return 1
   fi
@@ -345,6 +377,9 @@ summarize_with_ollama() {
   if [[ "$name" == "fundstrat" ]]; then
     prompt_head="$FUNDSTRAT_PROMPT_HEAD"
     prompt_tail="$FUNDSTRAT_PROMPT_TAIL"
+  elif [[ "$name" == "$AGGREGATE_NAME" ]]; then
+    prompt_head="$AGGREGATE_PROMPT_HEAD"
+    prompt_tail="$AGGREGATE_PROMPT_TAIL"
   fi
 
   echo "Generating summary for $name with $OLLAMA_MODEL (using $line_count lines from line $start_line)..."
@@ -487,11 +522,95 @@ fetch_and_summarize() {
 }
 
 # ---------------------------------------------------------------------------
+# Aggregate of several front pages (--aggregate)
+# ---------------------------------------------------------------------------
+
+# Prints a short site label for a front-page URL: its second-level domain (https://finance.yahoo.com/ -> yahoo).
+derive_label_from_url() {
+  local url="$1"
+  echo "$url" | sed -E 's#^[a-zA-Z]+://##; s#[/:?].*##' | awk -F. '{ print (NF > 1 ? $(NF - 1) : $1) }'
+}
+
+# Converts a front page's HTML_FILE to its headlines and teasers in TEXT_FILE, one per line: html2text marks link text
+# with underscores, which become spaces again; list markers and lines shorter than AGGREGATE_MIN_WORDS words
+# (navigation, tickers, buttons), cookie banners and repeated lines are dropped.
+extract_aggregate_text() {
+  local label="$1" html_file="$2" text_file="$3"
+  # -width keeps each headline on one line; -utf8 decodes the UTF-8 pages instead of treating them as ISO-8859-1.
+  html2text -utf8 -nobs -width 400 "$html_file" | \
+    sed -E 's/_/ /g; s/^[[:space:]]*([o*#+-]|[0-9]+\.)[[:space:]]+//; s/^[[:space:]]+//; s/[[:space:]]+$//; s/^\[(.*)\]$/\1/' | \
+    awk -v min_words="$AGGREGATE_MIN_WORDS" -v boilerplate="$AGGREGATE_BOILERPLATE_PATTERN" \
+      'NF >= min_words && tolower($0) !~ boilerplate && !seen[$0]++' \
+    > "$text_file"
+  if [[ ! -s "$text_file" ]]; then
+    echo "ERROR: no headlines of $AGGREGATE_MIN_WORDS or more words found on the $label page." >&2
+    return 1
+  fi
+  echo "OK: wrote $(wc -l < "$text_file") headline lines to $text_file"
+}
+
+# Fetches every AGGREGATE_URLS page, keeps PROMPT_LINES / <number of pages that loaded> headline lines of each in
+# OUTPUT_DIR/global-headlines.txt, summarizes them together with Ollama, and publishes the summary as
+# news-global-headlines_YYYY-MM-DD.txt. A page that fails (e.g. a captcha page) is left out; returns 1 if every page failed.
+aggregate_news() {
+  local prompt_lines="$1"
+  local text_file="$OUTPUT_DIR/${AGGREGATE_NAME}.txt"
+  local summary_md="$OUTPUT_DIR/${AGGREGATE_NAME}-summary.md"
+  local summary_txt="$OUTPUT_DIR/${AGGREGATE_NAME}-summary.txt"
+  local html_file i label url site_text_file fetched_at first_fetched_at="" fetched_urls="" lines_per_site
+  local -a fetched_labels=() fetched_url_list=() failed_labels=()
+
+  html_file="$(mktemp "/tmp/news-${AGGREGATE_NAME}-XXXXXX.html")"
+  # See fetch_and_summarize for why the RETURN trap resets itself.
+  trap 'rm -f "$html_file"; trap - RETURN' RETURN
+
+  for i in "${!AGGREGATE_LABELS[@]}"; do
+    label="${AGGREGATE_LABELS[$i]}"
+    url="${AGGREGATE_URL_LIST[$i]}"
+    site_text_file="$OUTPUT_DIR/${AGGREGATE_NAME}-${label}.txt"
+    fetched_at="$(TZ="America/New_York" date '+%Y-%m-%d %H:%M:%S %Z')"
+    echo "[$fetched_at] Fetching $label ($url) for the $AGGREGATE_NAME..."
+    if ! fetch_page_html "$url" "$html_file" || ! check_page "$html_file" "$url" ||
+      ! extract_aggregate_text "$label" "$html_file" "$site_text_file"; then
+      echo "WARNING: left $label out of the $AGGREGATE_NAME." >&2
+      failed_labels+=("$label")
+      continue
+    fi
+    # The summary is as old as its oldest page.
+    [[ -n "$first_fetched_at" ]] || first_fetched_at="$fetched_at"
+    fetched_labels+=("$label")
+    fetched_url_list+=("$url")
+    fetched_urls+="${fetched_urls:+, }$url"
+  done
+
+  if [[ ${#fetched_labels[@]} -eq 0 ]]; then
+    echo "ERROR: every $AGGREGATE_NAME page failed (${failed_labels[*]}); no summary written." >&2
+    return 1
+  fi
+  # Split the prompt lines across the pages that loaded, so a failed page leaves its share to the others.
+  lines_per_site=$((prompt_lines / ${#fetched_labels[@]}))
+  : > "$text_file"
+  for i in "${!fetched_labels[@]}"; do
+    { printf '<source name="%s" url="%s">\n' "${fetched_labels[$i]}" "${fetched_url_list[$i]}"
+      head -n "$lines_per_site" "$OUTPUT_DIR/${AGGREGATE_NAME}-${fetched_labels[$i]}.txt"
+      printf '</source>\n'; } >> "$text_file"
+  done
+  echo "OK: wrote $(wc -l < "$text_file") lines from ${fetched_labels[*]} to $text_file"
+  summarize_with_ollama "$AGGREGATE_NAME" "$text_file" 1 "$(wc -l < "$text_file")" "$summary_md" || return 1
+  convert_summary_to_text "$summary_md" "$summary_txt"
+  add_timestamp_line "$summary_txt" "$fetched_urls" "$first_fetched_at"
+  publish_news_file "$AGGREGATE_NAME" "$summary_txt" || return 1
+  if [[ ${#failed_labels[@]} -gt 0 ]]; then
+    echo "WARNING: the $AGGREGATE_NAME summary leaves out ${failed_labels[*]}." >&2
+  fi
+}
+
+# ---------------------------------------------------------------------------
 # Polling and command line
 # ---------------------------------------------------------------------------
 
-# Fetches every TARGET_NAMES/TARGET_URLS entry once, one after another; a failed site doesn't stop the others.
-# Returns 1 if any site failed.
+# Fetches every TARGET_NAMES/TARGET_URLS entry once, one after another, then the aggregate with --aggregate; a failed
+# site doesn't stop the others. Returns 1 if any site or the aggregate failed.
 run_cycle() {
   local i status=0
   for i in "${!TARGET_NAMES[@]}"; do
@@ -500,6 +619,10 @@ run_cycle() {
       status=1
     fi
   done
+  if [[ "$AGGREGATE" == true ]] && ! aggregate_news "$PROMPT_LINES"; then
+    echo "WARNING: $AGGREGATE_NAME failed this cycle." >&2
+    status=1
+  fi
   return "$status"
 }
 
@@ -522,25 +645,29 @@ derive_name_from_url() {
 }
 
 print_usage() {
-  echo "Usage: $0 --site <key>[,<key>...]|--url <URL> [OPTION]..."
+  echo "Usage: $0 --site <key>[,<key>...]|--url <URL>|--aggregate [OPTION]..."
   echo ""
   echo "Options:"
   echo "  --site <keys>        Fetch & summarize registered sites, comma-separated, one after another."
   echo "                       Valid keys: ${SITE_KEYS[*]} (e.g. --site cnbc,fundstrat)"
   echo "                       The summary is also written to \$PORTFOLIO_DIR/news-<key>_YYYY-MM-DD.txt and copied to the remote host"
   echo "  --url <URL>          Fetch & summarize an arbitrary URL (any site/page, e.g. Bloomberg)"
+  echo "  --aggregate          (Experimental) Fetch the front pages in \$AGGREGATE_URLS and summarize their headlines together"
+  echo "                       into \$PORTFOLIO_DIR/news-${AGGREGATE_NAME}_YYYY-MM-DD.txt, copied to the remote host;"
+  echo "                       runs after the --site sites, if any. Pages that fail to load are left out."
   echo "  --name <label>       Output file name/label to use with --url (default: derived from URL)"
-  echo "  --lines <N>          Number of lines from extracted text fed to Ollama (default: $DEFAULT_PROMPT_LINES)"
+  echo "  --lines <N>          Number of lines from extracted text fed to Ollama (default: $DEFAULT_PROMPT_LINES;"
+  echo "                       --aggregate splits them evenly across the pages that load)"
   echo "  --profile-dir <DIR>  Chrome profile directory (default: \$PROFILE_DIR or ~/workspace/chrome-flashinsights-profile)"
   echo "  --output-dir <DIR>   Directory for output files (default: \$OUTPUT_DIR or ~/Documents/news-aggregate)"
   echo "  --remote-host <U@H>  Host that --site copies news-<key>_YYYY-MM-DD.txt to with scp -P \$REMOTE_PORT"
   echo "                       (default: \$REMOTE_HOST or hil@hil-fr-dc.freeddns.org; \"\" skips the copy)"
   echo "  --poll [MINUTES]     Repeat forever, sleeping MINUTES (default: $DEFAULT_POLL_MINUTES) after each fetch & summarize cycle;"
-  echo "                       combine with --site <keys> or --url. Only fetches $POLL_START_ET-$POLL_END_ET ET on trading days."
-  echo "  --list               List available registered site keys and their URLs"
+  echo "                       combine with --site <keys>, --url or --aggregate. Only fetches $POLL_START_ET-$POLL_END_ET ET on trading days."
+  echo "  --list               List available registered site keys and their URLs, and the --aggregate URLs"
   echo "  -h, --help           Display this help message"
   echo ""
-  echo "One of --site or --url is required."
+  echo "At least one of --site, --url or --aggregate is required; --site and --url are mutually exclusive."
   echo ""
   echo "Examples:"
   echo "  $0 --site wsj"
@@ -549,6 +676,8 @@ print_usage() {
   echo "  $0 --site cnbc --poll 15              # poll CNBC every 15 minutes"
   echo "  $0 --site fundstrat --poll 15         # poll Flash Insights every 15 minutes"
   echo "  $0 --site wsj,cnbc,fundstrat --poll   # poll all three sites every $DEFAULT_POLL_MINUTES minutes"
+  echo "  $0 --aggregate                        # summarize the \$AGGREGATE_URLS front pages together"
+  echo "  $0 --site cnbc --aggregate --poll     # poll CNBC, then the aggregate, every $DEFAULT_POLL_MINUTES minutes"
   echo "  $0 --url \"https://www.bloomberg.com/markets\" --name bloomberg-markets"
   echo "  $0 --url \"https://www.bloomberg.com/news/articles/xxxx\" --name bbg-article --lines 500"
 }
@@ -561,6 +690,7 @@ CUSTOM_URL=""
 CUSTOM_NAME=""
 PROMPT_LINES="$DEFAULT_PROMPT_LINES"
 POLL_MINUTES=""
+AGGREGATE=false
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -573,6 +703,10 @@ while [[ $# -gt 0 ]]; do
       [[ $# -ge 2 ]] || { echo "ERROR: --url requires an argument." >&2; exit 1; }
       CUSTOM_URL="$2"
       shift 2
+      ;;
+    --aggregate)
+      AGGREGATE=true
+      shift
       ;;
     --name)
       [[ $# -ge 2 ]] || { echo "ERROR: --name requires an argument." >&2; exit 1; }
@@ -616,6 +750,11 @@ while [[ $# -gt 0 ]]; do
       for key in "${SITE_KEYS[@]}"; do
         echo "  $key -> ${SITE_URLS[$key]}"
       done
+      echo "--aggregate URLs (AGGREGATE_URLS):"
+      IFS=',' read -r -a aggregate_urls <<< "$AGGREGATE_URLS"
+      for url in "${aggregate_urls[@]}"; do
+        echo "  $url"
+      done
       exit 0
       ;;
     -h|--help|help)
@@ -633,8 +772,8 @@ if [[ -n "$CUSTOM_URL" && -n "$SELECTED_SITES" ]]; then
   echo "ERROR: --url and --site are mutually exclusive; pass only one." >&2
   exit 1
 fi
-if [[ -z "$CUSTOM_URL" && -z "$SELECTED_SITES" ]]; then
-  echo "ERROR: pass --site <keys> (${SITE_KEYS[*]}) or --url <URL>. Use -h or --help for usage." >&2
+if [[ -z "$CUSTOM_URL" && -z "$SELECTED_SITES" && "$AGGREGATE" != true ]]; then
+  echo "ERROR: pass --site <keys> (${SITE_KEYS[*]}), --url <URL> or --aggregate. Use -h or --help for usage." >&2
   exit 1
 fi
 
@@ -656,9 +795,13 @@ if [[ -n "$CUSTOM_URL" ]]; then
     echo "ERROR: --name $custom_name is reserved for --site $custom_name." >&2
     exit 1
   fi
+  if [[ "$custom_name" == "$AGGREGATE_NAME" || "$custom_name" == "$AGGREGATE_NAME"-* ]]; then
+    echo "ERROR: --name $custom_name is reserved for the --aggregate output files." >&2
+    exit 1
+  fi
   TARGET_NAMES=("$custom_name")
   TARGET_URLS=("$CUSTOM_URL")
-else
+elif [[ -n "$SELECTED_SITES" ]]; then
   IFS=',' read -r -a selected_keys <<< "$SELECTED_SITES"
   for key in "${selected_keys[@]}"; do
     if [[ -z "$key" || -z "${SITE_URLS[$key]+x}" ]]; then
@@ -674,6 +817,36 @@ else
   done
 fi
 
+# Resolve AGGREGATE_URLS into the site labels (output file names and <source> names in the prompt) and URLs.
+AGGREGATE_LABELS=()
+AGGREGATE_URL_LIST=()
+if [[ "$AGGREGATE" == true ]]; then
+  IFS=',' read -r -a aggregate_urls <<< "$AGGREGATE_URLS"
+  for url in "${aggregate_urls[@]}"; do
+    if ! [[ "$url" =~ ^https?://[^/]+ ]]; then
+      echo "ERROR: '$url' in AGGREGATE_URLS is not an http(s) URL (AGGREGATE_URLS is comma-separated)." >&2
+      exit 1
+    fi
+    label="$(derive_label_from_url "$url")"
+    # Two pages of one site (e.g. bloomberg.com/markets and bloomberg.com/economics) get bloomberg and bloomberg-2.
+    base_label="$label"
+    for ((n = 2; ; n++)); do
+      [[ " ${AGGREGATE_LABELS[*]} " == *" $label "* ]] || break
+      label="$base_label-$n"
+    done
+    AGGREGATE_LABELS+=("$label")
+    AGGREGATE_URL_LIST+=("$url")
+  done
+  if [[ ${#AGGREGATE_URL_LIST[@]} -eq 0 ]]; then
+    echo "ERROR: --aggregate needs at least one URL in AGGREGATE_URLS." >&2
+    exit 1
+  fi
+  if [[ "$PROMPT_LINES" -lt ${#AGGREGATE_URL_LIST[@]} ]]; then
+    echo "ERROR: --lines $PROMPT_LINES leaves no line for some of the ${#AGGREGATE_URL_LIST[@]} AGGREGATE_URLS pages." >&2
+    exit 1
+  fi
+fi
+
 mkdir -p "$OUTPUT_DIR"
 
 # ---------------------------------------------------------------------------
@@ -685,7 +858,7 @@ if [[ -z "$POLL_MINUTES" ]]; then
   exit 0
 fi
 
-echo "Starting news polling for ${TARGET_NAMES[*]} (sleeping $POLL_MINUTES minute(s) after each cycle," \
+echo "Starting news polling for ${TARGET_NAMES[*]}${AGGREGATE_LABELS[*]:+ $AGGREGATE_NAME (${AGGREGATE_LABELS[*]})} (sleeping $POLL_MINUTES minute(s) after each cycle," \
   "fetching only $POLL_START_ET-$POLL_END_ET ET on trading days)..."
 while true; do
   # Outside the polling window, sleep until it opens instead of waking every POLL_MINUTES.
