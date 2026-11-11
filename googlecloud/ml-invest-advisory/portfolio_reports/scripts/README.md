@@ -64,9 +64,23 @@ and, with `scp -P $REMOTE_PORT`, to the same path on `--remote-host` (default
 over `ssh` and deletes the site's older `news-<SITE>_*.txt` files too (printing
 each one). `--url` runs only write to
 `OUTPUT_DIR`.
+
+`--aggregate` (experimental) fetches the front pages in `AGGREGATE_URLS` (default:
+Bloomberg, Financial Times, Yahoo Finance, MarketWatch, Investing.com and Barron's,
+comma-separated), keeps each page's headlines and teasers (lines of 5 or more words,
+without navigation, cookie banners or repeats), splits `--lines` evenly across the
+pages that load, and summarizes them together in one Ollama run into
+`PORTFOLIO_DIR/news-global-headlines_YYYY-MM-DD.txt`, which `report-news-impact.sh` picks up
+like the other news files and which is copied to `--remote-host` the same way. A
+page that fails to load (e.g. a captcha page) is left out with a warning; the run
+fails only if every page fails. CNBC and WSJ aren't in the default list because
+`--site cnbc` and `--site wsj` already cover them. Reuters and The Economist aren't
+either: both answer headless Chrome with a DataDome captcha page.
 ```
 ./fetch-news.sh --site wsj|cnbc|fundstrat
 ./fetch-news.sh --site wsj,cnbc,fundstrat         # several sites, one after another
+./fetch-news.sh --aggregate                       # AGGREGATE_URLS front pages, summarized together
+./fetch-news.sh --site cnbc --aggregate --poll    # CNBC, then the aggregate, every cycle
 ./fetch-news.sh --url <URL> --name <label> [--lines N]
 ./fetch-news.sh --site wsj --profile-dir DIR      # use another Chrome profile
 ./fetch-news.sh --site wsj --output-dir DIR       # write to DIR
@@ -84,11 +98,11 @@ exits 1. `--poll` only fetches 08:00-18:00 ET on trading days (1.5 hours before
 the NYSE open until 2 hours after the close, the same window as
 `run-market-hours.sh`) and otherwise sleeps until the window opens; a failed site is retried next
 cycle instead of stopping the loop. Key env vars: `PROFILE_DIR`,
-`OUTPUT_DIR`, `PORTFOLIO_DIR`, `REMOTE_HOST`, `REMOTE_PORT`, `OLLAMA_HOST`,
-`OLLAMA_MODEL` (default `gemma4:12b-it-qat` for every site), `OLLAMA_THINK`.
+`OUTPUT_DIR`, `PORTFOLIO_DIR`, `REMOTE_HOST`, `REMOTE_PORT`, `AGGREGATE_URLS`,
+`OLLAMA_HOST` (default `localhost:11434`), `OLLAMA_MODEL` (default `gemma4:12b-it-qat` for every site), `OLLAMA_THINK`.
 
 The 600-line default assumes the Ollama server runs with
-`OLLAMA_CONTEXT_LENGTH=16384` (set on 8400f); with Ollama's 4096-token default
+`OLLAMA_CONTEXT_LENGTH=16384` (set in the local `ollama` systemd service); with Ollama's 4096-token default
 the prompt does not fit and Ollama truncates it.
 
 ### run-market-hours.sh
