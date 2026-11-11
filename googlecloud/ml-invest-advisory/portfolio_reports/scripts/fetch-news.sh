@@ -6,7 +6,8 @@
 #   Ollama. Supports both a built-in site registry (wsj, cnbc, fundstrat) and
 #   arbitrary ad-hoc URLs (e.g. a specific Bloomberg article page).
 #
-#   --site fundstrat fetches the fundstratdirect.com Flash Insights page and extracts its posts.
+#   --site fundstrat fetches the fundstratdirect.com Flash Insights page and extracts its posts, with their dates
+#   and authors, with extract_fundstrat_posts.py.
 #
 #   --aggregate (experimental) fetches the front pages in AGGREGATE_URLS (Bloomberg, Financial Times, Yahoo Finance,
 #   MarketWatch, Investing.com and Barron's by default), keeps their headlines and teasers, and summarizes them
@@ -25,7 +26,8 @@
 #   - `html2text` CLI installed via: sudo apt install html2text
 #   - `ollama` CLI installed and accessible
 #   - `pandoc` (optional, for markdown -> plain text conversion of the summary)
-#   - For --site fundstrat: a Chrome profile at PROFILE_DIR logged in to fundstratdirect.com
+#   - For --site fundstrat: python3 (standard library only) and a Chrome profile at PROFILE_DIR logged in to
+#     fundstratdirect.com
 #     (see "One-time setup" below)
 #
 # Usage (at least one of --site, --url or --aggregate is required):
@@ -103,6 +105,8 @@
 #
 
 set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # ---------------------------------------------------------------------------
 # Settings (environment variables, see the header for their defaults)
@@ -331,16 +335,24 @@ check_page() {
 
 # Converts HTML_FILE to text in TEXT_FILE; for fundstrat, keeps only the Flash Insights posts.
 extract_page_text() {
-  local name="$1" html_file="$2" text_file="$3"
+  local name="$1" html_file="$2" text_file="$3" status=0
   if [[ "$name" == "fundstrat" ]]; then
-    # Keep only the Flash Insights posts, between the "⚡ FlashInsights" heading and the share buttons.
-    html2text "$html_file" | \
-      awk '/^[⚡âš¡]* FlashInsights$/{f=1} f&&/click="shareOpen/{f=0; next} f{print} f&&/\[FlashInsights\]/{f=0}' \
-      > "$text_file"
-    if ! grep -q "[⚡âš¡]* FlashInsights" "$text_file"; then
-      echo "ERROR: '⚡ FlashInsights' not found in $text_file — session may have expired or page layout changed." >&2
-      return 1
-    fi
+    # Parse the posts out of the DOM (div.sub-insight-card elements) instead of the html2text output, whose markers
+    # around the posts are artifacts: a mis-decoded ⚡ and Alpine.js attributes html2text fails to parse.
+    python3 "$SCRIPT_DIR/extract_fundstrat_posts.py" "$html_file" > "$text_file" || status=$?
+    case "$status" in
+      0) ;;
+      3)
+        echo "ERROR: $FUNDSTRAT_LOGIN_URL session expired — the Chrome profile is not signed in." >&2
+        echo "  Re-authenticate: run the command below, log in, confirm the members page loads, then close Chrome completely:" >&2
+        echo "    google-chrome --user-data-dir=\"$PROFILE_DIR\" \"$FUNDSTRAT_LOGIN_URL\"" >&2
+        return 1
+        ;;
+      *)
+        echo "ERROR: no Flash Insights posts extracted from the fundstrat page (exit $status) — the page layout may have changed." >&2
+        return 1
+        ;;
+    esac
   else
     html2text "$html_file" > "$text_file"
   fi

@@ -89,7 +89,8 @@ either: both answer headless Chrome with a DataDome captcha page.
 ./fetch-news.sh --list
 ./fetch-news.sh -h|--help
 ```
-Requires `google-chrome`, `html2text`, `ollama` (optionally `pandoc`). Writes
+Requires `google-chrome`, `html2text`, `ollama` (optionally `pandoc`), and `python3` for
+`--site fundstrat`. Writes
 to `OUTPUT_DIR` (default `~/Documents/news-aggregate/`). The site navigation before the first `******`
 or `*****` heading (html2text `<h1>` or `<h2>`) is skipped, and the next `--lines` lines (default
 600) go to Ollama. Several `--site` keys are fetched one after another; a
@@ -104,6 +105,15 @@ cycle instead of stopping the loop. Key env vars: `PROFILE_DIR`,
 The 600-line default assumes the Ollama server runs with
 `OLLAMA_CONTEXT_LENGTH=16384` (set in the local `ollama` systemd service); with Ollama's 4096-token default
 the prompt does not fit and Ollama truncates it.
+
+### extract_fundstrat_posts.py
+Used by `fetch-news.sh --site fundstrat`: parses the Flash Insights posts (each
+`div.sub-insight-card`) out of Chrome's DOM dump of the members page and prints
+them as text, each under a `⚡ FlashInsights post N of M | <date> | <author>, <title>`
+line. Share buttons, like counts, images and the live price change in ticker
+badges are dropped. Exits 3 if the page isn't signed in (no `logged-in` `<body>`
+class) and 4 if it finds no posts. Standard library only; tests:
+`python -m pytest -v test_extract_fundstrat_posts.py`.
 
 ### run-market-hours.sh
 Loop that runs the daily + flash-insights portfolio scripts and uploads the
