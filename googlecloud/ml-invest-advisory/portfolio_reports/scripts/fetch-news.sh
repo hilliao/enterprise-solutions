@@ -382,7 +382,7 @@ summarize_with_ollama() {
     prompt_tail="$AGGREGATE_PROMPT_TAIL"
   fi
 
-  echo "Generating summary for $name with $OLLAMA_MODEL (using $line_count lines from line $start_line)..."
+  echo "Generating summary for $name with $OLLAMA_MODEL on $OLLAMA_HOST (using $line_count lines from line $start_line)..."
   for ((attempt = 1; attempt <= OLLAMA_MAX_ATTEMPTS; attempt++)); do
     if [[ "$attempt" -gt 1 ]]; then
       sleep 2
