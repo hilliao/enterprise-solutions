@@ -100,7 +100,7 @@ the NYSE open until 2 hours after the close, the same window as
 `run-market-hours.sh`) and otherwise sleeps until the window opens; a failed site is retried next
 cycle instead of stopping the loop. Key env vars: `PROFILE_DIR`,
 `OUTPUT_DIR`, `PORTFOLIO_DIR`, `REMOTE_HOST`, `REMOTE_PORT`, `AGGREGATE_URLS`,
-`OLLAMA_HOST` (default `localhost:11434`), `OLLAMA_MODEL` (default `gemma4:12b-it-qat` for every site), `OLLAMA_THINK`.
+`OLLAMA_HOST` (default `8400f:11434`), `OLLAMA_MODEL` (default `gemma4:12b-it-qat` for every site), `OLLAMA_THINK`.
 
 The 600-line default assumes the Ollama server runs with
 `OLLAMA_CONTEXT_LENGTH=16384` (set in the local `ollama` systemd service); with Ollama's 4096-token default
