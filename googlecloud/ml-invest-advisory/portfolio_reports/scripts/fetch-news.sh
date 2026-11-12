@@ -80,6 +80,7 @@
 #   AGGREGATE_URLS          https://www.bloomberg.com/markets,https://www.ft.com/markets,https://finance.yahoo.com/,
 #                           https://www.marketwatch.com/,https://www.investing.com/news/,https://www.barrons.com/
 #                           (comma-separated front pages that --aggregate summarizes together)
+#   AGGREGATE_MAX_CHARS     24000 (characters of headlines --aggregate sends to Ollama, split across the pages)
 #   OLLAMA_HOST             8400f:11434
 #   OLLAMA_MODEL            gemma4:12b-it-qat (all sites and --url)
 #   OLLAMA_THINK            false (passed as --think=$OLLAMA_THINK; thinking tokens can overflow the
@@ -131,6 +132,11 @@ export OLLAMA_HOST="${OLLAMA_HOST:-8400f:11434}"
 OLLAMA_MODEL="${OLLAMA_MODEL:-gemma4:12b-it-qat}"
 OLLAMA_THINK="${OLLAMA_THINK:-false}"
 OLLAMA_MAX_ATTEMPTS=3
+# A summary with fewer words (runs of 2+ letters) or fewer common English words (the, and, of, ...) is blank or
+# garbled, not prose. Good WSJ/CNBC/Flash Insights summaries have 230+ words and 24+ common words; the bad ones on
+# 8400f had 0-70 words and 0-1 common words.
+OLLAMA_MIN_SUMMARY_WORDS=50
+OLLAMA_MIN_COMMON_WORDS=10
 
 # --- Defaults of --lines and --poll ---
 # Measured 12-19 tokens per line on WSJ|CNBC|Flash Insights pages, so 600 lines stays under ~11.5k
@@ -173,6 +179,10 @@ AGGREGATE_NAME="global-headlines"
 AGGREGATE_MIN_WORDS=5
 # Lines matching this (case-insensitive) awk regex are cookie banners and page chrome, not news.
 AGGREGATE_BOILERPLATE_PATTERN="cookie|consent|privacy|confidentialit|all rights reserved|skip to"
+# Front-page headlines and teasers are far longer than the WSJ/CNBC lines DEFAULT_PROMPT_LINES was measured on, so
+# the aggregate is also capped at this many characters, split evenly across the pages that load. Past the 16384-token
+# context, Ollama drops the start of the prompt and gemma4 answers in garbled text or Chinese.
+AGGREGATE_MAX_CHARS="${AGGREGATE_MAX_CHARS:-24000}"
 
 # --- Fundstrat ---
 # Text rendered by fundstratdirect.com instead of member content when the session is not authenticated.
@@ -380,12 +390,35 @@ find_content_start_line() {
   echo "$start_line"
 }
 
+# Prints SUMMARY_MD's word and common-English-word counts; succeeds if both reach OLLAMA_MIN_SUMMARY_WORDS and
+# OLLAMA_MIN_COMMON_WORDS, i.e. the summary reads like prose rather than blank lines or garbled tokens.
+check_summary_prose() {
+  local summary_md="$1" words common
+  words="$(grep -oE '[[:alpha:]]{2,}' "$summary_md" | wc -l || true)"
+  common="$(grep -oiwE 'the|and|of|to|in|for|on|with|as|by' "$summary_md" | wc -l || true)"
+  echo "$words words, $common common words"
+  [[ "$words" -ge "$OLLAMA_MIN_SUMMARY_WORDS" && "$common" -ge "$OLLAMA_MIN_COMMON_WORDS" ]]
+}
+
+# Unloads OLLAMA_MODEL from the Ollama server. On 8400f's Vulkan backend (Arc A380), a ~9.6k-token prompt makes the
+# runner answer in garbled text, CJK, blank lines or repeated words, and the runner keeps answering garbage to every
+# later prompt, however short, until the model is reloaded.
+unload_ollama_model() {
+  # ollama stop prints spinner escape codes even when not on a terminal; report the outcome ourselves.
+  if ollama stop "$OLLAMA_MODEL" > /dev/null 2>&1; then
+    echo "Unloaded $OLLAMA_MODEL on $OLLAMA_HOST so the next request starts a fresh runner."
+  else
+    echo "WARNING: could not unload $OLLAMA_MODEL on $OLLAMA_HOST." >&2
+  fi
+}
+
 # Summarizes LINE_COUNT lines of TEXT_FILE from START_LINE into SUMMARY_MD with OLLAMA_MODEL, retrying up to
-# OLLAMA_MAX_ATTEMPTS times on a failure, an empty summary, or a summary containing CJK characters. --verbose prints
-# each run's stats (total duration, token counts, tokens/s) to stderr, i.e. the terminal, not SUMMARY_MD.
+# OLLAMA_MAX_ATTEMPTS times on a failure or a summary that contains CJK characters or isn't prose (check_summary_prose).
+# After each bad attempt, including the last, it unloads the model so the retry, and the next site, get a fresh runner.
+# --verbose prints each run's stats (total duration, token counts, tokens/s) to stderr, i.e. the terminal, not SUMMARY_MD.
 summarize_with_ollama() {
   local name="$1" text_file="$2" start_line="$3" line_count="$4" summary_md="$5"
-  local prompt_head="$NEWS_PROMPT_HEAD" prompt_tail="$NEWS_PROMPT_TAIL" attempt
+  local prompt_head="$NEWS_PROMPT_HEAD" prompt_tail="$NEWS_PROMPT_TAIL" attempt error prose_stats
   if [[ "$name" == "fundstrat" ]]; then
     prompt_head="$FUNDSTRAT_PROMPT_HEAD"
     prompt_tail="$FUNDSTRAT_PROMPT_TAIL"
@@ -405,17 +438,19 @@ summarize_with_ollama() {
       < <(printf '%s\n<article>\n' "$prompt_head"
           tail -n "+$start_line" "$text_file" | head -n "$line_count"
           printf '</article>\n\n%s\n' "$prompt_tail") \
-      > "$summary_md" || [[ ! -s "$summary_md" ]]; then
-      echo "ERROR: Ollama summary generation failed for $name." >&2
-      continue
-    fi
+      > "$summary_md"; then
+      error="Ollama summary generation failed for $name."
     # Some models (e.g. qwen2.5) drift into Chinese; reject output containing CJK characters/punctuation and retry.
-    if LC_ALL=C.UTF-8 grep -qP '[\x{3000}-\x{303F}\x{3400}-\x{9FFF}\x{F900}-\x{FAFF}\x{FF00}-\x{FFEF}]' "$summary_md"; then
-      echo "ERROR: Ollama summary for $name contains CJK characters." >&2
-      continue
+    elif LC_ALL=C.UTF-8 grep -qP '[\x{3000}-\x{303F}\x{3400}-\x{9FFF}\x{F900}-\x{FAFF}\x{FF00}-\x{FFEF}]' "$summary_md"; then
+      error="Ollama summary for $name contains CJK characters."
+    elif ! prose_stats="$(check_summary_prose "$summary_md")"; then
+      error="Ollama summary for $name is blank or garbled ($prose_stats)."
+    else
+      echo "OK: wrote summary markdown to $summary_md ($prose_stats)"
+      return 0
     fi
-    echo "OK: wrote summary markdown to $summary_md"
-    return 0
+    echo "ERROR: $error" >&2
+    unload_ollama_model
   done
   echo "ERROR: Ollama summary generation failed for $name after $OLLAMA_MAX_ATTEMPTS attempts." >&2
   return 1
@@ -569,7 +604,7 @@ aggregate_news() {
   local text_file="$OUTPUT_DIR/${AGGREGATE_NAME}.txt"
   local summary_md="$OUTPUT_DIR/${AGGREGATE_NAME}-summary.md"
   local summary_txt="$OUTPUT_DIR/${AGGREGATE_NAME}-summary.txt"
-  local html_file i label url site_text_file fetched_at first_fetched_at="" fetched_urls="" lines_per_site
+  local html_file i label url site_text_file fetched_at first_fetched_at="" fetched_urls="" lines_per_site chars_per_site
   local -a fetched_labels=() fetched_url_list=() failed_labels=()
 
   html_file="$(mktemp "/tmp/news-${AGGREGATE_NAME}-XXXXXX.html")"
@@ -599,12 +634,14 @@ aggregate_news() {
     echo "ERROR: every $AGGREGATE_NAME page failed (${failed_labels[*]}); no summary written." >&2
     return 1
   fi
-  # Split the prompt lines across the pages that loaded, so a failed page leaves its share to the others.
+  # Split the prompt lines and characters across the pages that loaded, so a failed page leaves its share to the others.
   lines_per_site=$((prompt_lines / ${#fetched_labels[@]}))
+  chars_per_site=$((AGGREGATE_MAX_CHARS / ${#fetched_labels[@]}))
   : > "$text_file"
   for i in "${!fetched_labels[@]}"; do
     { printf '<source name="%s" url="%s">\n' "${fetched_labels[$i]}" "${fetched_url_list[$i]}"
-      head -n "$lines_per_site" "$OUTPUT_DIR/${AGGREGATE_NAME}-${fetched_labels[$i]}.txt"
+      head -n "$lines_per_site" "$OUTPUT_DIR/${AGGREGATE_NAME}-${fetched_labels[$i]}.txt" | \
+        awk -v max_chars="$chars_per_site" '{ total += length($0) + 1; if (total > max_chars) exit; print }'
       printf '</source>\n'; } >> "$text_file"
   done
   echo "OK: wrote $(wc -l < "$text_file") lines from ${fetched_labels[*]} to $text_file"
