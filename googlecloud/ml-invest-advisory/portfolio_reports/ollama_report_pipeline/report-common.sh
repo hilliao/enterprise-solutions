@@ -9,7 +9,7 @@
 #
 #   Not meant to be run on its own.
 
-# Folder of build_portfolio_prompt.py, the prompt templates and the test portfolios (the parent of scripts/).
+# Folder of build_portfolio_prompt.py, the prompt templates and the test portfolios (the parent of ollama_report_pipeline/).
 PORTFOLIO_REPORTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 BUILD_PORTFOLIO_PROMPT_PY="$PORTFOLIO_REPORTS_DIR/build_portfolio_prompt.py"
 # Applied to every HTML report.
