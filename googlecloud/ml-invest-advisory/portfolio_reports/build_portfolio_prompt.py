@@ -68,7 +68,7 @@ TW_TICKER_PREFIX = "TW:"
 CLOUD_RUN_RETRY_DELAYS = [1, 2, 4, 8, 16]
 CLOUD_RUN_REQUEST_TIMEOUT = 60
 # Exit code when the stock quotes are still unavailable after all retries (sysexits EX_UNAVAILABLE).
-# scripts/run-market-hours.sh reports this exit code as a quotes endpoint failure.
+# ollama_report_pipeline/run-market-hours.sh reports this exit code as a quotes endpoint failure.
 EXIT_CODE_QUOTES_UNAVAILABLE = 69
 
 # --- Exchange rates ---

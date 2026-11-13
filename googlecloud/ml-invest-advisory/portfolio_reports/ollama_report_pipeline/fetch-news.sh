@@ -7,7 +7,17 @@
 #   arbitrary ad-hoc URLs (e.g. a specific Bloomberg article page).
 #
 #   --site fundstrat fetches the fundstratdirect.com Flash Insights page and extracts its posts, with their dates
-#   and authors, with extract_fundstrat_posts.py.
+#   and authors, with extract_fundstrat_posts.py. Other fundstratdirect.com pages (e.g. a --url research article) are
+#   extracted with extract_fundstrat_article.py: the article's title, date, author and text, without the site menus.
+#
+#   --fundstrat-daily-technical (experimental) finds the newest article on the Daily Technical Strategy listing page
+#   (FUNDSTRAT_LISTING_URLS), whose URL changes every day (e.g.
+#   .../daily-technical-strategy/2026/11/10/cross-asset-volatility-is-coming-back-while-equity-trends-and-momentum-rema/,
+#   or .../newtons-upticks/2026/11/12/upticks-november-2026/ on the day of the monthly Upticks report, which the listing
+#   holds too), and summarizes it into PORTFOLIO_DIR/news-fundstrat-daily-technical_YYYY-MM-DD.txt.
+#   --fundstrat-macro-analysis (experimental) does the same with the First Word listing page of Tom Lee's macro
+#   strategy articles (e.g. .../macro-strategy/first-word/2026/11/12/potential-departure-of-jensen-from-nvidia-a-negative-but-not-a-thesis-chang/)
+#   into PORTFOLIO_DIR/news-fundstrat-macro-analysis_YYYY-MM-DD.txt. Both listings are in FUNDSTRAT_LISTING_URLS.
 #
 #   --aggregate (experimental) fetches the front pages in AGGREGATE_URLS (Bloomberg, Financial Times, Yahoo Finance,
 #   MarketWatch, Investing.com and Barron's by default), keeps their headlines and teasers, and summarizes them
@@ -19,18 +29,21 @@
 #   Every --site run mirrors its summary to PORTFOLIO_DIR/news-<SITE>_YYYY-MM-DD.txt (e.g.
 #   news-wsj_2026-11-01.txt), which report-news-impact.sh reads, and to the same path on
 #   REMOTE_HOST. It then deletes that site's older news-<SITE>_*.txt files in PORTFOLIO_DIR, locally and on
-#   REMOTE_HOST. --aggregate does the same with news-global-headlines_YYYY-MM-DD.txt. --url runs only write to OUTPUT_DIR.
+#   REMOTE_HOST. --aggregate does the same with news-global-headlines_YYYY-MM-DD.txt, --fundstrat-daily-technical
+#   with news-fundstrat-daily-technical_YYYY-MM-DD.txt and --fundstrat-macro-analysis with
+#   news-fundstrat-macro-analysis_YYYY-MM-DD.txt. --url runs only write to OUTPUT_DIR.
 #
 # Requirements:
 #   - google-chrome installed and on PATH
 #   - `html2text` CLI installed via: sudo apt install html2text
 #   - `ollama` CLI installed and accessible
 #   - `pandoc` (optional, for markdown -> plain text conversion of the summary)
-#   - For --site fundstrat: python3 (standard library only) and a Chrome profile at PROFILE_DIR logged in to
-#     fundstratdirect.com
+#   - For --site fundstrat, --fundstrat-daily-technical, --fundstrat-macro-analysis and fundstratdirect.com --url
+#     pages: python3 (standard library only) and a Chrome profile at PROFILE_DIR logged in to fundstratdirect.com
 #     (see "One-time setup" below)
 #
-# Usage (at least one of --site, --url or --aggregate is required):
+# Usage (at least one of --site, --url, --aggregate, --fundstrat-daily-technical or --fundstrat-macro-analysis is
+# required):
 #   ./fetch-news.sh --site wsj                        # Fetch & summarize WSJ into PORTFOLIO_DIR/news-wsj_YYYY-MM-DD.txt
 #   ./fetch-news.sh --site cnbc                       # Fetch & summarize CNBC into PORTFOLIO_DIR/news-cnbc_YYYY-MM-DD.txt
 #   ./fetch-news.sh --site fundstrat                  # Fetch & summarize Fundstrat Flash Insights into
@@ -40,6 +53,10 @@
 #   ./fetch-news.sh --aggregate                       # Fetch the AGGREGATE_URLS front pages & summarize them together
 #                                                      # into PORTFOLIO_DIR/news-global-headlines_YYYY-MM-DD.txt
 #   ./fetch-news.sh --site wsj,cnbc --aggregate       # Fetch & summarize WSJ, then CNBC, then the aggregate
+#   ./fetch-news.sh --fundstrat-daily-technical       # Find & summarize the newest Fundstrat Daily Technical Strategy
+#                                                      # article into PORTFOLIO_DIR/news-fundstrat-daily-technical_YYYY-MM-DD.txt
+#   ./fetch-news.sh --fundstrat-macro-analysis        # Find & summarize the newest Fundstrat First Word macro article
+#                                                      # into PORTFOLIO_DIR/news-fundstrat-macro-analysis_YYYY-MM-DD.txt
 #   ./fetch-news.sh --url <URL> --name <label>        # Fetch & summarize an arbitrary URL
 #   ./fetch-news.sh --url <URL> --name <label> --lines 400
 #                                                      # Use first 400 lines of extracted text as the Ollama prompt input (default 600;
@@ -70,6 +87,8 @@
 #   ./fetch-news.sh --site cnbc --aggregate --poll    # Poll CNBC, then the aggregate, every 30 minutes
 #   AGGREGATE_URLS="https://www.bloomberg.com/markets,https://www.ft.com/markets" ./fetch-news.sh --aggregate
 #                                                      # Aggregate only Bloomberg and FT
+#   ./fetch-news.sh --url "https://fundstratdirect.com/technical-strategy/newtons-upticks/2026/11/12/upticks-november-2026/" \
+#     --name fundstrat-upticks                         # Summarize one Fundstrat research article
 #
 # Environment variables (all optional; defaults shown):
 #   PROFILE_DIR             ~/workspace/chrome-flashinsights-profile (overridden by --profile-dir)
@@ -188,6 +207,30 @@ AGGREGATE_MAX_CHARS="${AGGREGATE_MAX_CHARS:-24000}"
 # Text rendered by fundstratdirect.com instead of member content when the session is not authenticated.
 FUNDSTRAT_PAYWALL_MARKER="You need a Fundstrat Direct subscription"
 FUNDSTRAT_LOGIN_URL="https://fundstratdirect.com/members/"
+# Pages of this site other than Flash Insights are research articles, extracted with extract_fundstrat_article.py;
+# macro strategy articles get FUNDSTRAT_MACRO_PROMPT_*, the others (technical strategy) FUNDSTRAT_ARTICLE_PROMPT_*.
+FUNDSTRAT_URL_PATTERN='^https?://(www\.)?fundstratdirect\.com/'
+FUNDSTRAT_MACRO_URL_PATTERN='^https?://(www\.)?fundstratdirect\.com/macro-strategy/'
+
+# --- Newest article of a Fundstrat research listing (--fundstrat-daily-technical, --fundstrat-macro-analysis) ---
+# Each listing shows its articles newest first, each at its own dated URL: <prefix><series>/YYYY/MM/DD/<slug>/. The key
+# is the command-line flag without "--" and the name of the output files (<key>.txt, <key>-summary.{md,txt} and
+# news-<key>_YYYY-MM-DD.txt). Keys in the order they run.
+FUNDSTRAT_LISTING_KEYS=(fundstrat-daily-technical fundstrat-macro-analysis)
+declare -A FUNDSTRAT_LISTING_TITLES=(
+  [fundstrat-daily-technical]="Daily Technical Strategy"
+  [fundstrat-macro-analysis]="First Word"
+)
+declare -A FUNDSTRAT_LISTING_URLS=(
+  # Mark Newton's daily articles (series daily-technical-strategy), and the monthly Upticks (series newtons-upticks).
+  [fundstrat-daily-technical]="https://fundstratdirect.com/members/latest-research/?category=daily-technical-strategy"
+  # Tom Lee's macro strategy articles (series first-word).
+  [fundstrat-macro-analysis]="https://fundstratdirect.com/members/latest-research/?category=first-word"
+)
+declare -A FUNDSTRAT_LISTING_URL_PREFIXES=(
+  [fundstrat-daily-technical]="https://fundstratdirect.com/technical-strategy/"
+  [fundstrat-macro-analysis]="https://fundstratdirect.com/macro-strategy/"
+)
 
 # --- Polling window (--poll), America/New_York ---
 # --poll only fetches on trading days from POLL_START_ET to POLL_END_ET: 1.5 hours before the 09:30 ET NYSE open
@@ -214,12 +257,36 @@ AGGREGATE_PROMPT_HEAD="You are a financial analyst writing for a portfolio manag
 AGGREGATE_PROMPT_TAIL="Task: Summarize the news across all the sites above into one briefing. Highlight the top headlines, key macro/market-moving stories, and any notable stock, sector, or economic developments. Merge a story reported by several sites into one item and name its sources in parentheses, e.g. (Bloomberg, FT). Prioritize the stories covered by the most sites and the most recent items.
 Use only facts stated in the pages; never invent numbers.
 Format: Markdown headings and bullet points. Be concise."
+# Rules for every Fundstrat summary. gemma4:12b-it-qat once reported "a negative, but not a 'thesis changer'" (Tom Lee
+# on Jensen Huang possibly leaving NVDA) as a "thesis changer" risk, inverting the author's view: a "risk assessment"
+# task invites the model to turn the author's words into risks, so the stance comes first, in the author's words, and
+# only stated risks are listed.
+FUNDSTRAT_ACCURACY_RULES="Accuracy rules:
+- Keep the author's polarity exactly: carry over negations and qualifiers such as \"not\", \"no\", \"never\", \"but\" and \"although\". \"A negative, but not a game changer\" means the author's view is unchanged; never report such a phrase as a game-changing risk.
+- Quote the author word for word, including any \"not\" before the quoted words, and never use a quoted phrase in the opposite sense to the text.
+- For each stock and ETF the text discusses (tickers in a bare list need no entry of their own), give the author's stance first (bullish, bearish or neutral) with a short quote of the author's own words that shows it.
+- List only the risks the text itself states; if it states none for a stock or ETF, write \"No risks stated\" instead of inferring one.
+- Use only facts, numbers and price levels stated in the text; never invent numbers."
 FUNDSTRAT_PROMPT_HEAD="You are a financial analyst writing for portfolio managers and certified financial planners. The FlashInsights posts are between the <article> tags below."
 FUNDSTRAT_PROMPT_TAIL="Task:
 1. Summarize the posts above, prioritizing the posts with the most recent date and time.
 2. Highlight the key macro and technical insights.
-3. Give a risk assessment for each stock and ETF mentioned.
-Use only facts and price levels stated in the posts; never invent numbers.
+3. For each stock and ETF mentioned, give the author's stance and the risks the posts state.
+$FUNDSTRAT_ACCURACY_RULES
+Format: Markdown headings and bullet points. Be concise."
+FUNDSTRAT_ARTICLE_PROMPT_HEAD="You are a financial analyst writing for portfolio managers and certified financial planners. The Fundstrat research article is between the <article> tags below; its first line names its title, date and author."
+FUNDSTRAT_ARTICLE_PROMPT_TAIL="Task:
+1. Summarize the article's main market view and outlook.
+2. List the support levels, resistance levels and price targets stated for each index, stock, ETF, sector, commodity, currency and bond yield.
+3. For each stock and ETF mentioned, give the author's stance and the risks the article states.
+$FUNDSTRAT_ACCURACY_RULES
+Format: Markdown headings and bullet points. Be concise."
+FUNDSTRAT_MACRO_PROMPT_HEAD="$FUNDSTRAT_ARTICLE_PROMPT_HEAD"
+FUNDSTRAT_MACRO_PROMPT_TAIL="Task:
+1. Summarize the article's main macro view, market outlook and investment thesis.
+2. Highlight the key macro and market drivers it discusses (e.g. the Fed, rates, inflation, earnings, policy, sentiment) and the evidence it gives for each.
+3. List the stocks, ETFs and sectors it favors or warns about, with any price levels or targets it states, and for each stock and ETF give the author's stance and the risks the article states.
+$FUNDSTRAT_ACCURACY_RULES
 Format: Markdown headings and bullet points. Be concise."
 
 trap 'echo "ERROR: interrupted." >&2; exit 130' INT
@@ -343,21 +410,49 @@ check_page() {
   fi
 }
 
-# Converts HTML_FILE to text in TEXT_FILE; for fundstrat, keeps only the Flash Insights posts.
-extract_page_text() {
-  local name="$1" html_file="$2" text_file="$3" status=0
+# Prints how a page is extracted and summarized: fundstrat-posts (--site fundstrat), fundstrat-macro-article (a
+# fundstratdirect.com macro strategy page), fundstrat-article (any other fundstratdirect.com page) or news.
+page_kind() {
+  local name="$1" url="$2"
   if [[ "$name" == "fundstrat" ]]; then
+    echo fundstrat-posts
+  elif [[ "$url" =~ $FUNDSTRAT_MACRO_URL_PATTERN ]]; then
+    echo fundstrat-macro-article
+  elif [[ "$url" =~ $FUNDSTRAT_URL_PATTERN ]]; then
+    echo fundstrat-article
+  else
+    echo news
+  fi
+}
+
+# Prints the fundstratdirect.com re-authentication instructions.
+print_fundstrat_login_help() {
+  echo "ERROR: $FUNDSTRAT_LOGIN_URL session expired — the Chrome profile is not signed in." >&2
+  echo "  Re-authenticate: run the command below, log in, confirm the members page loads, then close Chrome completely:" >&2
+  echo "    google-chrome --user-data-dir=\"$PROFILE_DIR\" \"$FUNDSTRAT_LOGIN_URL\"" >&2
+}
+
+# Converts HTML_FILE to text in TEXT_FILE; for fundstrat-posts, keeps only the Flash Insights posts, and for
+# fundstrat-article and fundstrat-macro-article, only the article.
+extract_page_text() {
+  local name="$1" kind="$2" html_file="$3" text_file="$4" status=0
+  if [[ "$kind" == fundstrat-*article ]]; then
+    python3 "$SCRIPT_DIR/extract_fundstrat_article.py" "$html_file" > "$text_file" || status=$?
+    case "$status" in
+      0) ;;
+      3) print_fundstrat_login_help; return 1 ;;
+      *)
+        echo "ERROR: no article text extracted from the $name page (exit $status) — not an article page, or the layout changed." >&2
+        return 1
+        ;;
+    esac
+  elif [[ "$kind" == "fundstrat-posts" ]]; then
     # Parse the posts out of the DOM (div.sub-insight-card elements) instead of the html2text output, whose markers
     # around the posts are artifacts: a mis-decoded ⚡ and Alpine.js attributes html2text fails to parse.
     python3 "$SCRIPT_DIR/extract_fundstrat_posts.py" "$html_file" > "$text_file" || status=$?
     case "$status" in
       0) ;;
-      3)
-        echo "ERROR: $FUNDSTRAT_LOGIN_URL session expired — the Chrome profile is not signed in." >&2
-        echo "  Re-authenticate: run the command below, log in, confirm the members page loads, then close Chrome completely:" >&2
-        echo "    google-chrome --user-data-dir=\"$PROFILE_DIR\" \"$FUNDSTRAT_LOGIN_URL\"" >&2
-        return 1
-        ;;
+      3) print_fundstrat_login_help; return 1 ;;
       *)
         echo "ERROR: no Flash Insights posts extracted from the fundstrat page (exit $status) — the page layout may have changed." >&2
         return 1
@@ -374,11 +469,11 @@ extract_page_text() {
   echo "OK: wrote $(wc -l < "$text_file") lines to $text_file"
 }
 
-# Prints the line number where TEXT_FILE's content starts after the site navigation (1 for fundstrat,
-# whose text holds only the posts, and when no CONTENT_START_PATTERN heading is found).
+# Prints the line number where TEXT_FILE's content starts after the site navigation (1 for fundstrat pages,
+# whose text holds only the posts or the article, and when no CONTENT_START_PATTERN heading is found).
 find_content_start_line() {
-  local name="$1" text_file="$2" start_line
-  if [[ "$name" == "fundstrat" ]]; then
+  local kind="$1" text_file="$2" start_line
+  if [[ "$kind" == fundstrat-* ]]; then
     echo 1
     return
   fi
@@ -416,13 +511,20 @@ unload_ollama_model() {
 # OLLAMA_MAX_ATTEMPTS times on a failure or a summary that contains CJK characters or isn't prose (check_summary_prose).
 # After each bad attempt, including the last, it unloads the model so the retry, and the next site, get a fresh runner.
 # --verbose prints each run's stats (total duration, token counts, tokens/s) to stderr, i.e. the terminal, not SUMMARY_MD.
+# KIND (see page_kind, or aggregate) picks the prompt.
 summarize_with_ollama() {
-  local name="$1" text_file="$2" start_line="$3" line_count="$4" summary_md="$5"
+  local name="$1" kind="$2" text_file="$3" start_line="$4" line_count="$5" summary_md="$6"
   local prompt_head="$NEWS_PROMPT_HEAD" prompt_tail="$NEWS_PROMPT_TAIL" attempt error prose_stats
-  if [[ "$name" == "fundstrat" ]]; then
+  if [[ "$kind" == "fundstrat-posts" ]]; then
     prompt_head="$FUNDSTRAT_PROMPT_HEAD"
     prompt_tail="$FUNDSTRAT_PROMPT_TAIL"
-  elif [[ "$name" == "$AGGREGATE_NAME" ]]; then
+  elif [[ "$kind" == "fundstrat-macro-article" ]]; then
+    prompt_head="$FUNDSTRAT_MACRO_PROMPT_HEAD"
+    prompt_tail="$FUNDSTRAT_MACRO_PROMPT_TAIL"
+  elif [[ "$kind" == "fundstrat-article" ]]; then
+    prompt_head="$FUNDSTRAT_ARTICLE_PROMPT_HEAD"
+    prompt_tail="$FUNDSTRAT_ARTICLE_PROMPT_TAIL"
+  elif [[ "$kind" == "aggregate" ]]; then
     prompt_head="$AGGREGATE_PROMPT_HEAD"
     prompt_tail="$AGGREGATE_PROMPT_TAIL"
   fi
@@ -538,14 +640,15 @@ publish_news_file() {
   delete_old_remote_news_files "$name" "$news_file" || true
 }
 
-# Fetches URL, extracts its text, summarizes PROMPT_LINES lines of it with Ollama, and for --site runs publishes
-# the summary as a news file.
+# Fetches URL, extracts its text, summarizes PROMPT_LINES lines of it with Ollama, and for --site and
+# --fundstrat-<listing> runs publishes the summary as a news file.
 fetch_and_summarize() {
   local name="$1" url="$2" prompt_lines="$3"
   local text_file="$OUTPUT_DIR/${name}.txt"
   local summary_md="$OUTPUT_DIR/${name}-summary.md"
   local summary_txt="$OUTPUT_DIR/${name}-summary.txt"
-  local html_file start_line fetched_at
+  local html_file start_line fetched_at kind
+  kind="$(page_kind "$name" "$url")"
 
   html_file="$(mktemp "/tmp/news-${name}-XXXXXX.html")"
   # A RETURN trap outlives the function, so reset it once it has run; otherwise it fires on every
@@ -556,16 +659,47 @@ fetch_and_summarize() {
   echo "[$fetched_at] Fetching $name ($url)..."
   fetch_page_html "$url" "$html_file" || return 1
   check_page "$html_file" "$url" || return 1
-  extract_page_text "$name" "$html_file" "$text_file" || return 1
-  start_line="$(find_content_start_line "$name" "$text_file")"
-  summarize_with_ollama "$name" "$text_file" "$start_line" "$prompt_lines" "$summary_md" || return 1
+  extract_page_text "$name" "$kind" "$html_file" "$text_file" || return 1
+  start_line="$(find_content_start_line "$kind" "$text_file")"
+  summarize_with_ollama "$name" "$kind" "$text_file" "$start_line" "$prompt_lines" "$summary_md" || return 1
   convert_summary_to_text "$summary_md" "$summary_txt"
   add_timestamp_line "$summary_txt" "$url" "$fetched_at"
 
   # Only registered sites feed the portfolio reports; ad-hoc --url pages stay in OUTPUT_DIR.
-  if [[ -n "${SITE_URLS[$name]+x}" ]]; then
+  if [[ -n "${SITE_URLS[$name]+x}" || -n "${FUNDSTRAT_LISTING_URLS[$name]+x}" ]]; then
     publish_news_file "$name" "$summary_txt" || return 1
   fi
+}
+
+# ---------------------------------------------------------------------------
+# Newest article of a Fundstrat research listing (--fundstrat-daily-technical, --fundstrat-macro-analysis)
+# ---------------------------------------------------------------------------
+
+# Fetches the FUNDSTRAT_LISTING_URLS page of KEY, finds its newest article (each one has its own dated URL), and
+# fetches, summarizes and publishes that article as news-<KEY>_YYYY-MM-DD.txt.
+fundstrat_latest_article() {
+  local key="$1" prompt_lines="$2" html_file article_url status=0
+  local title="${FUNDSTRAT_LISTING_TITLES[$key]}" listing_url="${FUNDSTRAT_LISTING_URLS[$key]}"
+  local url_prefix="${FUNDSTRAT_LISTING_URL_PREFIXES[$key]}"
+  html_file="$(mktemp "/tmp/news-${key}-listing-XXXXXX.html")"
+  # See fetch_and_summarize for why the RETURN trap resets itself.
+  trap 'rm -f "$html_file"; trap - RETURN' RETURN
+
+  echo "[$(TZ="America/New_York" date '+%Y-%m-%d %H:%M:%S %Z')] Finding the newest $title article ($listing_url)..."
+  fetch_page_html "$listing_url" "$html_file" || return 1
+  check_page "$html_file" "$listing_url" || return 1
+  article_url="$(python3 "$SCRIPT_DIR/extract_fundstrat_article.py" --latest-url "$html_file" "$url_prefix")" ||
+    status=$?
+  case "$status" in
+    0) ;;
+    3) print_fundstrat_login_help; return 1 ;;
+    *)
+      echo "ERROR: no ${url_prefix}<series>/YYYY/MM/DD/<slug>/ link on the $title listing page (exit $status) — the layout may have changed." >&2
+      return 1
+      ;;
+  esac
+  echo "OK: newest $title article is $article_url"
+  fetch_and_summarize "$key" "$article_url" "$prompt_lines"
 }
 
 # ---------------------------------------------------------------------------
@@ -645,7 +779,7 @@ aggregate_news() {
       printf '</source>\n'; } >> "$text_file"
   done
   echo "OK: wrote $(wc -l < "$text_file") lines from ${fetched_labels[*]} to $text_file"
-  summarize_with_ollama "$AGGREGATE_NAME" "$text_file" 1 "$(wc -l < "$text_file")" "$summary_md" || return 1
+  summarize_with_ollama "$AGGREGATE_NAME" aggregate "$text_file" 1 "$(wc -l < "$text_file")" "$summary_md" || return 1
   convert_summary_to_text "$summary_md" "$summary_txt"
   add_timestamp_line "$summary_txt" "$fetched_urls" "$first_fetched_at"
   publish_news_file "$AGGREGATE_NAME" "$summary_txt" || return 1
@@ -658,13 +792,20 @@ aggregate_news() {
 # Polling and command line
 # ---------------------------------------------------------------------------
 
-# Fetches every TARGET_NAMES/TARGET_URLS entry once, one after another, then the aggregate with --aggregate; a failed
-# site doesn't stop the others. Returns 1 if any site or the aggregate failed.
+# Fetches every TARGET_NAMES/TARGET_URLS entry once, one after another, then the newest article of each
+# SELECTED_LISTINGS listing (--fundstrat-daily-technical, --fundstrat-macro-analysis), then the aggregate with
+# --aggregate; a failed one doesn't stop the others. Returns 1 if any of them failed.
 run_cycle() {
-  local i status=0
+  local i key status=0
   for i in "${!TARGET_NAMES[@]}"; do
     if ! fetch_and_summarize "${TARGET_NAMES[$i]}" "${TARGET_URLS[$i]}" "$PROMPT_LINES"; then
       echo "WARNING: ${TARGET_NAMES[$i]} failed this cycle." >&2
+      status=1
+    fi
+  done
+  for key in "${SELECTED_LISTINGS[@]}"; do
+    if ! fundstrat_latest_article "$key" "$PROMPT_LINES"; then
+      echo "WARNING: $key failed this cycle." >&2
       status=1
     fi
   done
@@ -694,7 +835,7 @@ derive_name_from_url() {
 }
 
 print_usage() {
-  echo "Usage: $0 --site <key>[,<key>...]|--url <URL>|--aggregate [OPTION]..."
+  echo "Usage: $0 --site <key>[,<key>...]|--url <URL>|--aggregate|--fundstrat-daily-technical|--fundstrat-macro-analysis [OPTION]..."
   echo ""
   echo "Options:"
   echo "  --site <keys>        Fetch & summarize registered sites, comma-separated, one after another."
@@ -704,6 +845,13 @@ print_usage() {
   echo "  --aggregate          (Experimental) Fetch the front pages in \$AGGREGATE_URLS and summarize their headlines together"
   echo "                       into \$PORTFOLIO_DIR/news-${AGGREGATE_NAME}_YYYY-MM-DD.txt, copied to the remote host;"
   echo "                       runs after the --site sites, if any. Pages that fail to load are left out."
+  echo "  --fundstrat-daily-technical"
+  echo "                       (Experimental) Find the newest article on the Fundstrat Daily Technical Strategy listing page"
+  echo "                       and summarize it into \$PORTFOLIO_DIR/news-fundstrat-daily-technical_YYYY-MM-DD.txt,"
+  echo "                       copied to the remote host; runs after the --site sites and before --aggregate."
+  echo "  --fundstrat-macro-analysis"
+  echo "                       (Experimental) Same with the Fundstrat First Word (macro strategy) listing page, into"
+  echo "                       \$PORTFOLIO_DIR/news-fundstrat-macro-analysis_YYYY-MM-DD.txt; runs after --fundstrat-daily-technical."
   echo "  --name <label>       Output file name/label to use with --url (default: derived from URL)"
   echo "  --lines <N>          Number of lines from extracted text fed to Ollama (default: $DEFAULT_PROMPT_LINES;"
   echo "                       --aggregate splits them evenly across the pages that load)"
@@ -712,11 +860,12 @@ print_usage() {
   echo "  --remote-host <U@H>  Host that --site copies news-<key>_YYYY-MM-DD.txt to with scp -P \$REMOTE_PORT"
   echo "                       (default: \$REMOTE_HOST or hil@hil-fr-dc.freeddns.org; \"\" skips the copy)"
   echo "  --poll [MINUTES]     Repeat forever, sleeping MINUTES (default: $DEFAULT_POLL_MINUTES) after each fetch & summarize cycle;"
-  echo "                       combine with --site <keys>, --url or --aggregate. Only fetches $POLL_START_ET-$POLL_END_ET ET on trading days."
+  echo "                       combine with --site <keys>, --url, --aggregate or --fundstrat-<listing>. Only fetches $POLL_START_ET-$POLL_END_ET ET on trading days."
   echo "  --list               List available registered site keys and their URLs, and the --aggregate URLs"
   echo "  -h, --help           Display this help message"
   echo ""
-  echo "At least one of --site, --url or --aggregate is required; --site and --url are mutually exclusive."
+  echo "At least one of --site, --url, --aggregate, --fundstrat-daily-technical or --fundstrat-macro-analysis is required;"
+  echo "--site and --url are mutually exclusive."
   echo ""
   echo "Examples:"
   echo "  $0 --site wsj"
@@ -727,6 +876,8 @@ print_usage() {
   echo "  $0 --site wsj,cnbc,fundstrat --poll   # poll all three sites every $DEFAULT_POLL_MINUTES minutes"
   echo "  $0 --aggregate                        # summarize the \$AGGREGATE_URLS front pages together"
   echo "  $0 --site cnbc --aggregate --poll     # poll CNBC, then the aggregate, every $DEFAULT_POLL_MINUTES minutes"
+  echo "  $0 --fundstrat-daily-technical        # summarize the newest Daily Technical Strategy article"
+  echo "  $0 --fundstrat-macro-analysis         # summarize the newest First Word macro article"
   echo "  $0 --url \"https://www.bloomberg.com/markets\" --name bloomberg-markets"
   echo "  $0 --url \"https://www.bloomberg.com/news/articles/xxxx\" --name bbg-article --lines 500"
 }
@@ -740,6 +891,8 @@ CUSTOM_NAME=""
 PROMPT_LINES="$DEFAULT_PROMPT_LINES"
 POLL_MINUTES=""
 AGGREGATE=false
+# Keys of FUNDSTRAT_LISTING_URLS selected with --fundstrat-<key> flags, in FUNDSTRAT_LISTING_KEYS order.
+SELECTED_LISTINGS=()
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -755,6 +908,10 @@ while [[ $# -gt 0 ]]; do
       ;;
     --aggregate)
       AGGREGATE=true
+      shift
+      ;;
+    --fundstrat-daily-technical|--fundstrat-macro-analysis)
+      [[ " ${SELECTED_LISTINGS[*]} " == *" ${1#--} "* ]] || SELECTED_LISTINGS+=("${1#--}")
       shift
       ;;
     --name)
@@ -799,6 +956,10 @@ while [[ $# -gt 0 ]]; do
       for key in "${SITE_KEYS[@]}"; do
         echo "  $key -> ${SITE_URLS[$key]}"
       done
+      echo "--fundstrat-<listing> listing pages:"
+      for key in "${FUNDSTRAT_LISTING_KEYS[@]}"; do
+        echo "  --$key -> ${FUNDSTRAT_LISTING_URLS[$key]}"
+      done
       echo "--aggregate URLs (AGGREGATE_URLS):"
       IFS=',' read -r -a aggregate_urls <<< "$AGGREGATE_URLS"
       for url in "${aggregate_urls[@]}"; do
@@ -817,12 +978,23 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
+# Run the selected listings in FUNDSTRAT_LISTING_KEYS order, whatever the order of their flags.
+ordered_listings=()
+for key in "${FUNDSTRAT_LISTING_KEYS[@]}"; do
+  if [[ " ${SELECTED_LISTINGS[*]} " == *" $key "* ]]; then
+    ordered_listings+=("$key")
+  fi
+done
+SELECTED_LISTINGS=("${ordered_listings[@]}")
+
 if [[ -n "$CUSTOM_URL" && -n "$SELECTED_SITES" ]]; then
   echo "ERROR: --url and --site are mutually exclusive; pass only one." >&2
   exit 1
 fi
-if [[ -z "$CUSTOM_URL" && -z "$SELECTED_SITES" && "$AGGREGATE" != true ]]; then
-  echo "ERROR: pass --site <keys> (${SITE_KEYS[*]}), --url <URL> or --aggregate. Use -h or --help for usage." >&2
+if [[ -z "$CUSTOM_URL" && -z "$SELECTED_SITES" && "$AGGREGATE" != true && ${#SELECTED_LISTINGS[@]} -eq 0 ]]; then
+  echo "ERROR: pass --site <keys> (${SITE_KEYS[*]}), --url <URL>, --aggregate, --fundstrat-daily-technical or" \
+    "--fundstrat-macro-analysis." \
+    "Use -h or --help for usage." >&2
   exit 1
 fi
 
@@ -846,6 +1018,10 @@ if [[ -n "$CUSTOM_URL" ]]; then
   fi
   if [[ "$custom_name" == "$AGGREGATE_NAME" || "$custom_name" == "$AGGREGATE_NAME"-* ]]; then
     echo "ERROR: --name $custom_name is reserved for the --aggregate output files." >&2
+    exit 1
+  fi
+  if [[ -n "${FUNDSTRAT_LISTING_URLS[$custom_name]+x}" ]]; then
+    echo "ERROR: --name $custom_name is reserved for the --$custom_name output files." >&2
     exit 1
   fi
   TARGET_NAMES=("$custom_name")
@@ -907,7 +1083,7 @@ if [[ -z "$POLL_MINUTES" ]]; then
   exit 0
 fi
 
-echo "Starting news polling for ${TARGET_NAMES[*]}${AGGREGATE_LABELS[*]:+ $AGGREGATE_NAME (${AGGREGATE_LABELS[*]})} (sleeping $POLL_MINUTES minute(s) after each cycle," \
+echo "Starting news polling for ${TARGET_NAMES[*]}${SELECTED_LISTINGS[*]:+ ${SELECTED_LISTINGS[*]}}${AGGREGATE_LABELS[*]:+ $AGGREGATE_NAME (${AGGREGATE_LABELS[*]})} (sleeping $POLL_MINUTES minute(s) after each cycle," \
   "fetching only $POLL_START_ET-$POLL_END_ET ET on trading days)..."
 while true; do
   # Outside the polling window, sleep until it opens instead of waking every POLL_MINUTES.

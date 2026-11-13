@@ -33,6 +33,8 @@ BLOCK_ELEMENTS = {'p', 'div', 'li', 'ul', 'ol', 'h1', 'h2', 'h3', 'h4', 'h5', 'h
 SKIPPED_ELEMENTS = {'script', 'style', 'svg', 'noscript', 'button', 'template'}
 # Classes of elements whose content is never post text: the like count and share buttons below each post.
 SKIPPED_CLASSES = {'flashinsight-card-footer'}
+# Classes of the ticker badges: ticker-badge-tag for stocks, ETFs and indexes, asset-badge-tag for crypto (e.g. ETH).
+BADGE_CLASSES = {'ticker-badge-tag', 'asset-badge-tag'}
 
 
 class FlashInsightsParser(HTMLParser):
@@ -86,7 +88,7 @@ class FlashInsightsParser(HTMLParser):
         drop = (tag in SKIPPED_ELEMENTS or bool(classes & SKIPPED_CLASSES) or 'x-show' in attributes or
                 (tag == 'sup' and self._inside('strategy-author-detail')))
         # A ticker badge is <a class="ticker-badge-tag"><span>^TNX</span><span>2.45%</span></a>: keep the first span.
-        if 'ticker-badge-tag' in classes:
+        if classes & BADGE_CLASSES:
             self.badge_spans = 0
         elif tag == 'span' and self.badge_spans is not None:
             self.badge_spans += 1
@@ -98,7 +100,7 @@ class FlashInsightsParser(HTMLParser):
             return
         if self.post is None:
             return
-        if 'ticker-badge-tag' in classes:
+        if classes & BADGE_CLASSES:
             self.post['body'].append(' ')
         if tag in BLOCK_ELEMENTS and self._part() == 'body':
             self.post['body'].append('\n- ' if tag == 'li' else '\n')
@@ -113,7 +115,7 @@ class FlashInsightsParser(HTMLParser):
         if self.post is not None and tag in BLOCK_ELEMENTS and self._part() == 'body':
             self.post['body'].append('\n')
         del self.stack[i:]
-        if not self._inside('ticker-badge-tag'):
+        if not any(classes & BADGE_CLASSES for _, classes, _ in self.stack):
             self.badge_spans = None
         if self.card_depth is not None and len(self.stack) < self.card_depth:
             self.posts.append(self.post)
