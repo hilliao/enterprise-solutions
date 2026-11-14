@@ -1,0 +1,9 @@
+# Keep secrets, caches and docs out of the build context.
+client_secret*.json
+**/__pycache__
+.gitignore
+README.md
+Dockerfile
+.dockerignore
+PRODUCT_REQUIREMENTS.*
+docs-style.html

@@ -1,0 +1,24 @@
+<style>
+:root { --text:#1d2330; --muted:#5f6b7a; --bg:#ffffff; --surface:#f4f5f7; --border:#d9dde3; --accent:#1a5fb4; }
+@media screen and (prefers-color-scheme: dark) {
+  :root { --text:#e4e7ec; --muted:#9aa4b2; --bg:#14171c; --surface:#1c2027; --border:#313742; --accent:#7fb0ff; }
+  html { color-scheme: dark; }
+}
+html { color: var(--text); background-color: var(--bg); }
+body { max-width: 62em; margin: 0 auto; padding: 32px 16px 64px; font: 16px/1.6 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; hyphens: manual; }
+header#title-block-header { border-bottom: 1px solid var(--border); margin-bottom: 24px; padding-bottom: 8px; }
+h1.title { font-size: 1.9em; margin: 0 0 4px; text-align: left; }
+p.subtitle { color: var(--muted); margin: 0 0 8px; text-align: left; font-size: 1em; }
+h1 { font-size: 1.45em; margin-top: 2em; padding-bottom: 4px; border-bottom: 1px solid var(--border); }
+h2 { font-size: 1.15em; margin-top: 1.6em; }
+a, a:visited { color: var(--accent); }
+code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.88em; background: var(--surface); padding: 1px 4px; border-radius: 4px; overflow-wrap: anywhere; }
+table { border-collapse: collapse; width: 100%; margin: 1em 0; font-size: 0.92em; display: block; overflow-x: auto; }
+th, td { border: 1px solid var(--border); padding: 6px 10px; vertical-align: top; text-align: left; }
+thead th { background: var(--surface); }
+tbody { border: none; }
+nav#TOC { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 8px 20px; margin-bottom: 24px; }
+nav#TOC > ul { padding-left: 1.2em; }
+nav#TOC ul ul { display: none; }
+@media print { nav#TOC { display: none; } html { background: white; color: black; } }
+</style>
