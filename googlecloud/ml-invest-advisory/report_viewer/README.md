@@ -95,8 +95,9 @@ bucket:
    users, which is expected for a personal app.
 2. **APIs & Services → Credentials → Create credentials → OAuth client ID**:
    - Application type: **Web application**
-   - Authorized redirect URI: `http://localhost:8080/auth/callback`. Use the exact URI the server prints at
-     startup; it depends on the port and on `PUBLIC_BASE_URL`.
+   - Authorized redirect URIs: `<address>/auth/callback` for every address the viewer is opened at, e.g.
+     `http://localhost:8080/auth/callback` and `https://services.googlecloud.fr/auth/callback`. Google refuses
+     sign-in at an address whose redirect URI isn't listed.
 3. Download the client JSON and keep it outside the repository. The viewer looks for it at
    `/home/hil/Encfs/confidential/secrets/client_secret_603410815034-35d82rt5p1t0n4mijg5j14g5etjoqnih.apps.googleusercontent.com.json`
    (`DEFAULT_OAUTH_CLIENT_FILE` in [google_sign_in.py](google_sign_in.py)); restrict it with `chmod 600 <file>`.
@@ -124,7 +125,7 @@ Open <http://localhost:8080> and click **Sign in with Google**.
 |-----------------------|---------------------------------------|-------------------------------------------------|
 | `OAUTH_CLIENT_FILE`   | the default file (see setup step 3)   | OAuth client JSON from the console              |
 | `OAUTH_CLIENT_ID` / `OAUTH_CLIENT_SECRET` | (instead of the file)  | OAuth client ID and secret; used before the default file |
-| `PUBLIC_BASE_URL`     | `http://localhost:<port>`             | Address browsers use; `<it>/auth/callback` must be an authorized redirect URI |
+| `PUBLIC_BASE_URL`     | (unset: the address of each request)  | Optional; pins sign-in to this one address, e.g. `https://services.example` |
 | `GCS_BUCKET`          | `hil-financial-services-smart-invest` | Bucket with the reports                         |
 | `GCS_PREFIX`          | `reports/`                            | Folder in the bucket, with one sub-folder per portfolio |
 | `HOST`                | `0.0.0.0` (all interfaces)            | Listen address; `127.0.0.1` = this machine only |
@@ -147,17 +148,20 @@ exits with an error. Set `PORT` to use one specific port instead.
 
 ### Opening the viewer from other devices
 
-The server listens on all interfaces, but **Google sign-in only works at `PUBLIC_BASE_URL`**. Google accepts plain
-`http://` redirect URIs only for `localhost`, and never raw IP addresses such as `http://192.168.1.2:8080`. On
-another host name, **Sign in with Google** shows a page pointing to the right address instead of a broken sign-in.
-Options for other devices:
+The server listens on all interfaces, and sign-in uses whatever address the browser used: the `Host` header, or
+`X-Forwarded-Host` and `X-Forwarded-Proto` from a reverse proxy. That address's `/auth/callback` must be an
+authorized redirect URI, and Google accepts plain `http://` redirect URIs only for `localhost`, never raw IP
+addresses such as `http://192.168.1.2:8080`. Options for other devices:
 
 - **SSH tunnel** (no setup on the server):
   `ssh -L 8080:localhost:8080 <this machine>`, then open `http://localhost:8080` on the other device.
 - **HTTPS name** in front of the server, e.g. `tailscale serve 8080` (gives `https://<machine>.<tailnet>.ts.net`)
-  or a reverse proxy with a TLS certificate. Then run with `PUBLIC_BASE_URL=https://<that name>` and add
-  `https://<that name>/auth/callback` as an authorized redirect URI. With an `https://` URL the cookies are also
-  marked `Secure`.
+  or a reverse proxy with a TLS certificate that passes the original `Host` (or sets `X-Forwarded-Host`) and sets
+  `X-Forwarded-Proto: https`. Add `https://<that name>/auth/callback` as an authorized redirect URI. Over
+  `https://` the cookies are also marked `Secure`.
+
+Set `PUBLIC_BASE_URL=https://<that name>` only to pin sign-in to that one address, e.g. when the proxy can't pass
+the host; **Sign in with Google** at any other address then shows a page pointing to it.
 
 Use `HOST=127.0.0.1` if only this machine (or an SSH tunnel or a local proxy) needs to reach it.
 
@@ -191,11 +195,11 @@ If a new `--site` of `fetch-news.sh` needs special capitalization (like `CNBC`),
 - **Sign-in**: the authorization code flow with PKCE and a one-time `state` value bound to the browser by a
   short-lived cookie, which prevents login CSRF. Only the `openid`, `email` and `devstorage.read_only` scopes are
   requested.
-- **Cookies**: the session cookie is a random 256-bit ID, `HttpOnly` and `SameSite=Lax`, and `Secure` when
-  `PUBLIC_BASE_URL` is `https://`. Access tokens never reach the browser. Sign-out is a `POST`, so other sites can't
-  trigger it.
+- **Cookies**: the session cookie is a random 256-bit ID, `HttpOnly` and `SameSite=Lax`, and `Secure` over
+  `https://` (an `https://` `PUBLIC_BASE_URL`, or `X-Forwarded-Proto: https`). Access tokens never reach the
+  browser. Sign-out is a `POST`, so other sites can't trigger it.
 - **Plain HTTP**: over plain `http://` (fine for `localhost`), anyone who can watch the network traffic could copy
-  the session cookie. Use an `https://` `PUBLIC_BASE_URL` for anything beyond this machine.
+  the session cookie. Serve it over `https://` for anything beyond this machine.
 - **Report names**: only `<portfolio>/<file>.html` paths under `GCS_PREFIX` are served, each part made of
   letters, digits, `.`, `_` and `-` and not starting with `.`. Path traversal is rejected.
 - **Report content**: reports hold LLM output and news text, and pandoc passes raw HTML through. So they are served
@@ -210,7 +214,10 @@ If a new `--site` of `fetch-news.sh` needs special capitalization (like `CNBC`),
   (`REQUEST_TIMEOUT_SECONDS`) is closed, so slowloris-style clients can't hold server threads forever.
 - **Memory bounds**: anyone can start a sign-in, so at most 10,000 are pending (`MAX_PENDING_SIGN_INS`; the oldest
   is dropped). Expired sessions are purged.
-- **HTTPS**: with an `https://` `PUBLIC_BASE_URL`, every response also carries
+- **Sign-in address**: a forged `Host` or `X-Forwarded-*` header can't send a sign-in elsewhere: Google only
+  redirects to authorized redirect URIs, the state cookie stays on the host the browser really used, and malformed
+  host values are rejected. Expose the viewer only through the proxy, so those headers come from it.
+- **HTTPS**: over `https://`, every response also carries
   `Strict-Transport-Security: max-age=31536000`.
 - **Sessions**: they are in memory only, so restarting the server signs everyone out.
 

@@ -34,8 +34,10 @@ Configuration (environment variables):
   OAUTH_CLIENT_FILE   OAuth client JSON downloaded from the Google Cloud console, or else
   OAUTH_CLIENT_ID / OAUTH_CLIENT_SECRET, or else the file google_sign_in.DEFAULT_OAUTH_CLIENT_FILE
   (/home/hil/Encfs/confidential/secrets/client_secret_603410815034-....json)
-  PUBLIC_BASE_URL     URL browsers use to reach this server; its /auth/callback must be an authorized redirect URI
-                      (default http://localhost:<port>; Google allows plain http only for localhost)
+  PUBLIC_BASE_URL     optional; pins the one address sign-in works at. Unset (the default), sign-in works at
+                      whatever address the browser used: the Host header (or X-Forwarded-Host from a reverse
+                      proxy), with https when X-Forwarded-Proto is https. Either way, <address>/auth/callback must be
+                      an authorized redirect URI of the OAuth client; Google allows plain http only for localhost.
   GCS_BUCKET          default hil-financial-services-smart-invest
   GCS_PREFIX          default reports/
   HOST                listen address, default 0.0.0.0 (all interfaces); 127.0.0.1 for this machine only
@@ -83,8 +85,11 @@ INDEX_CSP_TEMPLATE = ("default-src 'self'; script-src {script_hashes}; style-src
 # injected markup inert.
 REPORT_CSP = ("default-src 'none'; style-src 'unsafe-inline'; img-src data:; form-action 'none'; "
               "frame-ancestors 'self'; base-uri 'none'")
-# Sent over HTTPS only (PUBLIC_BASE_URL https://): browsers then refuse plain HTTP to this host for a year.
+# Sent over HTTPS only (an https:// PUBLIC_BASE_URL, or X-Forwarded-Proto: https from the proxy): browsers then
+# refuse plain HTTP to this host for a year.
 HSTS = 'max-age=31536000'
+# A Host or X-Forwarded-Host value the viewer accepts: a DNS name, IPv4 or [IPv6] address, with an optional port.
+SAFE_HOST = re.compile(r'^(?:[A-Za-z0-9](?:[A-Za-z0-9.-]{0,251}[A-Za-z0-9])?|\[[0-9A-Fa-f:.]+\])(?::[0-9]{1,5})?$')
 # Seconds a connection may sit idle or send a request slowly before it is closed. Without it, a client that never
 # finishes its request (slowloris) holds a server thread forever.
 REQUEST_TIMEOUT_SECONDS = 30
@@ -104,7 +109,7 @@ class Config:
     prefix: str
     host: str
     ports: tuple[int, ...]
-    public_base_url: str | None  # None: http://localhost:<bound port>
+    public_base_url: str | None  # None: the address of each request
 
     @classmethod
     def from_env(cls) -> 'Config':
@@ -123,14 +128,10 @@ class App:
     """What the request handler needs; set on ReportViewerHandler.app before serving."""
     bucket: str
     prefix: str
-    public_base_url: str
+    public_base_url: str | None  # None: the address of each request (see ReportViewerHandler._base_url)
     storage: CloudStorage
     sign_in: GoogleSignIn
     sessions: SessionStore
-
-    @property
-    def secure_cookies(self) -> bool:
-        return self.public_base_url.startswith('https://')
 
 
 class ReportViewerHandler(BaseHTTPRequestHandler):
@@ -218,16 +219,42 @@ class ReportViewerHandler(BaseHTTPRequestHandler):
 
     # ---- Google sign-in --------------------------------------------------------------------------------------
 
+    def _base_url(self) -> str | None:
+        """
+        The address the browser used, e.g. https://services.example: PUBLIC_BASE_URL when set, else the request's
+        X-Forwarded-Host or Host, with the scheme from X-Forwarded-Proto (http without it). None for a malformed host.
+        A forged header can't redirect a sign-in elsewhere: Google only returns to authorized redirect URIs, and the
+        sign-in's state cookie stays on the host the browser really used.
+        """
+        if self.app.public_base_url:
+            return self.app.public_base_url
+        host = self._first_header_value('X-Forwarded-Host') or self.headers.get('Host', '').strip()
+        if not SAFE_HOST.match(host):
+            return None
+        scheme = 'https' if self._first_header_value('X-Forwarded-Proto').lower() == 'https' else 'http'
+        return f'{scheme}://{host}'
+
+    def _first_header_value(self, name: str) -> str:
+        """First entry of a comma-separated header such as X-Forwarded-Host (one per proxy hop); '' if absent."""
+        return self.headers.get(name, '').split(',')[0].strip()
+
+    def _is_https(self) -> bool:
+        return (self._base_url() or '').startswith('https://')
+
     def _start_sign_in(self):
-        # The state cookie and Google's redirect must use the same host as the authorized redirect URI.
-        public_host = urllib.parse.urlsplit(self.app.public_base_url).netloc
-        if self.headers.get('Host', '') != public_host:
+        base_url = self._base_url()
+        if base_url is None:
+            self._send_message_page(HTTPStatus.BAD_REQUEST, 'Sign-in failed', 'The request has no valid Host header.')
+            return
+        # With PUBLIC_BASE_URL set, the state cookie must land on that host, where Google's redirect returns.
+        public_host = urllib.parse.urlsplit(base_url).netloc
+        if self.app.public_base_url and self.headers.get('Host', '') != public_host:
             self._send_message_page(
                 HTTPStatus.BAD_REQUEST, 'Open the viewer at its sign-in address',
-                f'Google sign-in only works at {self.app.public_base_url} (PUBLIC_BASE_URL). Open that address, or '
-                'see README.md to use another one.', link=(self.app.public_base_url + '/', 'Open the viewer'))
+                f'Google sign-in only works at {base_url} (PUBLIC_BASE_URL). Open that address, or unset '
+                'PUBLIC_BASE_URL to allow any address.', link=(base_url + '/', 'Open the viewer'))
             return
-        consent_url, state = self.app.sign_in.start()
+        consent_url, state = self.app.sign_in.start(redirect_uri=base_url + REDIRECT_PATH)
         self._redirect(consent_url, cookies=[self._cookie_header(SIGN_IN_STATE_COOKIE, state, path='/auth',
                                                                  max_age=10 * 60)])
 
@@ -275,7 +302,7 @@ class ReportViewerHandler(BaseHTTPRequestHandler):
         attributes = [f'{name}={value}', f'Path={path}', 'HttpOnly', 'SameSite=Lax']
         if max_age is not None:
             attributes.append(f'Max-Age={max_age}')
-        if self.app.secure_cookies:
+        if self._is_https():
             attributes.append('Secure')
         return '; '.join(attributes)
 
@@ -306,7 +333,7 @@ class ReportViewerHandler(BaseHTTPRequestHandler):
     def _send_common_headers(self):
         for name, value in COMMON_HEADERS.items():
             self.send_header(name, value)
-        if self.app.secure_cookies:
+        if self._is_https():
             self.send_header('Strict-Transport-Security', HSTS)
 
     def _send_json(self, status: int, payload: dict):
@@ -352,16 +379,18 @@ def main():
                  'using it (`ss -ltnp | grep <port>`) or pick another one with PORT=<port>.')
 
     port = server.server_address[1]
-    public_base_url = config.public_base_url or f'http://localhost{"" if port == 80 else f":{port}"}'
     ReportViewerHandler.app = App(
-        bucket=config.bucket, prefix=config.prefix, public_base_url=public_base_url,
-        storage=CloudStorage(config.bucket, config.prefix),
-        sign_in=GoogleSignIn(oauth_client, redirect_uri=public_base_url + REDIRECT_PATH),
+        bucket=config.bucket, prefix=config.prefix, public_base_url=config.public_base_url,
+        storage=CloudStorage(config.bucket, config.prefix), sign_in=GoogleSignIn(oauth_client),
         sessions=SessionStore())
 
+    local_url = f'http://localhost{"" if port == 80 else f":{port}"}'
+    open_url = config.public_base_url or local_url
+    redirect_uris = (f'{config.public_base_url}{REDIRECT_PATH}' if config.public_base_url else
+                     f'<address in the browser>{REDIRECT_PATH}, e.g. {local_url}{REDIRECT_PATH}')
     print(f'Report Viewer (beta) for gs://{config.bucket}/{config.prefix}<portfolio>/*.html\n'
-          f'  listening on {config.host}:{port}; open {public_base_url}/\n'
-          f'  OAuth redirect URI (must be authorized on the client): {public_base_url}{REDIRECT_PATH}',
+          f'  listening on {config.host}:{port}; open {open_url}/\n'
+          f'  OAuth redirect URI (must be authorized on the client): {redirect_uris}',
           file=sys.stderr)
     try:
         server.serve_forever()

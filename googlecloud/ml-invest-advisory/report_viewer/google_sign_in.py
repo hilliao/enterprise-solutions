@@ -16,7 +16,7 @@ Flow:
 
 Requirements:
   Python 3.10+, standard library only. An OAuth 2.0 client ID of type "Web application" whose authorized redirect
-  URI is <PUBLIC_BASE_URL>/auth/callback; see README.md.
+  URIs include https://<each address the viewer is opened at>/auth/callback; see README.md.
 """
 import base64
 import hashlib
@@ -89,14 +89,18 @@ class SignedInUser:
 
 
 class GoogleSignIn:
-    def __init__(self, client: OAuthClient, redirect_uri: str):
+    def __init__(self, client: OAuthClient):
         self.client = client
-        self.redirect_uri = redirect_uri
-        self._pending: dict[str, tuple[str, float]] = {}  # state -> (PKCE code verifier, expiry time)
+        # state -> (PKCE code verifier, redirect URI, expiry time)
+        self._pending: dict[str, tuple[str, str, float]] = {}
         self._lock = threading.Lock()
 
-    def start(self) -> tuple[str, str]:
-        """Returns (Google's consent URL to redirect the browser to, the state value to bind to the browser)."""
+    def start(self, redirect_uri: str) -> tuple[str, str]:
+        """
+        Returns (Google's consent URL to redirect the browser to, the state value to bind to the browser).
+        redirect_uri is <the address the browser used>/auth/callback; Google refuses it unless it is an authorized
+        redirect URI of the OAuth client, and finish() sends the same one.
+        """
         state = secrets.token_urlsafe(32)
         code_verifier = secrets.token_urlsafe(64)
         code_challenge = base64.urlsafe_b64encode(hashlib.sha256(code_verifier.encode()).digest()).rstrip(b'=')
@@ -104,10 +108,10 @@ class GoogleSignIn:
             self._drop_expired_pending()
             while len(self._pending) >= MAX_PENDING_SIGN_INS:
                 del self._pending[next(iter(self._pending))]  # the oldest; dicts keep insertion order
-            self._pending[state] = (code_verifier, time.time() + PENDING_SIGN_IN_SECONDS)
+            self._pending[state] = (code_verifier, redirect_uri, time.time() + PENDING_SIGN_IN_SECONDS)
         params = {
             'client_id': self.client.client_id,
-            'redirect_uri': self.redirect_uri,
+            'redirect_uri': redirect_uri,
             'response_type': 'code',
             'scope': ' '.join(SCOPES),
             'state': state,
@@ -133,7 +137,7 @@ class GoogleSignIn:
         if not code:
             raise SignInError('Google returned no authorization code')
 
-        token = self._exchange_code(code, code_verifier=pending[0])
+        token = self._exchange_code(code, code_verifier=pending[0], redirect_uri=pending[1])
         missing = set(SCOPES) - set(token.get('scope', '').split()) - {'openid', 'email'}
         if missing:
             raise SignInError('read access to Cloud Storage was not granted; sign in again and allow it')
@@ -151,12 +155,12 @@ class GoogleSignIn:
         except urllib.error.URLError:
             pass
 
-    def _exchange_code(self, code: str, code_verifier: str) -> dict:
+    def _exchange_code(self, code: str, code_verifier: str, redirect_uri: str) -> dict:
         body = urllib.parse.urlencode({
             'code': code,
             'client_id': self.client.client_id,
             'client_secret': self.client.client_secret,
-            'redirect_uri': self.redirect_uri,
+            'redirect_uri': redirect_uri,
             'grant_type': 'authorization_code',
             'code_verifier': code_verifier,
         }).encode()
@@ -172,7 +176,7 @@ class GoogleSignIn:
 
     def _drop_expired_pending(self) -> None:
         now = time.time()
-        for state in [state for state, (_, expires_at) in self._pending.items() if expires_at < now]:
+        for state in [state for state, (*_, expires_at) in self._pending.items() if expires_at < now]:
             del self._pending[state]
 
 
