@@ -1,0 +1,3 @@
+# OAuth client secrets downloaded from the Google Cloud console; never commit them.
+client_secret*.json
+__pycache__/
