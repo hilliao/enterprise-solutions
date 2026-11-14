@@ -24,7 +24,7 @@
 #   PORTFOLIO_DIR              <portfolio_reports>/test-portfolios
 #   LLM_PROMPT_TEMPLATE        <portfolio_reports>/prompt_templates/daily_report_prompt_template.txt
 #   USE_CASE                   daily-report (prefix of the output file names)
-#   MARKET_COMMENTARY_FILE     $PORTFOLIO_DIR/market-commentary_YYYY-MM-DD.txt (today's date)
+#   MARKET_COMMENTARY_FILE     $PORTFOLIO_DIR/news-fundstrat-daily-technical_YYYY-MM-DD.txt (today's Fundstrat daily technical strategy, written by fetch-news.sh --site fundstrat-daily-technical)
 #   STOCK_QUOTES_CLOUD_RUN_URL https://us-central1-my-gcp-project.cloudfunctions.net/get-us-ticker-quotes
 #                              (sample project ID; set it to your get-us-ticker-quotes URL)
 #   TW_STOCK_QUOTES_CLOUD_RUN_URL https://us-central1-my-gcp-project.cloudfunctions.net/get-tw-ticker-quotes
@@ -49,7 +49,7 @@
 #
 #     report-daily.sh && (report-news-impact.sh || true)
 #
-#   The daily report is required (a failure aborts the loop); the flash-insights
+#   The daily report is required (a failure aborts the loop); the news
 #   report is optional (its failure, e.g. a missing news file, is ignored).
 
 set -e # exit the script when execution hits any error
@@ -68,8 +68,8 @@ export PORTFOLIO_DIR="${PORTFOLIO_DIR:-$PORTFOLIO_REPORTS_DIR/test-portfolios}"
 # Prompt template with {{PORTFOLIO_HOLDING_DATA_JSON}} and {{MARKET_COMMENTARY}}, and the output file name prefix.
 export LLM_PROMPT_TEMPLATE="${LLM_PROMPT_TEMPLATE:-$PORTFOLIO_REPORTS_DIR/prompt_templates/daily_report_prompt_template.txt}"
 export USE_CASE="${USE_CASE:-daily-report}"
-# Today's market commentary, e.g. market-commentary_2026-05-03.txt; the section is left empty without it.
-export MARKET_COMMENTARY_FILE="${MARKET_COMMENTARY_FILE:-$PORTFOLIO_DIR/market-commentary_$(date +%Y-%m-%d).txt}"
+# Today's Fundstrat daily technical strategy, e.g. news-fundstrat-daily-technical_2026-11-14.txt; the section is left empty without it.
+export MARKET_COMMENTARY_FILE="${MARKET_COMMENTARY_FILE:-$PORTFOLIO_DIR/news-fundstrat-daily-technical_$(date +%Y-%m-%d).txt}"
 # Stock quotes Cloud Run endpoint read by build_portfolio_prompt.py.
 export STOCK_QUOTES_CLOUD_RUN_URL="${STOCK_QUOTES_CLOUD_RUN_URL:-https://us-central1-my-gcp-project.cloudfunctions.net/get-us-ticker-quotes}"
 export TW_STOCK_QUOTES_CLOUD_RUN_URL="${TW_STOCK_QUOTES_CLOUD_RUN_URL:-https://us-central1-my-gcp-project.cloudfunctions.net/get-tw-ticker-quotes}"
@@ -82,9 +82,9 @@ export OLLAMA_TIMEOUT_SECONDS="${OLLAMA_TIMEOUT_SECONDS:-600}"
 # ---------------------------------------------------------------------------
 require_valid_ollama_timeout
 if [ -r "$MARKET_COMMENTARY_FILE" ]; then
-  echo "Market commentary file is readable at: $MARKET_COMMENTARY_FILE"
+  echo "Daily technical strategy file is readable at: $MARKET_COMMENTARY_FILE"
 else
-  echo "Warning: Market commentary file is missing or not readable at: $MARKET_COMMENTARY_FILE. Section will be omitted."
+  echo "Warning: Daily technical strategy file is missing or not readable at: $MARKET_COMMENTARY_FILE. Section will be omitted."
 fi
 check_pandoc
 find_portfolio_files
@@ -105,7 +105,7 @@ for portfolio_file in "${PORTFOLIO_FILES[@]}"; do
   # set -e stops the script if any of these steps fails.
   build_portfolio_prompt "$portfolio_file" "$prompt_file"
 
-  # Replace {{MARKET_COMMENTARY}} with the commentary file's contents, or an empty string if it's missing.
+  # Replace {{MARKET_COMMENTARY}} with the daily technical strategy file's contents, or an empty string if it's missing.
   # Python avoids sed's escaping issues with multi-line text.
   python3 -c 'import sys
 text = open(sys.argv[1]).read()

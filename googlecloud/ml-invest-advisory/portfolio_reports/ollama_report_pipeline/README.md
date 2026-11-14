@@ -13,7 +13,7 @@ files, prompt templates, `build_portfolio_prompt.py` in the parent folder).
 ### report-daily.sh
 Generates the daily portfolio analysis report. For every `*.json` file in
 `PORTFOLIO_DIR`, builds an LLM prompt via `build_portfolio_prompt.py` (optionally
-inlining a `market-commentary_YYYY-MM-DD.txt` file), runs it through
+inlining the Fundstrat daily technical strategy from `news-fundstrat-daily-technical_YYYY-MM-DD.txt`), runs it through
 `ollama run $OLLAMA_MODEL` (default `gemma4:12b-it-qat`), and writes a Markdown report
 (plus an HTML version if `pandoc` is installed).
 Key env vars: `PORTFOLIO_DIR`, `LLM_PROMPT_TEMPLATE`, `USE_CASE`,
@@ -27,18 +27,32 @@ tokens/s (on stderr; the reports and summaries don't include them).
 Helper functions shared by `report-daily.sh` and `report-news-impact.sh`
 (building the prompt with `build_portfolio_prompt.py`, `run_ollama` with its
 timeout and retry, appending the input prompt to the report, and the pandoc
-HTML conversion). Sourced by those scripts; not run on its own.
+HTML conversion, which also runs `REPORT_UPLOAD_COMMAND` on each new HTML report
+if it is set). Sourced by those scripts; not run on its own.
+
+### upload-report.sh
+Uploads one HTML report to its portfolio's folder, `GCS_BUCKET<portfolio>/`
+(e.g. `gs://bucket/reports/yang/daily-report-yang-llm-generated.html`). The
+portfolio is the longest `PORTFOLIO_DIR/*.json` name the file name ends with.
+`run-market-hours.sh` sets it as `REPORT_UPLOAD_COMMAND`, so every report is
+uploaded the moment it is written instead of after the whole run; a failed upload
+only prints a warning. Needs `GCS_BUCKET`, `GCLOUD_CONFIG` and `PORTFOLIO_DIR`.
+```
+GCS_BUCKET=gs://bucket/reports/ GCLOUD_CONFIG=default PORTFOLIO_DIR=~/workspace/portfolios \
+  ./upload-report.sh ~/workspace/portfolios/daily-report-yang-llm-generated.html
+```
 
 ### report-news-impact.sh
-Same pipeline as `report-daily.sh`, but generates a "flash
-insights" / breaking-news impact report per portfolio and news site. It
+Same pipeline as `report-daily.sh`, but generates a breaking-news impact
+("news") report per portfolio and news site, from
+`prompt_templates/news-report-template.txt`. It
 reads every `PORTFOLIO_DIR/news-<SITE>_YYYY-MM-DD.txt` file for today
 (produced by `fetch-news.sh --site <SITE>`, e.g. `news-fundstrat_2026-11-01.txt`,
 `news-cnbc_2026-11-01.txt`, `news-wsj_2026-11-01.txt`) and prints which files
 it found. For each portfolio it fetches quotes once, then writes one report per
-news file, with that file in place of `{{FLASH_INSIGHTS}}`:
-`$USE_CASE-<portfolio>-<SITE>.{txt,md,html}` (e.g.
-`flash-insights-yang-cnbc-llm-generated.html`). Set `NEWS_FILES` to a comma-separated list
+news file, with that file in place of `{{NEWS_CONTENT}}`:
+`$USE_CASE-<SITE>-<portfolio>-llm-{prompt.txt,generated.md,generated.html}` (e.g.
+`news-cnbc-yang-llm-generated.html`; `USE_CASE` defaults to `news`). Set `NEWS_FILES` to a comma-separated list
 to use other files. Exits with an error if no news file is found.
 Key env vars: `PORTFOLIO_DIR`, `LLM_PROMPT_TEMPLATE`, `USE_CASE`, `NEWS_FILES`,
 `OLLAMA_MODEL`, `OLLAMA_TIMEOUT_SECONDS`.
@@ -166,8 +180,10 @@ codes as `extract_fundstrat_posts.py` (3 not signed in, 4 no article text or lin
 Standard library only; no unit tests yet.
 
 ### run-market-hours.sh
-Loop that runs the daily + flash-insights portfolio scripts and uploads the
-resulting HTML reports to a GCS bucket, repeatedly, during this script's
+Loop that runs the daily + news portfolio scripts, which upload each HTML
+report to a GCS bucket as soon as it is written (`upload-report.sh`), one folder
+per portfolio (`GCS_BUCKET<portfolio>/`, e.g.
+`gs://bucket/reports/yang/daily-report-yang-llm-generated.html`), repeatedly, during this script's
 execution window (Mon-Fri, 08:00-18:00 America/New_York, excluding configured
 holidays — intentionally ~1.5h before the actual 09:30-16:00 ET market
 session and a few hours after it, to also catch pre-market/after-hours
@@ -192,7 +208,7 @@ the loop would spin. `build_portfolio_prompt.py` retries a failed stock
 quotes Cloud Run request with exponential backoff (1, 2, 4, 8, 16 seconds),
 printing each failure's status code and response body (e.g. the 500 with
 Alpaca's error in `detail`) to stderr, then exits with code 69. The
-flash-insights step stays optional (`|| true` in `REPORT_COMMAND`), so its
+news step stays optional (`|| true` in `REPORT_COMMAND`), so its
 failures don't abort the loop.
 
 Before running, edit the `CONFIGURATION` section for
