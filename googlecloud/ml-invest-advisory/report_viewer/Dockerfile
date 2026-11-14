@@ -11,7 +11,7 @@
 #        http://localhost:8081/auth/callback
 #
 # 2. Build (from the report_viewer/ folder):
-#        docker build -t report-viewer:beta .
+#        docker build -t us-central1-docker.pkg.dev/todo-ae9c2/googlecloud-fr/report-viewer:beta .
 #
 # 3. Run, mounting the OAuth client JSON from the Docker host's file system (on the server that runs the container,
 #    or on this machine). The file stays on the host and is bind-mounted read-only into the container at
@@ -30,12 +30,13 @@
 #          --read-only --cap-drop ALL --security-opt no-new-privileges \
 #          -p 127.0.0.1:8081:8081 \
 #          -v /etc/report-viewer/client_secret.json:/run/secrets/client_secret.json:ro \
-#          report-viewer:beta
+#          us-central1-docker.pkg.dev/todo-ae9c2/googlecloud-fr/report-viewer:beta
 #
 #    -p 127.0.0.1:8081:8081 keeps the port reachable from the host only; a TLS reverse proxy on the host (Caddy,
-#    nginx) forwards https://<your domain> to it and must pass the original Host header. For a public address also
-#    add `-e PUBLIC_BASE_URL=https://<your domain>` and authorize https://<your domain>/auth/callback on the OAuth
-#    client. Google sign-in over plain http only works at localhost (see README.md). With -d the container runs
+#    nginx) forwards https://<your domain> to it. The proxy must pass the original Host header (or set
+#    X-Forwarded-Host) and set X-Forwarded-Proto: https; sign-in then works at whatever address the browser used.
+#    Authorize https://<your domain>/auth/callback on the OAuth client for each address. Google sign-in over plain
+#    http only works at localhost (see README.md). With -d the container runs
 #    in the background: `docker logs -f report-viewer`, `docker stop report-viewer`. Without -d (add --rm) it runs
 #    in the foreground; stop it with Ctrl+C.
 #
@@ -47,9 +48,9 @@
 # 4. Open http://localhost:8081 (or your https:// address) and click "Sign in with Google".
 #
 # Optional settings, as extra `-e NAME=value` flags on docker run: GCS_BUCKET, GCS_PREFIX, PUBLIC_BASE_URL (see
-# report_viewer.py). If PUBLIC_BASE_URL is set, it must match the address in your browser and the authorized
-# redirect URI. Run the unit tests inside the image with:
-#        docker run --rm --entrypoint python report-viewer:beta -m unittest test_report_viewer.py
+# report_viewer.py). PUBLIC_BASE_URL is unset by default; set it only to pin sign-in to that one address.
+# Run the unit tests inside the image with:
+#        docker run --rm --entrypoint python us-central1-docker.pkg.dev/todo-ae9c2/googlecloud-fr/report-viewer:beta -m unittest test_report_viewer.py
 # ----------------------------------------------------------------------------------------------------------------
 
 FROM python:3.12-slim
@@ -68,11 +69,9 @@ COPY --chown=viewer static ./static
 # Container defaults (override with docker run -e):
 #   HOST=0.0.0.0  accept connections through the published port; restrict who can reach it with -p 127.0.0.1:...
 #   PORT=8081     exactly this port (otherwise the server tries 80, then 8080)
-#   PUBLIC_BASE_URL  where the browser reaches the viewer; its /auth/callback is the OAuth redirect URI
 #   OAUTH_CLIENT_FILE  where the OAuth client JSON is mounted
 ENV HOST=0.0.0.0 \
     PORT=8081 \
-    PUBLIC_BASE_URL=http://localhost:8081 \
     OAUTH_CLIENT_FILE=/run/secrets/client_secret.json
 
 USER viewer

@@ -125,9 +125,9 @@ class ViewerHttpTest(unittest.TestCase):
         self.httpd = ThreadingHTTPServer(('127.0.0.1', 0), report_viewer.ReportViewerHandler)
         self.port = self.httpd.server_address[1]
         self.base_url = f'http://localhost:{self.port}'
-        self.sign_in = GoogleSignIn(OAuthClient('client-id', 'client-secret'), self.base_url + '/auth/callback')
+        self.sign_in = GoogleSignIn(OAuthClient('client-id', 'client-secret'))
         report_viewer.ReportViewerHandler.app = report_viewer.App(
-            bucket=BUCKET, prefix=PREFIX, public_base_url=self.base_url, storage=self.storage,
+            bucket=BUCKET, prefix=PREFIX, public_base_url=None, storage=self.storage,
             sign_in=self.sign_in, sessions=self.sessions)
         report_viewer.ReportViewerHandler.log_message = lambda *args: None
         threading.Thread(target=self.httpd.serve_forever, daemon=True).start()
@@ -136,9 +136,10 @@ class ViewerHttpTest(unittest.TestCase):
         self.httpd.shutdown()
         self.httpd.server_close()
 
-    def request(self, method: str, path: str, cookie: str | None = None, host: str | None = None):
+    def request(self, method: str, path: str, cookie: str | None = None, host: str | None = None,
+                extra_headers: dict | None = None):
         connection = http.client.HTTPConnection('127.0.0.1', self.port, timeout=10)
-        headers = {'Host': host or f'localhost:{self.port}'}
+        headers = {'Host': host or f'localhost:{self.port}', **(extra_headers or {})}
         if cookie:
             headers['Cookie'] = cookie
         connection.request(method, path, headers=headers)
@@ -285,10 +286,6 @@ class ViewerHttpTest(unittest.TestCase):
         self.assertNotIn(report_viewer.SESSION_COOKIE + '=',
                          ' '.join(c for c in response.msg.get_all('Set-Cookie') or [] if 'Max-Age=0' not in c))
 
-    def test_sign_in_from_another_host_name_is_refused(self):
-        response, _ = self.request('GET', '/auth/login', host=f'192.168.1.2:{self.port}')
-        self.assertEqual(400, response.status)
-
     def test_sign_out_ends_the_session_and_revokes_the_token(self):
         cookie = self.signed_in_cookie()
         with mock.patch.object(GoogleSignIn, 'revoke') as revoke:
@@ -368,6 +365,50 @@ class ViewerHttpTest(unittest.TestCase):
         self.assertEqual(404, self.request('GET', '/auth/logout', cookie=cookie)[0].status)
         self.assertEqual(200, self.request('GET', '/api/reports', cookie=cookie)[0].status)
 
+    def login_redirect_uri(self, **request_args) -> str:
+        response, _ = self.request('GET', '/auth/login', **request_args)
+        self.assertEqual(302, response.status)
+        return urllib.parse.parse_qs(urllib.parse.urlsplit(response.getheader('Location')).query)['redirect_uri'][0]
+
+    def test_sign_in_works_at_any_address_the_browser_used(self):
+        self.assertEqual('http://services.example/auth/callback', self.login_redirect_uri(host='services.example'))
+        self.assertEqual('http://10.0.0.5:8081/auth/callback', self.login_redirect_uri(host='10.0.0.5:8081'))
+
+    def test_reverse_proxy_headers_give_the_public_https_address(self):
+        response, _ = self.request('GET', '/auth/login', host='localhost:8081', extra_headers={
+            'X-Forwarded-Host': 'services.example, proxy.internal', 'X-Forwarded-Proto': 'https'})
+        params = urllib.parse.parse_qs(urllib.parse.urlsplit(response.getheader('Location')).query)
+        self.assertEqual(['https://services.example/auth/callback'], params['redirect_uri'])
+        self.assertIn('Secure', response.getheader('Set-Cookie'))
+        self.assertEqual('max-age=31536000', response.getheader('Strict-Transport-Security'))
+
+    def test_callback_exchanges_the_code_with_the_redirect_uri_the_sign_in_started_with(self):
+        response, _ = self.request('GET', '/auth/login', host='services.example',
+                                   extra_headers={'X-Forwarded-Proto': 'https'})
+        state = urllib.parse.parse_qs(urllib.parse.urlsplit(response.getheader('Location')).query)['state'][0]
+        state_cookie = response.getheader('Set-Cookie').split(';')[0]
+        token = {'access_token': 't', 'id_token': id_token('hil@example.com'),
+                 'scope': 'openid email https://www.googleapis.com/auth/devstorage.read_only'}
+        with mock.patch.object(GoogleSignIn, '_exchange_code', return_value=token) as exchange:
+            self.request('GET', f'/auth/callback?state={state}&code=c', cookie=state_cookie, host='other.example')
+        self.assertEqual('https://services.example/auth/callback', exchange.call_args.kwargs['redirect_uri'])
+
+    def test_malformed_host_is_rejected_at_sign_in(self):
+        for host in ('evil.example/path', 'evil.example@x', 'a b', '"><script>'):
+            with self.subTest(host=host):
+                response, body = self.request('GET', '/auth/login', host=host)
+                self.assertEqual(400, response.status)
+                self.assertNotIn(b'<script>', body)
+        response, _ = self.request('GET', '/auth/login', extra_headers={'X-Forwarded-Host': 'evil.example/x'})
+        self.assertEqual(400, response.status)
+
+    def test_public_base_url_pins_sign_in_to_one_address(self):
+        self.httpd.RequestHandlerClass.app.public_base_url = 'https://services.example'
+        self.assertEqual('https://services.example/auth/callback', self.login_redirect_uri(host='services.example'))
+        response, body = self.request('GET', '/auth/login', host='other.example')
+        self.assertEqual(400, response.status)
+        self.assertIn(b'only works at https://services.example', body)
+
     def test_https_deployment_sends_hsts_and_secure_cookies(self):
         self.httpd.RequestHandlerClass.app.public_base_url = 'https://services.example'
         response, _ = self.request('GET', '/auth/login', host='services.example')
@@ -392,8 +433,8 @@ class ViewerHttpTest(unittest.TestCase):
 
 class SignInUnitTest(unittest.TestCase):
     def test_finish_requires_matching_state(self):
-        sign_in = GoogleSignIn(OAuthClient('id', 'secret'), 'http://localhost/auth/callback')
-        _, state = sign_in.start()
+        sign_in = GoogleSignIn(OAuthClient('id', 'secret'))
+        _, state = sign_in.start('http://localhost/auth/callback')
         with self.assertRaises(SignInError):
             sign_in.finish(query_state=state, cookie_state='other', code='c')
 
@@ -402,11 +443,11 @@ class MemoryBoundsTest(unittest.TestCase):
     """Unauthenticated requests must not be able to grow the server's memory without limit."""
 
     def test_pending_sign_ins_are_capped_dropping_the_oldest(self):
-        sign_in = GoogleSignIn(OAuthClient('id', 'secret'), 'http://localhost/auth/callback')
+        sign_in = GoogleSignIn(OAuthClient('id', 'secret'))
         token = {'access_token': 't', 'id_token': id_token('a@example.com'),
                  'scope': 'openid email https://www.googleapis.com/auth/devstorage.read_only'}
         with mock.patch.object(google_sign_in, 'MAX_PENDING_SIGN_INS', 3):
-            states = [sign_in.start()[1] for _ in range(5)]
+            states = [sign_in.start('http://localhost/auth/callback')[1] for _ in range(5)]
         self.assertEqual(3, len(sign_in._pending))
         with self.assertRaisesRegex(SignInError, 'expired or was already used'):
             sign_in.finish(query_state=states[0], cookie_state=states[0], code='c')
