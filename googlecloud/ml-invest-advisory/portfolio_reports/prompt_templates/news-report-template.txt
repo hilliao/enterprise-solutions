@@ -27,7 +27,7 @@ Do NOT print, copy, or replicate this raw JSON block in your report.
 
 [BREAKING NEWS]
 <breaking_news>
-{{FLASH_INSIGHTS}}
+{{NEWS_CONTENT}}
 </breaking_news>
 
 [ACCURACY RULES]

@@ -31,8 +31,8 @@ Set the following environment variables to customize the behavior:
 
 *   `PORTFOLIO_DIR`: Directory containing your portfolio `.json` files.
 *   `GOOGLE_APPLICATION_CREDENTIALS`: Path to your Google Cloud service account key.
-*   `MARKET_COMMENTARY_FILE`: (For daily reports) Path to a text file containing market commentary.
-*   `NEWS_FILES`: (For flash insights) Comma-separated news files; defaults to every `news-<SITE>_YYYY-MM-DD.txt` for today in `PORTFOLIO_DIR`, written by `ollama_report_pipeline/fetch-news.sh --site <SITE>`.
+*   `MARKET_COMMENTARY_FILE`: (For daily reports) Path to the text file with the Fundstrat daily technical strategy (this feeds the prompt's market commentary section); defaults to `$PORTFOLIO_DIR/news-fundstrat-daily-technical_YYYY-MM-DD.txt` for today.
+*   `NEWS_FILES`: (For news reports) Comma-separated news files; defaults to every `news-<SITE>_YYYY-MM-DD.txt` for today in `PORTFOLIO_DIR`, written by `ollama_report_pipeline/fetch-news.sh --site <SITE>`.
 *   `OLLAMA_MODEL`: Ollama model used for the reports (default `gemma4:12b-it-qat`). Use `ollama_report_pipeline/compare-models.sh` to compare candidate models on the same prompt.
 
 ### Portfolio Format
@@ -73,17 +73,17 @@ The `ollama_report_pipeline/` directory contains different scripts tailored for 
 ### 1. Daily Portfolio Reports
 **Script**: `ollama_report_pipeline/report-daily.sh`
 
-Generates a comprehensive daily analysis. It searches for all `.json` portfolios in `PORTFOLIO_DIR`, incorporates market commentary from `MARKET_COMMENTARY_FILE` (if provided), and saves both `.md` and `.html` reports.
+Generates a comprehensive daily analysis. It searches for all `.json` portfolios in `PORTFOLIO_DIR`, incorporates the Fundstrat daily technical strategy from `MARKET_COMMENTARY_FILE` (default `news-fundstrat-daily-technical_YYYY-MM-DD.txt`, if present), and saves both `.md` and `.html` reports.
 
-### 2. Flash Insights reports
+### 2. News reports
 **Script**: `ollama_report_pipeline/report-news-impact.sh`
 
-Designed for rapid analysis of breaking news. It uses a specific "flash insights" template and injects each of today's news files from `ollama_report_pipeline/fetch-news.sh` to analyze how current events might impact your specific holdings, producing one report per portfolio and news site (e.g. `flash-insights-yang-cnbc-llm-generated.html`).
+Designed for rapid analysis of breaking news. It uses the `prompt_templates/news-report-template.txt` template and injects each of today's news files from `ollama_report_pipeline/fetch-news.sh` in place of its `{{NEWS_CONTENT}}` placeholder to analyze how current events might impact your specific holdings, producing one report per news site and portfolio named `news-<site>-<portfolio>-llm-generated.html` (e.g. `news-cnbc-yang-llm-generated.html`).
 
 ### 3. Realtime Continuous Monitoring
 **Script**: `ollama_report_pipeline/run-market-hours.sh`
 
-A continuous monitoring loop that executes during market hours (08:00 - 18:00 ET, Mon-Fri). It runs the daily and flash insights report generators at a specified interval and uploads the HTML reports to a Google Cloud Storage (GCS) bucket for remote access. Set `PYTHON_VENV` in its `CONFIGURATION` section to the virtual environment above; the script activates it, so `source py-venv/bin/activate` isn't needed first.
+A continuous monitoring loop that executes during market hours (08:00 - 18:00 ET, Mon-Fri). It runs the daily and news report generators at a specified interval, and each HTML report is uploaded to a Google Cloud Storage (GCS) bucket for remote access as soon as it is written (`ollama_report_pipeline/upload-report.sh`), in one folder per portfolio (e.g. `gs://bucket/reports/yang/news-cnbc-yang-llm-generated.html`). Set `PYTHON_VENV` in its `CONFIGURATION` section to the virtual environment above; the script activates it, so `source py-venv/bin/activate` isn't needed first.
 
 ## Usage
 

@@ -12,8 +12,36 @@
 # Folder of build_portfolio_prompt.py, the prompt templates and the test portfolios (the parent of ollama_report_pipeline/).
 PORTFOLIO_REPORTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 BUILD_PORTFOLIO_PROMPT_PY="$PORTFOLIO_REPORTS_DIR/build_portfolio_prompt.py"
-# Applied to every HTML report.
-HTML_REPORT_STYLE='<style>body { max-width: 80%; margin: 0 auto; } p, li, td, th { line-height: 1.5; }</style>'
+# Applied to every HTML report. pandoc includes it after its own light-theme CSS, so these rules override it. The
+# dark theme follows the viewer's browser/OS setting (prefers-color-scheme) on screen; printing stays black on white.
+# It recolors pandoc's text, links, rules, tables and the syntax-highlighted code (e.g. the JSON in the input prompt),
+# and the inline "color: brown" heading of append_prompt_to_report.
+HTML_REPORT_STYLE='<style>
+body { max-width: 80%; margin: 0 auto; } p, li, td, th { line-height: 1.5; }
+@media screen and (prefers-color-scheme: dark) {
+  html { color-scheme: dark; color: #e4e7ec; background-color: #1c2027; }
+  a, a:visited { color: #7fb0ff; }
+  blockquote { color: #9aa4b2; border-left-color: #3a404b; }
+  hr { background-color: #3a404b; }
+  table, thead, tbody, tr, th, td { border-color: #3a404b; }
+  span[style*="color: brown"] { color: #e8916f !important; }
+  pre > code.sourceCode > span > a:first-child::before { color: #6a737d; }
+  pre.numberSource { border-left-color: #3a404b; }
+  code span.dt { color: #f0a37e; }
+  code span.st, code span.ch, code span.sc, code span.vs { color: #9ecbff; }
+  code span.dv, code span.fl, code span.bn { color: #7ee2b8; }
+  code span.fu, code span.va { color: #c3b5ff; }
+  code span.kw, code span.cf, code span.ot { color: #ff9a8f; }
+  code span.co, code span.an, code span.cv, code span.in, code span.wa { color: #8b949e; }
+  code span.op { color: #b0b7c3; }
+  code span.cn, code span.do { color: #ffa3a3; }
+  code span.at { color: #b5d36a; }
+  code span.pp { color: #e0b060; }
+  code span.bu, code span.im { color: #7ee08e; }
+  code span.ss { color: #e8a0c8; }
+  code span.al, code span.er { color: #ff6b6b; }
+}
+</style>'
 
 # Exits if OLLAMA_TIMEOUT_SECONDS isn't a positive integer.
 require_valid_ollama_timeout() {
@@ -88,6 +116,9 @@ append_prompt_to_report() {
 }
 
 # Converts REPORT_MD to the standalone HTML page REPORT_HTML titled TITLE, if pandoc is installed (see check_pandoc).
+# Then, if REPORT_UPLOAD_COMMAND is set (run-market-hours.sh sets it to upload-report.sh), runs it with REPORT_HTML so
+# the report is uploaded as soon as it exists. A failed upload only prints a warning: the report is regenerated on
+# the next run, and the remaining reports shouldn't be lost over one failed upload.
 write_html_report() {
   local report_md="$1" report_html="$2" title="$3"
   if [ "$HAVE_PANDOC" != true ]; then
@@ -96,4 +127,7 @@ write_html_report() {
   echo -e "\n--- Generating HTML report using pandoc at $report_html ---"
   pandoc -s -f gfm -t html5 -o "$report_html" "$report_md" \
     --metadata title="$title" --include-in-header <(echo "$HTML_REPORT_STYLE")
+  if [ -n "${REPORT_UPLOAD_COMMAND:-}" ] && ! "$REPORT_UPLOAD_COMMAND" "$report_html"; then
+    echo "WARNING: uploading $report_html failed (see above); continuing." >&2
+  fi
 }

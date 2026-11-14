@@ -1,18 +1,19 @@
 #!/bin/bash
 #
 # Purpose:
-#   Generates a breaking-news ("flash insights") impact report per portfolio and news site with
+#   Generates a breaking-news impact report ("news" report) per portfolio and news site with
 #   a local Ollama LLM. For every *.json portfolio file in PORTFOLIO_DIR:
 #     1) Builds an LLM prompt from LLM_PROMPT_TEMPLATE via build_portfolio_prompt.py,
 #        which fetches current quotes from STOCK_QUOTES_CLOUD_RUN_URL and TW_STOCK_QUOTES_CLOUD_RUN_URL (once per portfolio).
-#     2) For every news file, replaces {{FLASH_INSIGHTS}} in a copy of that prompt with a
+#     2) For every news file, replaces {{NEWS_CONTENT}} in a copy of that prompt with a
 #        "### <SITE>" section holding the news file's contents, writing
-#        $PORTFOLIO_DIR/$USE_CASE-<portfolio>-<SITE>-llm-prompt.txt.
+#        $PORTFOLIO_DIR/$USE_CASE-<SITE>-<portfolio>-llm-prompt.txt.
 #     3) Runs each prompt through `ollama run $OLLAMA_MODEL` (killed and retried
 #        once after OLLAMA_TIMEOUT_SECONDS) and writes the generated report to
-#        $PORTFOLIO_DIR/$USE_CASE-<portfolio>-<SITE>-llm-generated.md (report + input prompt), plus
-#        $PORTFOLIO_DIR/$USE_CASE-<portfolio>-<SITE>-llm-generated.html if pandoc is installed.
-#   So 2 portfolios and 3 news files produce 6 reports, e.g. flash-insights-yang-cnbc-llm-generated.html.
+#        $PORTFOLIO_DIR/$USE_CASE-<SITE>-<portfolio>-llm-generated.md (report + input prompt), plus
+#        $PORTFOLIO_DIR/$USE_CASE-<SITE>-<portfolio>-llm-generated.html if pandoc is installed.
+#   So 2 portfolios and 3 news files produce 6 reports, e.g. news-cnbc-yang-llm-generated.html. The name ends with
+#   the portfolio, like the daily report's, so run-market-hours.sh can upload both to gs://.../<portfolio>/.
 #
 #   The news files are produced by `fetch-news.sh --site <SITE>`, which writes
 #   $PORTFOLIO_DIR/news-<SITE>_YYYY-MM-DD.txt (e.g. news-fundstrat_2026-11-01.txt,
@@ -28,8 +29,8 @@
 #
 # Environment variables (all optional; defaults shown):
 #   PORTFOLIO_DIR              <portfolio_reports>/test-portfolios
-#   LLM_PROMPT_TEMPLATE        <portfolio_reports>/prompt_templates/flash-insights-report-template.txt
-#   USE_CASE                   flash-insights (prefix of the output file names)
+#   LLM_PROMPT_TEMPLATE        <portfolio_reports>/prompt_templates/news-report-template.txt
+#   USE_CASE                   news (prefix of the output file names)
 #   NEWS_FILES                 every $PORTFOLIO_DIR/news-*_YYYY-MM-DD.txt for today's date; set it to a
 #                              comma-separated list of files to use those instead
 #   STOCK_QUOTES_CLOUD_RUN_URL https://us-central1-my-gcp-project.cloudfunctions.net/get-us-ticker-quotes
@@ -55,11 +56,11 @@
 # Callers:
 #   run-market-hours.sh runs report-daily.sh and then report-news-impact.sh on every
 #   loop iteration during the 08:00-18:00 ET window,
-#   then uploads $PORTFOLIO_DIR/*.html to GCS:
+#   then uploads $PORTFOLIO_DIR/*.html to GCS, one folder per portfolio:
 #
 #     report-daily.sh && (report-news-impact.sh || true)
 #
-#   The daily report is required (a failure aborts the loop); the flash-insights
+#   The daily report is required (a failure aborts the loop); the news
 #   report is optional (its failure, e.g. a missing news file, is ignored).
 
 set -e # exit the script when execution hits any error
@@ -75,9 +76,9 @@ source "$SCRIPT_DIR/report-common.sh"
 
 # Portfolio *.json input files and news-<SITE>_YYYY-MM-DD.txt files, and the folder the reports are written to.
 export PORTFOLIO_DIR="${PORTFOLIO_DIR:-$PORTFOLIO_REPORTS_DIR/test-portfolios}"
-# Prompt template with {{PORTFOLIO_HOLDING_DATA_JSON}} and {{FLASH_INSIGHTS}}, and the output file name prefix.
-export LLM_PROMPT_TEMPLATE="${LLM_PROMPT_TEMPLATE:-$PORTFOLIO_REPORTS_DIR/prompt_templates/flash-insights-report-template.txt}"
-export USE_CASE="${USE_CASE:-flash-insights}"
+# Prompt template with {{PORTFOLIO_HOLDING_DATA_JSON}} and {{NEWS_CONTENT}}, and the output file name prefix.
+export LLM_PROMPT_TEMPLATE="${LLM_PROMPT_TEMPLATE:-$PORTFOLIO_REPORTS_DIR/prompt_templates/news-report-template.txt}"
+export USE_CASE="${USE_CASE:-news}"
 # Comma-separated news files; empty means every news-*_<today>.txt in PORTFOLIO_DIR.
 export NEWS_FILES="${NEWS_FILES:-}"
 # Stock quotes Cloud Run endpoint read by build_portfolio_prompt.py.
@@ -127,7 +128,7 @@ fi
 check_pandoc
 find_portfolio_files
 
-# Holds each portfolio's prompt before {{FLASH_INSIGHTS}} is replaced.
+# Holds each portfolio's prompt before {{NEWS_CONTENT}} is replaced.
 work_dir="$(mktemp -d /tmp/report-news-impact-XXXXXX)"
 trap 'rm -rf "$work_dir"' EXIT
 
@@ -145,16 +146,17 @@ for portfolio_file in "${PORTFOLIO_FILES[@]}"; do
   # One report per news file, so each site's news is analyzed on its own.
   for news_file in "${news_files[@]}"; do
     site="$(news_site_name "$news_file")"
-    report_name="$USE_CASE-$portfolio_name-$site"
+    # $USE_CASE-$site-$portfolio_name: ends with the portfolio, which names its upload folder in run-market-hours.sh.
+    report_name="$USE_CASE-$site-$portfolio_name"
     # The LLM's input prompt, and the report it generates (Markdown, and HTML for GCS).
     prompt_file="$PORTFOLIO_DIR/$report_name-llm-prompt.txt"
     report_md="$PORTFOLIO_DIR/$report_name-llm-generated.md"
     report_html="$PORTFOLIO_DIR/$report_name-llm-generated.html"
     echo "--- Generating $report_name from $news_file ---"
 
-    # Replace {{FLASH_INSIGHTS}} with this site's news under a "### <SITE>" heading.
+    # Replace {{NEWS_CONTENT}} with this site's news under a "### <SITE>" heading.
     # Python avoids sed's escaping issues with multi-line text.
-    python3 -c 'import sys; text=open(sys.argv[1]).read(); news="### " + sys.argv[3] + "\n\n" + open(sys.argv[2]).read(); open(sys.argv[4], "w").write(text.replace("{{FLASH_INSIGHTS}}", news))' \
+    python3 -c 'import sys; text=open(sys.argv[1]).read(); news="### " + sys.argv[3] + "\n\n" + open(sys.argv[2]).read(); open(sys.argv[4], "w").write(text.replace("{{NEWS_CONTENT}}", news))' \
       "$portfolio_prompt_file" "$news_file" "$site" "$prompt_file"
 
     run_ollama "$prompt_file" "$report_md"
