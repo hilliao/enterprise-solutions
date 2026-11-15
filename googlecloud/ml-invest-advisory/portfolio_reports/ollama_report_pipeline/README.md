@@ -47,7 +47,7 @@ Same pipeline as `report-daily.sh`, but generates a breaking-news impact
 ("news") report per portfolio and news site, from
 `prompt_templates/news-report-template.txt`. It
 reads every `PORTFOLIO_DIR/news-<SITE>_YYYY-MM-DD.txt` file for today
-(produced by `fetch-news.sh --site <SITE>`, e.g. `news-fundstrat_2026-11-01.txt`,
+(produced by `fetch-news.sh --site <SITE>`, e.g. `news-fundstrat-flash-insights_2026-11-01.txt`,
 `news-cnbc_2026-11-01.txt`, `news-wsj_2026-11-01.txt`) and prints which files
 it found. For each portfolio it fetches quotes once, then writes one report per
 news file, with that file in place of `{{NEWS_CONTENT}}`:
@@ -69,53 +69,51 @@ to a new timestamped directory under `<prompt dir>/model-comparison/`.
 Key env vars: `OUTPUT_DIR`, `OLLAMA_TIMEOUT_SECONDS` (default 1800), `OLLAMA_THINK`.
 
 ### fetch-news.sh
-News aggregator: fetches one news page via headless Chrome (a built-in site
-`wsj`, `cnbc` or `fundstrat`, or any ad-hoc `--url`) and summarizes it with
-Ollama. `--site fundstrat` fetches the fundstratdirect.com Flash Insights page
-(reusing a pre-authenticated Chrome profile — see the script header for
-one-time setup) and extracts the posts with `extract_fundstrat_posts.py`. Any
-other fundstratdirect.com page (e.g. a `--url` research article) is extracted with
-`extract_fundstrat_article.py` instead of `html2text`, so the prompt gets only the
-article (title, date, author, text) without the site menus. Technical strategy
-articles are summarized with a prompt for the market view, support/resistance
-levels and price targets; macro strategy articles (`/macro-strategy/` URLs) with
-one for the thesis, the macro drivers and the stocks favored or warned about. Every summary starts with a "Fetched at
-... from <URL>; summarized at ..." line in Eastern time. Every `--site` run copies its summary
-to `PORTFOLIO_DIR/news-<SITE>_YYYY-MM-DD.txt` (read by `report-news-impact.sh`),
-deletes that site's older `news-<SITE>_*.txt` files there (printing each one)
-and, with `scp -P $REMOTE_PORT`, to the same path on `--remote-host` (default
-`hil@hil-fr-dc.freeddns.org`; `""` skips the copy), where it lists `PORTFOLIO_DIR`
-over `ssh` and deletes the site's older `news-<SITE>_*.txt` files too (printing
-each one). `--url` runs only write to
-`OUTPUT_DIR`.
+News aggregator: fetches news pages via headless Chrome and summarizes them with
+Ollama. `--site` takes comma-separated keys (or `all`), run one after another in
+the order given; each key is also the name of its output files:
 
-`--aggregate` (experimental) fetches the front pages in `AGGREGATE_URLS` (default:
-Bloomberg, Financial Times, Yahoo Finance, MarketWatch, Investing.com and Barron's,
+| `--site` key | What it summarizes |
+|---|---|
+| `wsj`, `cnbc` | the WSJ finance and CNBC front pages |
+| `fundstrat-flash-insights` | the fundstratdirect.com Flash Insights posts, extracted with `extract_fundstrat_posts.py` |
+| `fundstrat-daily-technical` | (experimental) the newest article of the Daily Technical Strategy listing, `latest-research/?category=daily-technical-strategy` (Mark Newton): `technical-strategy/daily-technical-strategy/...`, and `technical-strategy/newtons-upticks/...` on the monthly Upticks day |
+| `fundstrat-macro-analysis` | (experimental) the newest article of the First Word listing, `latest-research/?category=first-word` (Tom Lee): `macro-strategy/first-word/...` |
+| `aggregate` | (experimental) the headlines of the `AGGREGATE_URLS` front pages, summarized together |
+
+`--url` fetches any other page; it runs after the `--site` keys and only writes to
+`OUTPUT_DIR`. The registry is `SITE_KEYS`, `SITE_TYPES` and `SITE_URLS` in the script.
+The Fundstrat keys reuse a pre-authenticated Chrome profile (see the script header
+for one-time setup).
+
+fundstratdirect.com research articles (a listing's newest article, or a `--url`
+article) are extracted with `extract_fundstrat_article.py` instead of `html2text`, so
+the prompt gets only the article (title, date, author, text) without the site menus.
+Technical strategy articles are summarized with a prompt for the market view,
+support/resistance levels and price targets; macro strategy articles
+(`/macro-strategy/` URLs) with one for the thesis, the macro drivers and the stocks
+favored or warned about. A listing's article URL changes with every article
+(`<prefix><series>/YYYY/MM/DD/<slug>/`), so the script fetches the listing page and
+takes the article link with the latest date (`extract_fundstrat_article.py --latest-url`).
+
+`aggregate` fetches the front pages in `AGGREGATE_URLS` (default: Bloomberg,
+Financial Times, Yahoo Finance, MarketWatch, Investing.com and Barron's,
 comma-separated), keeps each page's headlines and teasers (lines of 5 or more words,
 without navigation, cookie banners or repeats), splits `--lines` evenly across the
-pages that load, and summarizes them together in one Ollama run into
-`PORTFOLIO_DIR/news-global-headlines_YYYY-MM-DD.txt`, which `report-news-impact.sh` picks up
-like the other news files and which is copied to `--remote-host` the same way. A
-page that fails to load (e.g. a captcha page) is left out with a warning; the run
-fails only if every page fails. CNBC and WSJ aren't in the default list because
-`--site cnbc` and `--site wsj` already cover them. Reuters and The Economist aren't
-either: both answer headless Chrome with a DataDome captcha page.
+pages that load, and summarizes them together in one Ollama run. A page that fails to
+load (e.g. a captcha page) is left out with a warning; the key fails only if every
+page fails. CNBC and WSJ aren't in the default list because `--site cnbc` and
+`--site wsj` already cover them. Reuters and The Economist aren't either: both answer
+headless Chrome with a DataDome captcha page.
 
-`--fundstrat-daily-technical` and `--fundstrat-macro-analysis` (experimental) summarize
-the newest article of a Fundstrat research listing, whose URL changes with every
-article (`<prefix><series>/YYYY/MM/DD/<slug>/`): the script fetches the listing page,
-takes the article link with the latest date (`extract_fundstrat_article.py
---latest-url`), then fetches and summarizes that article into
-`PORTFOLIO_DIR/news-<flag>_YYYY-MM-DD.txt`, published like the `--site` files
-(and picked up by `report-news-impact.sh`). The listings are set in
-`FUNDSTRAT_LISTING_URLS` in the script:
-
-| Flag | Listing page | Article links |
-|---|---|---|
-| `--fundstrat-daily-technical` | `latest-research/?category=daily-technical-strategy` (Mark Newton) | `technical-strategy/daily-technical-strategy/...`, and `technical-strategy/newtons-upticks/...` on the monthly Upticks day |
-| `--fundstrat-macro-analysis` | `latest-research/?category=first-word` (Tom Lee) | `macro-strategy/first-word/...` |
-
-Both run after the `--site` sites and before `--aggregate`, and work with `--poll`.
+Every summary starts with a "Fetched at ... from <URL>; summarized at ..." line in
+Eastern time. Every `--site` key copies its summary to
+`PORTFOLIO_DIR/news-<KEY>_YYYY-MM-DD.txt` (read by `report-news-impact.sh`, and
+`news-fundstrat-daily-technical_*` by `report-daily.sh` too), deletes that key's
+older `news-<KEY>_*.txt` files there (printing each one) and, with
+`scp -P $REMOTE_PORT`, to the same path on `--remote-host` (default
+`hil@hil-fr-dc.freeddns.org`; `""` skips the copy), where it lists `PORTFOLIO_DIR`
+over `ssh` and deletes the key's older `news-<KEY>_*.txt` files too (printing each one).
 
 Every Fundstrat prompt (Flash Insights, technical and macro articles) carries
 `FUNDSTRAT_ACCURACY_RULES`: keep the author's negations and qualifiers, quote word for
@@ -124,24 +122,25 @@ and list only the risks the text states ("No risks stated" otherwise). They were
 after gemma4:12b-it-qat turned "a negative, but not a 'thesis changer'" into a
 "thesis changer" risk; with them, 3 of 3 reruns of that article kept the author's view.
 ```
-./fetch-news.sh --site wsj|cnbc|fundstrat
-./fetch-news.sh --site wsj,cnbc,fundstrat         # several sites, one after another
-./fetch-news.sh --aggregate                       # AGGREGATE_URLS front pages, summarized together
-./fetch-news.sh --site cnbc --aggregate --poll    # CNBC, then the aggregate, every cycle
-./fetch-news.sh --fundstrat-daily-technical       # newest Daily Technical Strategy (or Upticks) article
-./fetch-news.sh --fundstrat-macro-analysis        # newest First Word macro article
+./fetch-news.sh --site wsj|cnbc|fundstrat-flash-insights
+./fetch-news.sh --site wsj,cnbc,aggregate         # several keys, one after another in this order
+./fetch-news.sh --site fundstrat-daily-technical,fundstrat-macro-analysis   # newest Fundstrat articles
+./fetch-news.sh --site all                        # every key
+./fetch-news.sh --site cnbc,aggregate --poll      # CNBC, then the aggregate, every cycle
 ./fetch-news.sh --url <fundstratdirect.com article URL> --name <label>   # one Fundstrat article
 ./fetch-news.sh --url <URL> --name <label> [--lines N]
 ./fetch-news.sh --site wsj --profile-dir DIR      # use another Chrome profile
 ./fetch-news.sh --site wsj --output-dir DIR       # write to DIR
 ./fetch-news.sh --site wsj --remote-host U@H       # copy news-wsj_YYYY-MM-DD.txt to another host
-./fetch-news.sh --site cnbc,fundstrat --poll [MIN]  # repeat forever, sleeping MIN (default 30) after each cycle
+./fetch-news.sh --site cnbc,fundstrat-flash-insights --poll [MIN]  # repeat forever, sleeping MIN (default 30) after each cycle
 ./fetch-news.sh --list
 ./fetch-news.sh -h|--help
 ```
 Requires `google-chrome`, `html2text`, `ollama` (optionally `pandoc`), and `python3` for
-`--site fundstrat`, the `--fundstrat-*` flags and fundstratdirect.com `--url` pages. Writes
-to `OUTPUT_DIR` (default `~/Documents/news-aggregate/`). For other sites, the site navigation before the first `******`
+the `fundstrat-*` keys and fundstratdirect.com `--url` pages. Writes
+to `OUTPUT_DIR` (default `~/Documents/news-aggregate/`). Fundstrat pages (Flash Insights posts and research articles) go to Ollama whole, for the most
+accurate summary, ignoring `--lines`; only text past `FUNDSTRAT_MAX_CHARS` (default 40,000 characters, ~11k tokens)
+is cut, with a warning, so the prompt fits the 16384-token context. For other sites, the site navigation before the first `******`
 or `*****` heading (html2text `<h1>` or `<h2>`) is skipped, and the next `--lines` lines (default
 600) go to Ollama. Several `--site` keys are fetched one after another; a
 failed site (e.g. a WSJ captcha page) doesn't stop the others, and the run then
@@ -149,7 +148,7 @@ exits 1. `--poll` only fetches 08:00-18:00 ET on trading days (1.5 hours before
 the NYSE open until 2 hours after the close, the same window as
 `run-market-hours.sh`) and otherwise sleeps until the window opens; a failed site is retried next
 cycle instead of stopping the loop. Key env vars: `PROFILE_DIR`,
-`OUTPUT_DIR`, `PORTFOLIO_DIR`, `REMOTE_HOST`, `REMOTE_PORT`, `AGGREGATE_URLS`,
+`OUTPUT_DIR`, `PORTFOLIO_DIR`, `REMOTE_HOST`, `REMOTE_PORT`, `AGGREGATE_URLS`, `FUNDSTRAT_MAX_CHARS`,
 `OLLAMA_HOST` (default `8400f:11434`), `OLLAMA_MODEL` (default `gemma4:12b-it-qat` for every site), `OLLAMA_THINK`.
 
 The 600-line default assumes the Ollama server runs with
@@ -157,7 +156,7 @@ The 600-line default assumes the Ollama server runs with
 the prompt does not fit and Ollama truncates it.
 
 ### extract_fundstrat_posts.py
-Used by `fetch-news.sh --site fundstrat`: parses the Flash Insights posts (each
+Used by `fetch-news.sh --site fundstrat-flash-insights`: parses the Flash Insights posts (each
 `div.sub-insight-card`) out of Chrome's DOM dump of the members page and prints
 them as text, each under a `⚡ FlashInsights post N of M | <date> | <author>, <title>`
 line. Share buttons, like counts, images and the live price change in ticker
@@ -168,7 +167,7 @@ class) and 4 if it finds no posts. Standard library only; tests:
 
 ### extract_fundstrat_article.py
 Used by `fetch-news.sh` for fundstratdirect.com research articles and the
-`--fundstrat-*` flags. `extract_fundstrat_article.py PAGE_HTML` prints the first
+`fundstrat-daily-technical` and `fundstrat-macro-analysis` keys. `extract_fundstrat_article.py PAGE_HTML` prints the first
 `<article>` as text: a `<title> | <date> | <author>, <author title>` line, then
 `div#content-post` with headings as `## ` and list items as `- `; images, share
 popups and the live price change in ticker badges are dropped (it reuses the badge

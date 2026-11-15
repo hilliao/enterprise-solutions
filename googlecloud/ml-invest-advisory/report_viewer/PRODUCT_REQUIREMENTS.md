@@ -318,6 +318,6 @@ For example:
 - `reports/yang/daily-report-yang-llm-generated.html`
 - `reports/vicky-tw-portfolio/news-fundstrat-daily-technical-vicky-tw-portfolio-llm-generated.html`
 
-Use cases: `daily-report`, `news`. Sources: `fundstrat`, `fundstrat-daily-technical`, `fundstrat-macro-analysis`,
-`cnbc`, `wsj`, `global-headlines`. The viewer takes the portfolio from the folder name. Files directly under
-`reports/`, from the old flat layout, aren't listed.
+Use cases: `daily-report`, `news`. Sources (`fetch-news.sh --site` keys): `fundstrat-flash-insights`,
+`fundstrat-daily-technical`, `fundstrat-macro-analysis`, `cnbc`, `wsj`, `aggregate`. The viewer takes the portfolio
+from the folder name. Files directly under `reports/`, from the old flat layout, aren't listed.
