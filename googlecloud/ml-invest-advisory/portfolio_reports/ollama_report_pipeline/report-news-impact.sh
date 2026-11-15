@@ -16,7 +16,7 @@
 #   the portfolio, like the daily report's, so run-market-hours.sh can upload both to gs://.../<portfolio>/.
 #
 #   The news files are produced by `fetch-news.sh --site <SITE>`, which writes
-#   $PORTFOLIO_DIR/news-<SITE>_YYYY-MM-DD.txt (e.g. news-fundstrat_2026-11-01.txt,
+#   $PORTFOLIO_DIR/news-<SITE>_YYYY-MM-DD.txt (e.g. news-fundstrat-flash-insights_2026-11-01.txt,
 #   news-cnbc_2026-11-01.txt, news-wsj_2026-11-01.txt). By default every such file
 #   for today's date is used. The script exits with status 1 if none is found.
 #
@@ -42,10 +42,9 @@
 #   DEBUG                      set to any value to trace execution (set -x)
 #
 # Usage:
-#   ./fetch-news.sh --site fundstrat        # produce today's news files first
-#   ./fetch-news.sh --site cnbc
+#   ./fetch-news.sh --site fundstrat-flash-insights,cnbc   # produce today's news files first
 #   ./report-news-impact.sh                 # uses every news-*_<today>.txt in PORTFOLIO_DIR
-#   NEWS_FILES=$PORTFOLIO_DIR/news-fundstrat_2026-11-01.txt,$PORTFOLIO_DIR/news-wsj_2026-11-01.txt ./report-news-impact.sh
+#   NEWS_FILES=$PORTFOLIO_DIR/news-fundstrat-flash-insights_2026-11-01.txt,$PORTFOLIO_DIR/news-wsj_2026-11-01.txt ./report-news-impact.sh
 #
 # Exit status:
 #   1 if no news file is found; otherwise non-zero on the first

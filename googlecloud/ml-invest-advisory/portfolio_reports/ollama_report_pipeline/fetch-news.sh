@@ -1,91 +1,74 @@
 #!/bin/bash
 #
 # Purpose:
-#   News aggregator that fetches page(s) from news sites using headless
-#   Chrome, converts the DOM dump to text, and generates an AI summary with
-#   Ollama. Supports both a built-in site registry (wsj, cnbc, fundstrat) and
-#   arbitrary ad-hoc URLs (e.g. a specific Bloomberg article page).
+#   News aggregator that fetches page(s) from news sites using headless Chrome, converts the DOM dump to text, and
+#   generates an AI summary with Ollama. Supports a built-in site registry (--site, see SITE_KEYS) and arbitrary
+#   ad-hoc URLs (--url, e.g. a specific Bloomberg article page).
 #
-#   --site fundstrat fetches the fundstratdirect.com Flash Insights page and extracts its posts, with their dates
-#   and authors, with extract_fundstrat_posts.py. Other fundstratdirect.com pages (e.g. a --url research article) are
-#   extracted with extract_fundstrat_article.py: the article's title, date, author and text, without the site menus.
-#
-#   --fundstrat-daily-technical (experimental) finds the newest article on the Daily Technical Strategy listing page
-#   (FUNDSTRAT_LISTING_URLS), whose URL changes every day (e.g.
-#   .../daily-technical-strategy/2026/11/10/cross-asset-volatility-is-coming-back-while-equity-trends-and-momentum-rema/,
-#   or .../newtons-upticks/2026/11/12/upticks-november-2026/ on the day of the monthly Upticks report, which the listing
-#   holds too), and summarizes it into PORTFOLIO_DIR/news-fundstrat-daily-technical_YYYY-MM-DD.txt.
-#   --fundstrat-macro-analysis (experimental) does the same with the First Word listing page of Tom Lee's macro
-#   strategy articles (e.g. .../macro-strategy/first-word/2026/11/12/potential-departure-of-jensen-from-nvidia-a-negative-but-not-a-thesis-chang/)
-#   into PORTFOLIO_DIR/news-fundstrat-macro-analysis_YYYY-MM-DD.txt. Both listings are in FUNDSTRAT_LISTING_URLS.
-#
-#   --aggregate (experimental) fetches the front pages in AGGREGATE_URLS (Bloomberg, Financial Times, Yahoo Finance,
-#   MarketWatch, Investing.com and Barron's by default), keeps their headlines and teasers, and summarizes them
-#   together in one Ollama run into PORTFOLIO_DIR/news-global-headlines_YYYY-MM-DD.txt. A page that fails to load (e.g. a
-#   captcha page) is left out of the summary; the run fails only if no page loads.
+#   --site keys, run one after another in the order given:
+#     wsj, cnbc                   the WSJ finance and CNBC front pages
+#     fundstrat-flash-insights    the fundstratdirect.com Flash Insights page; its posts, with their dates and authors,
+#                                 are extracted with extract_fundstrat_posts.py
+#     fundstrat-daily-technical   (experimental) the newest article on the Daily Technical Strategy listing page, whose
+#                                 URL changes every day (e.g. .../daily-technical-strategy/2026/11/10/cross-asset-volatility-is-coming-back-while-equity-trends-and-momentum-rema/,
+#                                 or .../newtons-upticks/2026/11/12/upticks-november-2026/ on the day of the monthly
+#                                 Upticks report, which the listing holds too)
+#     fundstrat-macro-analysis    (experimental) the same with the First Word listing page of Tom Lee's macro strategy
+#                                 articles (e.g. .../macro-strategy/first-word/2026/11/12/potential-departure-of-jensen-from-nvidia-a-negative-but-not-a-thesis-chang/)
+#     aggregate                   (experimental) the front pages in AGGREGATE_URLS (Bloomberg, Financial Times, Yahoo
+#                                 Finance, MarketWatch, Investing.com and Barron's by default): their headlines and
+#                                 teasers, summarized together in one Ollama run. A page that fails to load (e.g. a
+#                                 captcha page) is left out of the summary; the site fails only if no page loads.
+#   fundstratdirect.com research articles (the two listings' articles, or a --url article) are extracted with
+#   extract_fundstrat_article.py: the article's title, date, author and text, without the site menus.
 #
 #   Every summary starts with a "Fetched at ... from <URL>; summarized at ..." line in Eastern time.
 #
-#   Every --site run mirrors its summary to PORTFOLIO_DIR/news-<SITE>_YYYY-MM-DD.txt (e.g.
-#   news-wsj_2026-11-01.txt), which report-news-impact.sh reads, and to the same path on
-#   REMOTE_HOST. It then deletes that site's older news-<SITE>_*.txt files in PORTFOLIO_DIR, locally and on
-#   REMOTE_HOST. --aggregate does the same with news-global-headlines_YYYY-MM-DD.txt, --fundstrat-daily-technical
-#   with news-fundstrat-daily-technical_YYYY-MM-DD.txt and --fundstrat-macro-analysis with
-#   news-fundstrat-macro-analysis_YYYY-MM-DD.txt. --url runs only write to OUTPUT_DIR.
+#   Every --site key mirrors its summary to PORTFOLIO_DIR/news-<KEY>_YYYY-MM-DD.txt (e.g. news-wsj_2026-11-01.txt),
+#   which report-news-impact.sh reads (report-daily.sh also reads news-fundstrat-daily-technical_YYYY-MM-DD.txt), and
+#   to the same path on REMOTE_HOST. It then deletes that key's older news-<KEY>_*.txt files in PORTFOLIO_DIR, locally
+#   and on REMOTE_HOST. --url runs only write to OUTPUT_DIR.
 #
 # Requirements:
 #   - google-chrome installed and on PATH
 #   - `html2text` CLI installed via: sudo apt install html2text
 #   - `ollama` CLI installed and accessible
 #   - `pandoc` (optional, for markdown -> plain text conversion of the summary)
-#   - For --site fundstrat, --fundstrat-daily-technical, --fundstrat-macro-analysis and fundstratdirect.com --url
-#     pages: python3 (standard library only) and a Chrome profile at PROFILE_DIR logged in to fundstratdirect.com
-#     (see "One-time setup" below)
+#   - For the fundstrat-* keys and fundstratdirect.com --url pages: python3 (standard library only) and a Chrome
+#     profile at PROFILE_DIR logged in to fundstratdirect.com (see "One-time setup" below)
 #
-# Usage (at least one of --site, --url, --aggregate, --fundstrat-daily-technical or --fundstrat-macro-analysis is
-# required):
+# Usage (--site, --url or both are required; with both, the --site keys run first):
 #   ./fetch-news.sh --site wsj                        # Fetch & summarize WSJ into PORTFOLIO_DIR/news-wsj_YYYY-MM-DD.txt
-#   ./fetch-news.sh --site cnbc                       # Fetch & summarize CNBC into PORTFOLIO_DIR/news-cnbc_YYYY-MM-DD.txt
-#   ./fetch-news.sh --site fundstrat                  # Fetch & summarize Fundstrat Flash Insights into
-#                                                      # PORTFOLIO_DIR/news-fundstrat_YYYY-MM-DD.txt
-#   ./fetch-news.sh --site cnbc,fundstrat             # Fetch & summarize several sites, one after another
-#   ./fetch-news.sh --site wsj,cnbc,fundstrat         # (comma-separated keys from wsj, cnbc, fundstrat)
-#   ./fetch-news.sh --aggregate                       # Fetch the AGGREGATE_URLS front pages & summarize them together
-#                                                      # into PORTFOLIO_DIR/news-global-headlines_YYYY-MM-DD.txt
-#   ./fetch-news.sh --site wsj,cnbc --aggregate       # Fetch & summarize WSJ, then CNBC, then the aggregate
-#   ./fetch-news.sh --fundstrat-daily-technical       # Find & summarize the newest Fundstrat Daily Technical Strategy
+#   ./fetch-news.sh --site fundstrat-flash-insights   # Fetch & summarize Fundstrat Flash Insights into
+#                                                      # PORTFOLIO_DIR/news-fundstrat-flash-insights_YYYY-MM-DD.txt
+#   ./fetch-news.sh --site fundstrat-daily-technical  # Find & summarize the newest Fundstrat Daily Technical Strategy
 #                                                      # article into PORTFOLIO_DIR/news-fundstrat-daily-technical_YYYY-MM-DD.txt
-#   ./fetch-news.sh --fundstrat-macro-analysis        # Find & summarize the newest Fundstrat First Word macro article
-#                                                      # into PORTFOLIO_DIR/news-fundstrat-macro-analysis_YYYY-MM-DD.txt
+#   ./fetch-news.sh --site aggregate                  # Fetch the AGGREGATE_URLS front pages & summarize them together
+#                                                      # into PORTFOLIO_DIR/news-aggregate_YYYY-MM-DD.txt
+#   ./fetch-news.sh --site wsj,cnbc,aggregate         # Several keys (comma-separated), one after another
+#   ./fetch-news.sh --site all                        # Every key, in SITE_KEYS order
 #   ./fetch-news.sh --url <URL> --name <label>        # Fetch & summarize an arbitrary URL
 #   ./fetch-news.sh --url <URL> --name <label> --lines 400
-#                                                      # Use first 400 lines of extracted text as the Ollama prompt input (default 600;
-#                                                      # --aggregate splits the lines evenly across the pages that load)
+#                                                      # Use first 400 lines of extracted text as the Ollama prompt input
+#                                                      # (default 600; aggregate splits the lines evenly across the pages
+#                                                      # that load; Fundstrat pages are sent whole, see FUNDSTRAT_MAX_CHARS)
 #   ./fetch-news.sh --site wsj --profile-dir <DIR>    # Use a different Chrome profile directory
 #   ./fetch-news.sh --site wsj --output-dir <DIR>     # Write output files to DIR instead of ~/Documents/news-aggregate
 #   ./fetch-news.sh --site wsj --remote-host <USER@HOST>
 #                                                      # Copy news-wsj_YYYY-MM-DD.txt to another host ("" skips the copy)
-#   ./fetch-news.sh --site wsj --poll [MINUTES]       # Poll WSJ, sleeping MINUTES (default 30) after each cycle
-#   ./fetch-news.sh --site cnbc --poll [MINUTES]      # Poll CNBC
-#   ./fetch-news.sh --site fundstrat --poll [MINUTES] # Poll Fundstrat
-#   ./fetch-news.sh --site wsj,cnbc,fundstrat --poll [MINUTES]
-#                                                      # Poll all three sites, one after another in each cycle
-#   ./fetch-news.sh --url <URL> --name <label> --poll [MINUTES]
-#                                                      # Poll an arbitrary URL
+#   ./fetch-news.sh --site wsj,cnbc --poll [MINUTES]  # Repeat forever, sleeping MINUTES (default 30) after each cycle;
 #                                                      # --poll only fetches from 08:00 to 18:00 ET on trading days
 #                                                      # (POLL_START_ET-POLL_END_ET) and sleeps outside that window
-#   ./fetch-news.sh --list                            # List available site keys
+#   ./fetch-news.sh --list                            # List the site keys and their URLs
 #   ./fetch-news.sh -h|--help                         # Show help
 #
 # Examples:
 #   ./fetch-news.sh --url "https://www.bloomberg.com/markets" --name bloomberg-markets
 #   ./fetch-news.sh --url "https://www.bloomberg.com/news/articles/xxxx" --name bbg-article --lines 500
-#   ./fetch-news.sh --site wsj --poll                 # Poll WSJ every 30 minutes (after each cycle ends)
 #   ./fetch-news.sh --site cnbc --poll 15             # Poll CNBC every 15 minutes (after each cycle ends)
-#   ./fetch-news.sh --site fundstrat --poll 15        # Poll Flash Insights every 15 minutes during market hours
-#   ./fetch-news.sh --site cnbc,fundstrat --poll      # Poll CNBC, then Fundstrat, every 30 minutes
-#   ./fetch-news.sh --site cnbc --aggregate --poll    # Poll CNBC, then the aggregate, every 30 minutes
-#   AGGREGATE_URLS="https://www.bloomberg.com/markets,https://www.ft.com/markets" ./fetch-news.sh --aggregate
+#   ./fetch-news.sh --site cnbc,fundstrat-flash-insights,aggregate --poll
+#                                                      # Poll CNBC, Flash Insights, then the aggregate, every 30 minutes
+#   AGGREGATE_URLS="https://www.bloomberg.com/markets,https://www.ft.com/markets" ./fetch-news.sh --site aggregate
 #                                                      # Aggregate only Bloomberg and FT
 #   ./fetch-news.sh --url "https://fundstratdirect.com/technical-strategy/newtons-upticks/2026/11/12/upticks-november-2026/" \
 #     --name fundstrat-upticks                         # Summarize one Fundstrat research article
@@ -93,20 +76,21 @@
 # Environment variables (all optional; defaults shown):
 #   PROFILE_DIR             ~/workspace/chrome-flashinsights-profile (overridden by --profile-dir)
 #   OUTPUT_DIR              ~/Documents/news-aggregate (overridden by --output-dir)
-#   PORTFOLIO_DIR           ~/workspace/portfolios (where --site writes news-<SITE>_YYYY-MM-DD.txt)
+#   PORTFOLIO_DIR           ~/workspace/portfolios (where --site writes news-<KEY>_YYYY-MM-DD.txt)
 #   REMOTE_HOST             hil@hil-fr-dc.freeddns.org (overridden by --remote-host; empty skips the copy)
 #   REMOTE_PORT             23 (ssh port for the scp to and cleanup on REMOTE_HOST)
 #   AGGREGATE_URLS          https://www.bloomberg.com/markets,https://www.ft.com/markets,https://finance.yahoo.com/,
 #                           https://www.marketwatch.com/,https://www.investing.com/news/,https://www.barrons.com/
-#                           (comma-separated front pages that --aggregate summarizes together)
-#   AGGREGATE_MAX_CHARS     24000 (characters of headlines --aggregate sends to Ollama, split across the pages)
+#                           (comma-separated front pages that --site aggregate summarizes together)
+#   AGGREGATE_MAX_CHARS     24000 (characters of headlines --site aggregate sends to Ollama, split across the pages)
+#   FUNDSTRAT_MAX_CHARS     40000 (characters of a Fundstrat page's text sent to Ollama; the pages are sent whole up to it)
 #   OLLAMA_HOST             8400f:11434
 #   OLLAMA_MODEL            gemma4:12b-it-qat (all sites and --url)
 #   OLLAMA_THINK            false (passed as --think=$OLLAMA_THINK; thinking tokens can overflow the
 #                           server's context (OLLAMA_CONTEXT_LENGTH) and truncate the summary)
 #
 # ---------------------------------------------------------------------------
-# One-time setup: authenticate the Chrome profile used by --site fundstrat
+# One-time setup: authenticate the Chrome profile used by the fundstrat-* sites
 # ---------------------------------------------------------------------------
 #   This script never logs in itself — it reuses cookies from a Chrome
 #   profile you authenticate manually, one time, before running it headless.
@@ -137,7 +121,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROFILE_DIR="${PROFILE_DIR:-$HOME/workspace/chrome-flashinsights-profile}"
 # Every run writes <name>.txt (page text), <name>-summary.md and <name>-summary.txt here.
 OUTPUT_DIR="${OUTPUT_DIR:-$HOME/Documents/news-aggregate}"
-# --site runs also write news-<SITE>_YYYY-MM-DD.txt here for report-news-impact.sh.
+# --site runs also write news-<KEY>_YYYY-MM-DD.txt here for report-news-impact.sh and report-daily.sh.
 PORTFOLIO_DIR="${PORTFOLIO_DIR:-$HOME/workspace/portfolios}"
 
 # --- Copy of the news files to the host that runs the reports (an empty REMOTE_HOST skips it) ---
@@ -157,10 +141,18 @@ OLLAMA_MAX_ATTEMPTS=3
 OLLAMA_MIN_SUMMARY_WORDS=50
 OLLAMA_MIN_COMMON_WORDS=10
 
-# --- Defaults of --lines and --poll ---
+# --- Prompt size: --lines (news pages), FUNDSTRAT_MAX_CHARS (Fundstrat pages), and the --poll default ---
 # Measured 12-19 tokens per line on WSJ|CNBC|Flash Insights pages, so 600 lines stays under ~11.5k
 # tokens and fits the 16384-token context (OLLAMA_CONTEXT_LENGTH of the Ollama server) with room for the summary.
 DEFAULT_PROMPT_LINES=600
+# Fundstrat pages (Flash Insights posts and research articles) go to Ollama whole, for the most accurate summary:
+# their extracted text has no navigation and holds one paragraph per line, so a line count says little about its size
+# (a 1,600-word macro article is 108 lines, a 1,100-word technical one 27). They are capped by characters instead, to
+# fit the 16384-token context with the prompt's instructions and a ~2,000-token summary; ticker lists make Fundstrat
+# text token-dense (~3.6 characters per token measured), so 40,000 characters stays under ~11k tokens. Measured on
+# 2026-11-13/12 articles: 6,877 and 9,162 characters (1,874 and 3,172 prompt tokens). A longer page is cut at its
+# last whole paragraph within the cap, with a warning.
+FUNDSTRAT_MAX_CHARS="${FUNDSTRAT_MAX_CHARS:-40000}"
 # WSJ serves a captcha after a few fetches in quick succession, so poll conservatively by default.
 DEFAULT_POLL_MINUTES=30
 
@@ -174,26 +166,43 @@ CHROME_TIMEOUT_SECONDS=120
 # the installed Chrome version as a regular desktop browser.
 CHROME_USER_AGENT="Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/$(google-chrome --version | sed -E 's/[^0-9]*([0-9]+).*/\1/').0.0.0 Safari/537.36"
 
-# --- Built-in sites (--site <key>[,<key>...]) ---
-# Keys in the order they're listed in messages.
-SITE_KEYS=(wsj cnbc fundstrat)
+# --- Sites (--site <key>[,<key>...]) ---
+# Each key is also the name of its output files: <key>.txt (page text), <key>-summary.{md,txt} in OUTPUT_DIR and
+# news-<key>_YYYY-MM-DD.txt in PORTFOLIO_DIR. Keys in the order --list, --help and --site all use.
+SITE_KEYS=(wsj cnbc fundstrat-flash-insights fundstrat-daily-technical fundstrat-macro-analysis aggregate)
+# How each key is fetched and summarized:
+#   news-page          SITE_URLS page, text from html2text after the site navigation (CONTENT_START_PATTERN)
+#   fundstrat-posts    SITE_URLS page, the Flash Insights posts from extract_fundstrat_posts.py
+#   fundstrat-listing  the newest article linked from the SITE_URLS listing page (see "Fundstrat" below)
+#   aggregate          the AGGREGATE_URLS front pages, summarized together (see "Aggregate" below)
+declare -A SITE_TYPES=(
+  [wsj]=news-page
+  [cnbc]=news-page
+  [fundstrat-flash-insights]=fundstrat-posts
+  [fundstrat-daily-technical]=fundstrat-listing
+  [fundstrat-macro-analysis]=fundstrat-listing
+  [aggregate]=aggregate
+)
 declare -A SITE_URLS=(
   [wsj]="https://www.wsj.com/finance"
   [cnbc]="https://www.cnbc.com/"
-  [fundstrat]="https://fundstratdirect.com/members/flashinsights/"
+  [fundstrat-flash-insights]="https://fundstratdirect.com/members/flashinsights/"
+  # Mark Newton's daily articles (series daily-technical-strategy), and the monthly Upticks (series newtons-upticks).
+  [fundstrat-daily-technical]="https://fundstratdirect.com/members/latest-research/?category=daily-technical-strategy"
+  # Tom Lee's macro strategy articles (series first-word).
+  [fundstrat-macro-analysis]="https://fundstratdirect.com/members/latest-research/?category=first-word"
+  # aggregate: AGGREGATE_URLS
 )
 # html2text renders <h1> as "****** ... ******" and <h2> as "***** ... *****"; the first one marks the end of the
 # site navigation menus (the "Markets & Finance" <h1> on wsj.com/finance, the lead headline <h2> on cnbc.com),
 # which would otherwise fill the Ollama prompt. The wsj.com home page can't use this: its first line is an <h1>.
 CONTENT_START_PATTERN='^\*{5,6} '
 
-# --- Aggregate of several front pages (--aggregate, experimental) ---
+# --- Aggregate of several front pages (--site aggregate, experimental) ---
 # CNBC and WSJ are left out: --site cnbc and --site wsj already summarize them. Reuters
 # (https://www.reuters.com/markets/) and The Economist (https://www.economist.com/finance-and-economics) are left out
 # too: both answer headless Chrome with a DataDome captcha page instead of the news page.
 AGGREGATE_URLS="${AGGREGATE_URLS:-https://www.bloomberg.com/markets,https://www.ft.com/markets,https://finance.yahoo.com/,https://www.marketwatch.com/,https://www.investing.com/news/,https://www.barrons.com/}"
-# Name of the output files: global-headlines.txt, global-headlines-summary.{md,txt} and news-global-headlines_YYYY-MM-DD.txt.
-AGGREGATE_NAME="global-headlines"
 # Front-page lines with fewer words are navigation links, section titles, tickers, bylines and buttons, not news.
 AGGREGATE_MIN_WORDS=5
 # Lines matching this (case-insensitive) awk regex are cookie banners and page chrome, not news.
@@ -211,21 +220,11 @@ FUNDSTRAT_LOGIN_URL="https://fundstratdirect.com/members/"
 # macro strategy articles get FUNDSTRAT_MACRO_PROMPT_*, the others (technical strategy) FUNDSTRAT_ARTICLE_PROMPT_*.
 FUNDSTRAT_URL_PATTERN='^https?://(www\.)?fundstratdirect\.com/'
 FUNDSTRAT_MACRO_URL_PATTERN='^https?://(www\.)?fundstratdirect\.com/macro-strategy/'
-
-# --- Newest article of a Fundstrat research listing (--fundstrat-daily-technical, --fundstrat-macro-analysis) ---
-# Each listing shows its articles newest first, each at its own dated URL: <prefix><series>/YYYY/MM/DD/<slug>/. The key
-# is the command-line flag without "--" and the name of the output files (<key>.txt, <key>-summary.{md,txt} and
-# news-<key>_YYYY-MM-DD.txt). Keys in the order they run.
-FUNDSTRAT_LISTING_KEYS=(fundstrat-daily-technical fundstrat-macro-analysis)
+# The fundstrat-listing sites: each SITE_URLS listing shows its articles newest first, each at its own dated URL,
+# <prefix><series>/YYYY/MM/DD/<slug>/.
 declare -A FUNDSTRAT_LISTING_TITLES=(
   [fundstrat-daily-technical]="Daily Technical Strategy"
   [fundstrat-macro-analysis]="First Word"
-)
-declare -A FUNDSTRAT_LISTING_URLS=(
-  # Mark Newton's daily articles (series daily-technical-strategy), and the monthly Upticks (series newtons-upticks).
-  [fundstrat-daily-technical]="https://fundstratdirect.com/members/latest-research/?category=daily-technical-strategy"
-  # Tom Lee's macro strategy articles (series first-word).
-  [fundstrat-macro-analysis]="https://fundstratdirect.com/members/latest-research/?category=first-word"
 )
 declare -A FUNDSTRAT_LISTING_URL_PREFIXES=(
   [fundstrat-daily-technical]="https://fundstratdirect.com/technical-strategy/"
@@ -397,8 +396,7 @@ check_page() {
   fi
   if grep -q "$FUNDSTRAT_PAYWALL_MARKER" "$html_file"; then
     echo "ERROR: $url returned the subscription paywall — Chrome profile session expired." >&2
-    echo "  Re-authenticate: run the command below, log in, confirm the members page loads, then close Chrome completely:" >&2
-    echo "    google-chrome --user-data-dir=\"$PROFILE_DIR\" \"$FUNDSTRAT_LOGIN_URL\"" >&2
+    print_fundstrat_login_help
     return 1
   fi
   # The web server answers with a bare error page (e.g. "403 Forbidden" from nginx) when it refuses the request.
@@ -410,11 +408,12 @@ check_page() {
   fi
 }
 
-# Prints how a page is extracted and summarized: fundstrat-posts (--site fundstrat), fundstrat-macro-article (a
-# fundstratdirect.com macro strategy page), fundstrat-article (any other fundstratdirect.com page) or news.
+# Prints how the page NAME fetched from URL is extracted and summarized: fundstrat-posts (--site
+# fundstrat-flash-insights), fundstrat-macro-article (a fundstratdirect.com macro strategy page), fundstrat-article
+# (any other fundstratdirect.com page, e.g. a fundstrat-listing site's article) or news.
 page_kind() {
   local name="$1" url="$2"
-  if [[ "$name" == "fundstrat" ]]; then
+  if [[ "${SITE_TYPES[$name]:-}" == "fundstrat-posts" ]]; then
     echo fundstrat-posts
   elif [[ "$url" =~ $FUNDSTRAT_MACRO_URL_PATTERN ]]; then
     echo fundstrat-macro-article
@@ -427,9 +426,14 @@ page_kind() {
 
 # Prints the fundstratdirect.com re-authentication instructions.
 print_fundstrat_login_help() {
-  echo "ERROR: $FUNDSTRAT_LOGIN_URL session expired — the Chrome profile is not signed in." >&2
   echo "  Re-authenticate: run the command below, log in, confirm the members page loads, then close Chrome completely:" >&2
   echo "    google-chrome --user-data-dir=\"$PROFILE_DIR\" \"$FUNDSTRAT_LOGIN_URL\"" >&2
+}
+
+# For exit code 3 of the extract_fundstrat_*.py scripts: the page is the sign-in page, not member content.
+print_fundstrat_session_expired() {
+  echo "ERROR: $FUNDSTRAT_LOGIN_URL session expired — the Chrome profile is not signed in." >&2
+  print_fundstrat_login_help
 }
 
 # Converts HTML_FILE to text in TEXT_FILE; for fundstrat-posts, keeps only the Flash Insights posts, and for
@@ -440,7 +444,7 @@ extract_page_text() {
     python3 "$SCRIPT_DIR/extract_fundstrat_article.py" "$html_file" > "$text_file" || status=$?
     case "$status" in
       0) ;;
-      3) print_fundstrat_login_help; return 1 ;;
+      3) print_fundstrat_session_expired; return 1 ;;
       *)
         echo "ERROR: no article text extracted from the $name page (exit $status) — not an article page, or the layout changed." >&2
         return 1
@@ -452,9 +456,9 @@ extract_page_text() {
     python3 "$SCRIPT_DIR/extract_fundstrat_posts.py" "$html_file" > "$text_file" || status=$?
     case "$status" in
       0) ;;
-      3) print_fundstrat_login_help; return 1 ;;
+      3) print_fundstrat_session_expired; return 1 ;;
       *)
-        echo "ERROR: no Flash Insights posts extracted from the fundstrat page (exit $status) — the page layout may have changed." >&2
+        echo "ERROR: no Flash Insights posts extracted from the $name page (exit $status) — the page layout may have changed." >&2
         return 1
         ;;
     esac
@@ -558,6 +562,21 @@ summarize_with_ollama() {
   return 1
 }
 
+# Prints how many lines of a Fundstrat page's TEXT_FILE go to Ollama: all of them, or as many whole lines as fit in
+# FUNDSTRAT_MAX_CHARS, with a warning when that leaves some out.
+fundstrat_prompt_lines() {
+  local name="$1" text_file="$2" total_lines total_chars fitting_lines
+  total_lines="$(wc -l < "$text_file")"
+  total_chars="$(wc -c < "$text_file")"
+  fitting_lines="$(awk -v max_chars="$FUNDSTRAT_MAX_CHARS" \
+    '{ total += length($0) + 1; if (total > max_chars) exit; lines++ } END { print lines + 0 }' "$text_file")"
+  if [[ "$fitting_lines" -lt "$total_lines" ]]; then
+    echo "WARNING: the $name text is $total_chars characters; sending its first $fitting_lines of $total_lines lines" \
+      "(FUNDSTRAT_MAX_CHARS=$FUNDSTRAT_MAX_CHARS) so the prompt fits the Ollama context." >&2
+  fi
+  echo "$fitting_lines"
+}
+
 # Converts SUMMARY_MD to plain text in SUMMARY_TXT with pandoc, or copies it as-is without pandoc.
 convert_summary_to_text() {
   local summary_md="$1" summary_txt="$2"
@@ -640,8 +659,8 @@ publish_news_file() {
   delete_old_remote_news_files "$name" "$news_file" || true
 }
 
-# Fetches URL, extracts its text, summarizes PROMPT_LINES lines of it with Ollama, and for --site and
-# --fundstrat-<listing> runs publishes the summary as a news file.
+# Fetches URL, extracts its text, summarizes it with Ollama (PROMPT_LINES lines of a news page, the whole text of a
+# Fundstrat page up to FUNDSTRAT_MAX_CHARS), and for a --site key publishes the summary as a news file.
 fetch_and_summarize() {
   local name="$1" url="$2" prompt_lines="$3"
   local text_file="$OUTPUT_DIR/${name}.txt"
@@ -661,25 +680,28 @@ fetch_and_summarize() {
   check_page "$html_file" "$url" || return 1
   extract_page_text "$name" "$kind" "$html_file" "$text_file" || return 1
   start_line="$(find_content_start_line "$kind" "$text_file")"
+  if [[ "$kind" == fundstrat-* ]]; then
+    prompt_lines="$(fundstrat_prompt_lines "$name" "$text_file")"
+  fi
   summarize_with_ollama "$name" "$kind" "$text_file" "$start_line" "$prompt_lines" "$summary_md" || return 1
   convert_summary_to_text "$summary_md" "$summary_txt"
   add_timestamp_line "$summary_txt" "$url" "$fetched_at"
 
-  # Only registered sites feed the portfolio reports; ad-hoc --url pages stay in OUTPUT_DIR.
-  if [[ -n "${SITE_URLS[$name]+x}" || -n "${FUNDSTRAT_LISTING_URLS[$name]+x}" ]]; then
+  # Only --site keys feed the portfolio reports; ad-hoc --url pages stay in OUTPUT_DIR.
+  if [[ -n "${SITE_TYPES[$name]+x}" ]]; then
     publish_news_file "$name" "$summary_txt" || return 1
   fi
 }
 
 # ---------------------------------------------------------------------------
-# Newest article of a Fundstrat research listing (--fundstrat-daily-technical, --fundstrat-macro-analysis)
+# Newest article of a Fundstrat research listing (the fundstrat-listing sites)
 # ---------------------------------------------------------------------------
 
-# Fetches the FUNDSTRAT_LISTING_URLS page of KEY, finds its newest article (each one has its own dated URL), and
-# fetches, summarizes and publishes that article as news-<KEY>_YYYY-MM-DD.txt.
+# Fetches the SITE_URLS listing page of KEY, finds its newest article (each one has its own dated URL), and fetches,
+# summarizes and publishes that article as news-<KEY>_YYYY-MM-DD.txt.
 fundstrat_latest_article() {
   local key="$1" prompt_lines="$2" html_file article_url status=0
-  local title="${FUNDSTRAT_LISTING_TITLES[$key]}" listing_url="${FUNDSTRAT_LISTING_URLS[$key]}"
+  local title="${FUNDSTRAT_LISTING_TITLES[$key]}" listing_url="${SITE_URLS[$key]}"
   local url_prefix="${FUNDSTRAT_LISTING_URL_PREFIXES[$key]}"
   html_file="$(mktemp "/tmp/news-${key}-listing-XXXXXX.html")"
   # See fetch_and_summarize for why the RETURN trap resets itself.
@@ -692,7 +714,7 @@ fundstrat_latest_article() {
     status=$?
   case "$status" in
     0) ;;
-    3) print_fundstrat_login_help; return 1 ;;
+    3) print_fundstrat_session_expired; return 1 ;;
     *)
       echo "ERROR: no ${url_prefix}<series>/YYYY/MM/DD/<slug>/ link on the $title listing page (exit $status) — the layout may have changed." >&2
       return 1
@@ -703,14 +725,8 @@ fundstrat_latest_article() {
 }
 
 # ---------------------------------------------------------------------------
-# Aggregate of several front pages (--aggregate)
+# Aggregate of several front pages (--site aggregate)
 # ---------------------------------------------------------------------------
-
-# Prints a short site label for a front-page URL: its second-level domain (https://finance.yahoo.com/ -> yahoo).
-derive_label_from_url() {
-  local url="$1"
-  echo "$url" | sed -E 's#^[a-zA-Z]+://##; s#[/:?].*##' | awk -F. '{ print (NF > 1 ? $(NF - 1) : $1) }'
-}
 
 # Converts a front page's HTML_FILE to its headlines and teasers in TEXT_FILE, one per line: html2text marks link text
 # with underscores, which become spaces again; list markers and lines shorter than AGGREGATE_MIN_WORDS words
@@ -730,30 +746,31 @@ extract_aggregate_text() {
   echo "OK: wrote $(wc -l < "$text_file") headline lines to $text_file"
 }
 
-# Fetches every AGGREGATE_URLS page, keeps PROMPT_LINES / <number of pages that loaded> headline lines of each in
-# OUTPUT_DIR/global-headlines.txt, summarizes them together with Ollama, and publishes the summary as
-# news-global-headlines_YYYY-MM-DD.txt. A page that fails (e.g. a captcha page) is left out; returns 1 if every page failed.
+# Fetches every AGGREGATE_URLS page (resolved into AGGREGATE_LABELS and AGGREGATE_URL_LIST), keeps PROMPT_LINES /
+# <number of pages that loaded> headline lines of each in OUTPUT_DIR/<NAME>.txt, summarizes them together with Ollama,
+# and publishes the summary as news-<NAME>_YYYY-MM-DD.txt. A page that fails (e.g. a captcha page) is left out;
+# returns 1 if every page failed.
 aggregate_news() {
-  local prompt_lines="$1"
-  local text_file="$OUTPUT_DIR/${AGGREGATE_NAME}.txt"
-  local summary_md="$OUTPUT_DIR/${AGGREGATE_NAME}-summary.md"
-  local summary_txt="$OUTPUT_DIR/${AGGREGATE_NAME}-summary.txt"
+  local name="$1" prompt_lines="$2"
+  local text_file="$OUTPUT_DIR/${name}.txt"
+  local summary_md="$OUTPUT_DIR/${name}-summary.md"
+  local summary_txt="$OUTPUT_DIR/${name}-summary.txt"
   local html_file i label url site_text_file fetched_at first_fetched_at="" fetched_urls="" lines_per_site chars_per_site
   local -a fetched_labels=() fetched_url_list=() failed_labels=()
 
-  html_file="$(mktemp "/tmp/news-${AGGREGATE_NAME}-XXXXXX.html")"
+  html_file="$(mktemp "/tmp/news-${name}-XXXXXX.html")"
   # See fetch_and_summarize for why the RETURN trap resets itself.
   trap 'rm -f "$html_file"; trap - RETURN' RETURN
 
   for i in "${!AGGREGATE_LABELS[@]}"; do
     label="${AGGREGATE_LABELS[$i]}"
     url="${AGGREGATE_URL_LIST[$i]}"
-    site_text_file="$OUTPUT_DIR/${AGGREGATE_NAME}-${label}.txt"
+    site_text_file="$OUTPUT_DIR/${name}-${label}.txt"
     fetched_at="$(TZ="America/New_York" date '+%Y-%m-%d %H:%M:%S %Z')"
-    echo "[$fetched_at] Fetching $label ($url) for the $AGGREGATE_NAME..."
+    echo "[$fetched_at] Fetching $label ($url) for the $name..."
     if ! fetch_page_html "$url" "$html_file" || ! check_page "$html_file" "$url" ||
       ! extract_aggregate_text "$label" "$html_file" "$site_text_file"; then
-      echo "WARNING: left $label out of the $AGGREGATE_NAME." >&2
+      echo "WARNING: left $label out of the $name." >&2
       failed_labels+=("$label")
       continue
     fi
@@ -765,7 +782,7 @@ aggregate_news() {
   done
 
   if [[ ${#fetched_labels[@]} -eq 0 ]]; then
-    echo "ERROR: every $AGGREGATE_NAME page failed (${failed_labels[*]}); no summary written." >&2
+    echo "ERROR: every $name page failed (${failed_labels[*]}); no summary written." >&2
     return 1
   fi
   # Split the prompt lines and characters across the pages that loaded, so a failed page leaves its share to the others.
@@ -774,43 +791,46 @@ aggregate_news() {
   : > "$text_file"
   for i in "${!fetched_labels[@]}"; do
     { printf '<source name="%s" url="%s">\n' "${fetched_labels[$i]}" "${fetched_url_list[$i]}"
-      head -n "$lines_per_site" "$OUTPUT_DIR/${AGGREGATE_NAME}-${fetched_labels[$i]}.txt" | \
+      head -n "$lines_per_site" "$OUTPUT_DIR/${name}-${fetched_labels[$i]}.txt" | \
         awk -v max_chars="$chars_per_site" '{ total += length($0) + 1; if (total > max_chars) exit; print }'
       printf '</source>\n'; } >> "$text_file"
   done
   echo "OK: wrote $(wc -l < "$text_file") lines from ${fetched_labels[*]} to $text_file"
-  summarize_with_ollama "$AGGREGATE_NAME" aggregate "$text_file" 1 "$(wc -l < "$text_file")" "$summary_md" || return 1
+  summarize_with_ollama "$name" aggregate "$text_file" 1 "$(wc -l < "$text_file")" "$summary_md" || return 1
   convert_summary_to_text "$summary_md" "$summary_txt"
   add_timestamp_line "$summary_txt" "$fetched_urls" "$first_fetched_at"
-  publish_news_file "$AGGREGATE_NAME" "$summary_txt" || return 1
+  publish_news_file "$name" "$summary_txt" || return 1
   if [[ ${#failed_labels[@]} -gt 0 ]]; then
-    echo "WARNING: the $AGGREGATE_NAME summary leaves out ${failed_labels[*]}." >&2
+    echo "WARNING: the $name summary leaves out ${failed_labels[*]}." >&2
   fi
 }
 
 # ---------------------------------------------------------------------------
-# Polling and command line
+# One cycle and polling
 # ---------------------------------------------------------------------------
 
-# Fetches every TARGET_NAMES/TARGET_URLS entry once, one after another, then the newest article of each
-# SELECTED_LISTINGS listing (--fundstrat-daily-technical, --fundstrat-macro-analysis), then the aggregate with
-# --aggregate; a failed one doesn't stop the others. Returns 1 if any of them failed.
+# Fetches, summarizes and publishes the --site key KEY, the way its SITE_TYPES entry says.
+run_site() {
+  local key="$1"
+  case "${SITE_TYPES[$key]}" in
+    news-page|fundstrat-posts) fetch_and_summarize "$key" "${SITE_URLS[$key]}" "$PROMPT_LINES" ;;
+    fundstrat-listing) fundstrat_latest_article "$key" "$PROMPT_LINES" ;;
+    aggregate) aggregate_news "$key" "$PROMPT_LINES" ;;
+  esac
+}
+
+# Runs every SELECTED_SITES key once, in the order given, then the --url page (CUSTOM_URL as CUSTOM_NAME); a failed
+# one doesn't stop the others. Returns 1 if any of them failed.
 run_cycle() {
-  local i key status=0
-  for i in "${!TARGET_NAMES[@]}"; do
-    if ! fetch_and_summarize "${TARGET_NAMES[$i]}" "${TARGET_URLS[$i]}" "$PROMPT_LINES"; then
-      echo "WARNING: ${TARGET_NAMES[$i]} failed this cycle." >&2
-      status=1
-    fi
-  done
-  for key in "${SELECTED_LISTINGS[@]}"; do
-    if ! fundstrat_latest_article "$key" "$PROMPT_LINES"; then
+  local key status=0
+  for key in "${SELECTED_SITES[@]}"; do
+    if ! run_site "$key"; then
       echo "WARNING: $key failed this cycle." >&2
       status=1
     fi
   done
-  if [[ "$AGGREGATE" == true ]] && ! aggregate_news "$PROMPT_LINES"; then
-    echo "WARNING: $AGGREGATE_NAME failed this cycle." >&2
+  if [[ -n "$CUSTOM_URL" ]] && ! fetch_and_summarize "$CUSTOM_NAME" "$CUSTOM_URL" "$PROMPT_LINES"; then
+    echo "WARNING: $CUSTOM_NAME failed this cycle." >&2
     status=1
   fi
   return "$status"
@@ -827,227 +847,207 @@ sleep_with_countdown() {
   printf "\n"
 }
 
-# Prints a filesystem-safe name derived from a URL, for --url without --name.
-derive_name_from_url() {
-  local url="$1" name
-  name="$(echo "$url" | sed -E 's#^[a-zA-Z]+://##; s#/$##' | tr '/.:?&=' '-----')"
-  echo "${name:0:80}"
-}
+# ---------------------------------------------------------------------------
+# Command line
+# ---------------------------------------------------------------------------
 
 print_usage() {
-  echo "Usage: $0 --site <key>[,<key>...]|--url <URL>|--aggregate|--fundstrat-daily-technical|--fundstrat-macro-analysis [OPTION]..."
+  echo "Usage: $0 --site <key>[,<key>...]|all [--url <URL> [--name <label>]] [OPTION]..."
+  echo "       $0 --url <URL> [--name <label>] [OPTION]..."
   echo ""
   echo "Options:"
-  echo "  --site <keys>        Fetch & summarize registered sites, comma-separated, one after another."
-  echo "                       Valid keys: ${SITE_KEYS[*]} (e.g. --site cnbc,fundstrat)"
-  echo "                       The summary is also written to \$PORTFOLIO_DIR/news-<key>_YYYY-MM-DD.txt and copied to the remote host"
-  echo "  --url <URL>          Fetch & summarize an arbitrary URL (any site/page, e.g. Bloomberg)"
-  echo "  --aggregate          (Experimental) Fetch the front pages in \$AGGREGATE_URLS and summarize their headlines together"
-  echo "                       into \$PORTFOLIO_DIR/news-${AGGREGATE_NAME}_YYYY-MM-DD.txt, copied to the remote host;"
-  echo "                       runs after the --site sites, if any. Pages that fail to load are left out."
-  echo "  --fundstrat-daily-technical"
-  echo "                       (Experimental) Find the newest article on the Fundstrat Daily Technical Strategy listing page"
-  echo "                       and summarize it into \$PORTFOLIO_DIR/news-fundstrat-daily-technical_YYYY-MM-DD.txt,"
-  echo "                       copied to the remote host; runs after the --site sites and before --aggregate."
-  echo "  --fundstrat-macro-analysis"
-  echo "                       (Experimental) Same with the Fundstrat First Word (macro strategy) listing page, into"
-  echo "                       \$PORTFOLIO_DIR/news-fundstrat-macro-analysis_YYYY-MM-DD.txt; runs after --fundstrat-daily-technical."
+  echo "  --site <keys>        Fetch & summarize sites, comma-separated, one after another in the order given;"
+  echo "                       'all' runs every key in the order below. Each one is also written to"
+  echo "                       \$PORTFOLIO_DIR/news-<key>_YYYY-MM-DD.txt and copied to the remote host. Keys:"
+  echo "                         wsj, cnbc                  the WSJ finance and CNBC front pages"
+  echo "                         fundstrat-flash-insights   the Fundstrat Flash Insights posts"
+  echo "                         fundstrat-daily-technical  (experimental) the newest Fundstrat Daily Technical Strategy article"
+  echo "                         fundstrat-macro-analysis   (experimental) the newest Fundstrat First Word macro article"
+  echo "                         aggregate                  (experimental) the headlines of the \$AGGREGATE_URLS front pages,"
+  echo "                                                    summarized together; pages that fail to load are left out"
+  echo "  --url <URL>          Fetch & summarize an arbitrary URL (any site/page, e.g. Bloomberg), after the --site keys;"
+  echo "                       written to \$OUTPUT_DIR only"
   echo "  --name <label>       Output file name/label to use with --url (default: derived from URL)"
   echo "  --lines <N>          Number of lines from extracted text fed to Ollama (default: $DEFAULT_PROMPT_LINES;"
-  echo "                       --aggregate splits them evenly across the pages that load)"
+  echo "                       aggregate splits them evenly across the pages that load). Fundstrat pages ignore it:"
+  echo "                       they are sent whole, up to \$FUNDSTRAT_MAX_CHARS (default 40000) characters"
   echo "  --profile-dir <DIR>  Chrome profile directory (default: \$PROFILE_DIR or ~/workspace/chrome-flashinsights-profile)"
   echo "  --output-dir <DIR>   Directory for output files (default: \$OUTPUT_DIR or ~/Documents/news-aggregate)"
   echo "  --remote-host <U@H>  Host that --site copies news-<key>_YYYY-MM-DD.txt to with scp -P \$REMOTE_PORT"
   echo "                       (default: \$REMOTE_HOST or hil@hil-fr-dc.freeddns.org; \"\" skips the copy)"
-  echo "  --poll [MINUTES]     Repeat forever, sleeping MINUTES (default: $DEFAULT_POLL_MINUTES) after each fetch & summarize cycle;"
-  echo "                       combine with --site <keys>, --url, --aggregate or --fundstrat-<listing>. Only fetches $POLL_START_ET-$POLL_END_ET ET on trading days."
-  echo "  --list               List available registered site keys and their URLs, and the --aggregate URLs"
+  echo "  --poll [MINUTES]     Repeat forever, sleeping MINUTES (default: $DEFAULT_POLL_MINUTES) after each cycle;"
+  echo "                       only fetches $POLL_START_ET-$POLL_END_ET ET on trading days."
+  echo "  --list               List the site keys and their URLs"
   echo "  -h, --help           Display this help message"
-  echo ""
-  echo "At least one of --site, --url, --aggregate, --fundstrat-daily-technical or --fundstrat-macro-analysis is required;"
-  echo "--site and --url are mutually exclusive."
   echo ""
   echo "Examples:"
   echo "  $0 --site wsj"
-  echo "  $0 --site fundstrat"
-  echo "  $0 --site wsj --poll                  # poll WSJ every $DEFAULT_POLL_MINUTES minutes"
-  echo "  $0 --site cnbc --poll 15              # poll CNBC every 15 minutes"
-  echo "  $0 --site fundstrat --poll 15         # poll Flash Insights every 15 minutes"
-  echo "  $0 --site wsj,cnbc,fundstrat --poll   # poll all three sites every $DEFAULT_POLL_MINUTES minutes"
-  echo "  $0 --aggregate                        # summarize the \$AGGREGATE_URLS front pages together"
-  echo "  $0 --site cnbc --aggregate --poll     # poll CNBC, then the aggregate, every $DEFAULT_POLL_MINUTES minutes"
-  echo "  $0 --fundstrat-daily-technical        # summarize the newest Daily Technical Strategy article"
-  echo "  $0 --fundstrat-macro-analysis         # summarize the newest First Word macro article"
+  echo "  $0 --site fundstrat-flash-insights --poll 15     # poll Flash Insights every 15 minutes"
+  echo "  $0 --site wsj,cnbc,aggregate --poll              # poll WSJ, CNBC, then the aggregate every $DEFAULT_POLL_MINUTES minutes"
+  echo "  $0 --site fundstrat-daily-technical,fundstrat-macro-analysis"
+  echo "  $0 --site all"
   echo "  $0 --url \"https://www.bloomberg.com/markets\" --name bloomberg-markets"
   echo "  $0 --url \"https://www.bloomberg.com/news/articles/xxxx\" --name bbg-article --lines 500"
 }
 
-# ---------------------------------------------------------------------------
-# Argument parsing
-# ---------------------------------------------------------------------------
-SELECTED_SITES=""
-CUSTOM_URL=""
-CUSTOM_NAME=""
-PROMPT_LINES="$DEFAULT_PROMPT_LINES"
-POLL_MINUTES=""
-AGGREGATE=false
-# Keys of FUNDSTRAT_LISTING_URLS selected with --fundstrat-<key> flags, in FUNDSTRAT_LISTING_KEYS order.
-SELECTED_LISTINGS=()
-
-while [[ $# -gt 0 ]]; do
-  case "$1" in
-    --site)
-      [[ $# -ge 2 ]] || { echo "ERROR: --site requires comma-separated keys (${SITE_KEYS[*]})." >&2; exit 1; }
-      SELECTED_SITES="$2"
-      shift 2
-      ;;
-    --url)
-      [[ $# -ge 2 ]] || { echo "ERROR: --url requires an argument." >&2; exit 1; }
-      CUSTOM_URL="$2"
-      shift 2
-      ;;
-    --aggregate)
-      AGGREGATE=true
-      shift
-      ;;
-    --fundstrat-daily-technical|--fundstrat-macro-analysis)
-      [[ " ${SELECTED_LISTINGS[*]} " == *" ${1#--} "* ]] || SELECTED_LISTINGS+=("${1#--}")
-      shift
-      ;;
-    --name)
-      [[ $# -ge 2 ]] || { echo "ERROR: --name requires an argument." >&2; exit 1; }
-      CUSTOM_NAME="$2"
-      shift 2
-      ;;
-    --lines)
-      [[ $# -ge 2 ]] || { echo "ERROR: --lines requires a numeric argument." >&2; exit 1; }
-      if ! [[ "$2" =~ ^[0-9]+$ ]]; then
-        echo "ERROR: --lines must be a positive integer, got '$2'." >&2
-        exit 1
-      fi
-      PROMPT_LINES="$2"
-      shift 2
-      ;;
-    --profile-dir)
-      [[ $# -ge 2 ]] || { echo "ERROR: --profile-dir requires a directory argument." >&2; exit 1; }
-      PROFILE_DIR="$2"
-      shift 2
-      ;;
-    --output-dir)
-      [[ $# -ge 2 ]] || { echo "ERROR: --output-dir requires a directory argument." >&2; exit 1; }
-      OUTPUT_DIR="$2"
-      shift 2
-      ;;
-    --remote-host)
-      [[ $# -ge 2 ]] || { echo "ERROR: --remote-host requires a USER@HOST argument (\"\" skips the copy)." >&2; exit 1; }
-      REMOTE_HOST="$2"
-      shift 2
-      ;;
-    --poll)
-      POLL_MINUTES="$DEFAULT_POLL_MINUTES"
-      if [[ $# -ge 2 && "$2" =~ ^[0-9]+$ ]]; then
-        POLL_MINUTES="$2"
-        shift
-      fi
-      shift
-      ;;
-    --list)
-      echo "Available site keys:"
-      for key in "${SITE_KEYS[@]}"; do
-        echo "  $key -> ${SITE_URLS[$key]}"
-      done
-      echo "--fundstrat-<listing> listing pages:"
-      for key in "${FUNDSTRAT_LISTING_KEYS[@]}"; do
-        echo "  --$key -> ${FUNDSTRAT_LISTING_URLS[$key]}"
-      done
-      echo "--aggregate URLs (AGGREGATE_URLS):"
-      IFS=',' read -r -a aggregate_urls <<< "$AGGREGATE_URLS"
-      for url in "${aggregate_urls[@]}"; do
-        echo "  $url"
-      done
-      exit 0
-      ;;
-    -h|--help|help)
-      print_usage
-      exit 0
-      ;;
-    *)
-      echo "ERROR: Unknown argument '$1'. Use -h or --help for usage." >&2
-      exit 1
-      ;;
-  esac
-done
-
-# Run the selected listings in FUNDSTRAT_LISTING_KEYS order, whatever the order of their flags.
-ordered_listings=()
-for key in "${FUNDSTRAT_LISTING_KEYS[@]}"; do
-  if [[ " ${SELECTED_LISTINGS[*]} " == *" $key "* ]]; then
-    ordered_listings+=("$key")
-  fi
-done
-SELECTED_LISTINGS=("${ordered_listings[@]}")
-
-if [[ -n "$CUSTOM_URL" && -n "$SELECTED_SITES" ]]; then
-  echo "ERROR: --url and --site are mutually exclusive; pass only one." >&2
-  exit 1
-fi
-if [[ -z "$CUSTOM_URL" && -z "$SELECTED_SITES" && "$AGGREGATE" != true && ${#SELECTED_LISTINGS[@]} -eq 0 ]]; then
-  echo "ERROR: pass --site <keys> (${SITE_KEYS[*]}), --url <URL>, --aggregate, --fundstrat-daily-technical or" \
-    "--fundstrat-macro-analysis." \
-    "Use -h or --help for usage." >&2
-  exit 1
-fi
-
-if [[ ! -d "$PROFILE_DIR" ]]; then
-  echo "ERROR: Profile directory '$PROFILE_DIR' does not exist." >&2
-  exit 1
-fi
-
-# Resolve the arguments into the output names and URLs to fetch each cycle, in the given order.
-TARGET_NAMES=()
-TARGET_URLS=()
-if [[ -n "$CUSTOM_URL" ]]; then
-  custom_name="$CUSTOM_NAME"
-  if [[ -z "$custom_name" ]]; then
-    custom_name="$(derive_name_from_url "$CUSTOM_URL")"
-    echo "INFO: --name not given; derived name '$custom_name' from URL."
-  fi
-  if [[ -n "${SITE_URLS[$custom_name]+x}" ]]; then
-    echo "ERROR: --name $custom_name is reserved for --site $custom_name." >&2
-    exit 1
-  fi
-  if [[ "$custom_name" == "$AGGREGATE_NAME" || "$custom_name" == "$AGGREGATE_NAME"-* ]]; then
-    echo "ERROR: --name $custom_name is reserved for the --aggregate output files." >&2
-    exit 1
-  fi
-  if [[ -n "${FUNDSTRAT_LISTING_URLS[$custom_name]+x}" ]]; then
-    echo "ERROR: --name $custom_name is reserved for the --$custom_name output files." >&2
-    exit 1
-  fi
-  TARGET_NAMES=("$custom_name")
-  TARGET_URLS=("$CUSTOM_URL")
-elif [[ -n "$SELECTED_SITES" ]]; then
-  IFS=',' read -r -a selected_keys <<< "$SELECTED_SITES"
-  for key in "${selected_keys[@]}"; do
-    if [[ -z "$key" || -z "${SITE_URLS[$key]+x}" ]]; then
-      echo "ERROR: Unknown site key '$key' in --site $SELECTED_SITES. Valid keys: ${SITE_KEYS[*]} (comma-separated)" >&2
-      exit 1
-    fi
-    if [[ " ${TARGET_NAMES[*]} " == *" $key "* ]]; then
-      echo "ERROR: Site key '$key' is repeated in --site $SELECTED_SITES." >&2
-      exit 1
-    fi
-    TARGET_NAMES+=("$key")
-    TARGET_URLS+=("${SITE_URLS[$key]}")
+print_site_list() {
+  local key url
+  local -a aggregate_urls=()
+  echo "Site keys (--site):"
+  for key in "${SITE_KEYS[@]}"; do
+    case "${SITE_TYPES[$key]}" in
+      fundstrat-listing) echo "  $key -> newest article on ${SITE_URLS[$key]}" ;;
+      aggregate)
+        echo "  $key -> the front pages in AGGREGATE_URLS:"
+        IFS=',' read -r -a aggregate_urls <<< "$AGGREGATE_URLS"
+        for url in "${aggregate_urls[@]}"; do
+          echo "      $url"
+        done
+        ;;
+      *) echo "  $key -> ${SITE_URLS[$key]}" ;;
+    esac
   done
-fi
+}
 
-# Resolve AGGREGATE_URLS into the site labels (output file names and <source> names in the prompt) and URLs.
-AGGREGATE_LABELS=()
-AGGREGATE_URL_LIST=()
-if [[ "$AGGREGATE" == true ]]; then
-  IFS=',' read -r -a aggregate_urls <<< "$AGGREGATE_URLS"
-  for url in "${aggregate_urls[@]}"; do
+# Parses the command line into SITE_ARGUMENT, CUSTOM_URL, CUSTOM_NAME, PROMPT_LINES, POLL_MINUTES, PROFILE_DIR,
+# OUTPUT_DIR and REMOTE_HOST; --list and --help exit here.
+parse_arguments() {
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --site)
+        [[ $# -ge 2 ]] || { echo "ERROR: --site requires comma-separated keys (${SITE_KEYS[*]}) or all." >&2; exit 1; }
+        SITE_ARGUMENT="$2"
+        shift 2
+        ;;
+      --url)
+        [[ $# -ge 2 ]] || { echo "ERROR: --url requires an argument." >&2; exit 1; }
+        CUSTOM_URL="$2"
+        shift 2
+        ;;
+      --name)
+        [[ $# -ge 2 ]] || { echo "ERROR: --name requires an argument." >&2; exit 1; }
+        CUSTOM_NAME="$2"
+        shift 2
+        ;;
+      --lines)
+        [[ $# -ge 2 ]] || { echo "ERROR: --lines requires a numeric argument." >&2; exit 1; }
+        if ! [[ "$2" =~ ^[1-9][0-9]*$ ]]; then
+          echo "ERROR: --lines must be a positive integer, got '$2'." >&2
+          exit 1
+        fi
+        PROMPT_LINES="$2"
+        shift 2
+        ;;
+      --profile-dir)
+        [[ $# -ge 2 ]] || { echo "ERROR: --profile-dir requires a directory argument." >&2; exit 1; }
+        PROFILE_DIR="$2"
+        shift 2
+        ;;
+      --output-dir)
+        [[ $# -ge 2 ]] || { echo "ERROR: --output-dir requires a directory argument." >&2; exit 1; }
+        OUTPUT_DIR="$2"
+        shift 2
+        ;;
+      --remote-host)
+        [[ $# -ge 2 ]] || { echo "ERROR: --remote-host requires a USER@HOST argument (\"\" skips the copy)." >&2; exit 1; }
+        REMOTE_HOST="$2"
+        shift 2
+        ;;
+      --poll)
+        POLL_MINUTES="$DEFAULT_POLL_MINUTES"
+        if [[ $# -ge 2 && "$2" =~ ^[0-9]+$ ]]; then
+          POLL_MINUTES="$2"
+          shift
+        fi
+        shift
+        ;;
+      --list)
+        print_site_list
+        exit 0
+        ;;
+      -h|--help|help)
+        print_usage
+        exit 0
+        ;;
+      *)
+        echo "ERROR: Unknown argument '$1'. Use -h or --help for usage." >&2
+        exit 1
+        ;;
+    esac
+  done
+
+  if [[ -z "$SITE_ARGUMENT" && -z "$CUSTOM_URL" ]]; then
+    echo "ERROR: pass --site <keys> (${SITE_KEYS[*]}, or all), --url <URL>, or both. Use -h or --help for usage." >&2
+    exit 1
+  fi
+  if [[ -n "$CUSTOM_NAME" && -z "$CUSTOM_URL" ]]; then
+    echo "ERROR: --name only applies to --url." >&2
+    exit 1
+  fi
+}
+
+# Resolves SITE_ARGUMENT ("all" or comma-separated keys) into SELECTED_SITES, in the order given.
+resolve_sites() {
+  local key
+  local -a keys=()
+  SELECTED_SITES=()
+  [[ -n "$SITE_ARGUMENT" ]] || return 0
+  if [[ "$SITE_ARGUMENT" == all ]]; then
+    SELECTED_SITES=("${SITE_KEYS[@]}")
+    return 0
+  fi
+  IFS=',' read -r -a keys <<< "$SITE_ARGUMENT"
+  for key in "${keys[@]}"; do
+    if [[ -z "$key" || -z "${SITE_TYPES[$key]+x}" ]]; then
+      echo "ERROR: Unknown site key '$key' in --site $SITE_ARGUMENT. Valid keys: ${SITE_KEYS[*]} (comma-separated), or all." >&2
+      exit 1
+    fi
+    if [[ " ${SELECTED_SITES[*]} " == *" $key "* ]]; then
+      echo "ERROR: Site key '$key' is repeated in --site $SITE_ARGUMENT." >&2
+      exit 1
+    fi
+    SELECTED_SITES+=("$key")
+  done
+}
+
+# Sets CUSTOM_NAME for --url (derived from the URL without --name) and rejects names whose output files belong to a
+# site key: <key>.txt, <key>-summary.*, and aggregate-<label>.txt for each aggregate page.
+resolve_custom_name() {
+  local key
+  [[ -n "$CUSTOM_URL" ]] || return 0
+  if [[ -z "$CUSTOM_NAME" ]]; then
+    CUSTOM_NAME="$(echo "$CUSTOM_URL" | sed -E 's#^[a-zA-Z]+://##; s#/$##' | tr '/.:?&=' '-----')"
+    CUSTOM_NAME="${CUSTOM_NAME:0:80}"
+    echo "INFO: --name not given; derived name '$CUSTOM_NAME' from URL."
+  fi
+  for key in "${SITE_KEYS[@]}"; do
+    if [[ "$CUSTOM_NAME" == "$key" || ( "${SITE_TYPES[$key]}" == aggregate && "$CUSTOM_NAME" == "$key"-* ) ]]; then
+      echo "ERROR: --name $CUSTOM_NAME is reserved for the output files of --site $key." >&2
+      exit 1
+    fi
+  done
+}
+
+# Prints a short label for a front-page URL: its second-level domain (https://finance.yahoo.com/ -> yahoo).
+derive_label_from_url() {
+  local url="$1"
+  echo "$url" | sed -E 's#^[a-zA-Z]+://##; s#[/:?].*##' | awk -F. '{ print (NF > 1 ? $(NF - 1) : $1) }'
+}
+
+# When an aggregate site is selected, resolves AGGREGATE_URLS into AGGREGATE_LABELS (the per-page output file names
+# and the <source> names in the prompt) and AGGREGATE_URL_LIST.
+resolve_aggregate_urls() {
+  local key url label base_label n selected=false
+  local -a urls=()
+  AGGREGATE_LABELS=()
+  AGGREGATE_URL_LIST=()
+  for key in "${SELECTED_SITES[@]}"; do
+    [[ "${SITE_TYPES[$key]}" == aggregate ]] && selected=true
+  done
+  [[ "$selected" == true ]] || return 0
+
+  IFS=',' read -r -a urls <<< "$AGGREGATE_URLS"
+  for url in "${urls[@]}"; do
     if ! [[ "$url" =~ ^https?://[^/]+ ]]; then
       echo "ERROR: '$url' in AGGREGATE_URLS is not an http(s) URL (AGGREGATE_URLS is comma-separated)." >&2
       exit 1
@@ -1063,28 +1063,46 @@ if [[ "$AGGREGATE" == true ]]; then
     AGGREGATE_URL_LIST+=("$url")
   done
   if [[ ${#AGGREGATE_URL_LIST[@]} -eq 0 ]]; then
-    echo "ERROR: --aggregate needs at least one URL in AGGREGATE_URLS." >&2
+    echo "ERROR: --site aggregate needs at least one URL in AGGREGATE_URLS." >&2
     exit 1
   fi
   if [[ "$PROMPT_LINES" -lt ${#AGGREGATE_URL_LIST[@]} ]]; then
     echo "ERROR: --lines $PROMPT_LINES leaves no line for some of the ${#AGGREGATE_URL_LIST[@]} AGGREGATE_URLS pages." >&2
     exit 1
   fi
-fi
-
-mkdir -p "$OUTPUT_DIR"
+}
 
 # ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
+SITE_ARGUMENT=""            # --site as given, e.g. "wsj,aggregate"
+SELECTED_SITES=()           # its keys, in the order given
+CUSTOM_URL=""               # --url
+CUSTOM_NAME=""              # --name, or derived from --url
+PROMPT_LINES="$DEFAULT_PROMPT_LINES"
+POLL_MINUTES=""             # empty: run one cycle
+AGGREGATE_LABELS=()
+AGGREGATE_URL_LIST=()
+
+parse_arguments "$@"
+resolve_sites
+resolve_custom_name
+resolve_aggregate_urls
+
+if [[ ! -d "$PROFILE_DIR" ]]; then
+  echo "ERROR: Profile directory '$PROFILE_DIR' does not exist." >&2
+  exit 1
+fi
+mkdir -p "$OUTPUT_DIR"
+
 if [[ -z "$POLL_MINUTES" ]]; then
   run_cycle || exit 1
   echo "INFO: News aggregate run complete."
   exit 0
 fi
 
-echo "Starting news polling for ${TARGET_NAMES[*]}${SELECTED_LISTINGS[*]:+ ${SELECTED_LISTINGS[*]}}${AGGREGATE_LABELS[*]:+ $AGGREGATE_NAME (${AGGREGATE_LABELS[*]})} (sleeping $POLL_MINUTES minute(s) after each cycle," \
-  "fetching only $POLL_START_ET-$POLL_END_ET ET on trading days)..."
+echo "Starting news polling for ${SELECTED_SITES[*]}${CUSTOM_URL:+${SELECTED_SITES[*]:+ }$CUSTOM_NAME}" \
+  "(sleeping $POLL_MINUTES minute(s) after each cycle, fetching only $POLL_START_ET-$POLL_END_ET ET on trading days)..."
 while true; do
   # Outside the polling window, sleep until it opens instead of waking every POLL_MINUTES.
   if ! is_poll_window; then

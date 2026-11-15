@@ -18,7 +18,7 @@ page among links with that date). The listing's article URLs change every day, a
 Technical Strategy listing also holds the monthly Upticks report, under technical-strategy/newtons-upticks/ instead of
 technical-strategy/daily-technical-strategy/), so this finds the current one.
 
-Usage (used by fetch-news.sh for fundstratdirect.com article pages and --fundstrat-daily-technical):
+Usage (used by fetch-news.sh for fundstratdirect.com article pages and --site fundstrat-daily-technical,fundstrat-macro-analysis):
     python3 extract_fundstrat_article.py PAGE_HTML > article.txt
     python3 extract_fundstrat_article.py --latest-url LISTING_HTML URL_PREFIX
 

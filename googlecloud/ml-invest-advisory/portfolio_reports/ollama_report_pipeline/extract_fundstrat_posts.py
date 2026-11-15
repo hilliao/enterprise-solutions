@@ -10,7 +10,7 @@ in div.strategy-author-detail (name in <h6>, title in <p>) and the text in div.f
 are dropped; ticker badges keep only the ticker, not the live price change printed next to it, which is the quote
 when the page loaded rather than part of the post.
 
-Usage (used by fetch-news.sh --site fundstrat):
+Usage (used by fetch-news.sh --site fundstrat-flash-insights):
     python3 extract_fundstrat_posts.py PAGE_HTML > posts.txt
 
 Exit codes: 0 posts written to stdout; 3 the page is not signed in (no "logged-in" <body> class, which WordPress
