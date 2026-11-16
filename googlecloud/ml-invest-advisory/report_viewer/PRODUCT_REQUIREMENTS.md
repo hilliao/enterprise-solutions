@@ -77,7 +77,7 @@ holidays. That window starts about 1.5 hours before the market opens. On each pa
 | Report | Content | Main input |
 |---|---|---|
 | **Daily report** | Portfolio performance snapshot, AI daily briefing, holding-by-holding commentary | Real-time quotes + the **Fundstrat Daily Technical Strategy** article of the day |
-| **News**, one per news source | Breaking-news impact: key news, direct holdings impact, macro and sector channels, resilience vs. vulnerability, tactical action items | Real-time quotes + that source's news summary |
+| **News**, one per news source | Financial market news impact: key news, direct holdings impact, macro and sector channels, resilience vs. vulnerability, tactical action items | Real-time quotes + that source's news summary |
 
 **News and research sources**
 

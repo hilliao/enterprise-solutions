@@ -43,7 +43,7 @@ GCS_BUCKET=gs://bucket/reports/ GCLOUD_CONFIG=default PORTFOLIO_DIR=~/workspace/
 ```
 
 ### report-news-impact.sh
-Same pipeline as `report-daily.sh`, but generates a breaking-news impact
+Same pipeline as `report-daily.sh`, but generates a financial market news impact
 ("news") report per portfolio and news site, from
 `prompt_templates/news-report-template.txt`. It
 reads every `PORTFOLIO_DIR/news-<SITE>_YYYY-MM-DD.txt` file for today

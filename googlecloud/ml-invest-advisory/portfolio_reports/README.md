@@ -78,7 +78,7 @@ Generates a comprehensive daily analysis. It searches for all `.json` portfolios
 ### 2. News reports
 **Script**: `ollama_report_pipeline/report-news-impact.sh`
 
-Designed for rapid analysis of breaking news. It uses the `prompt_templates/news-report-template.txt` template and injects each of today's news files from `ollama_report_pipeline/fetch-news.sh` in place of its `{{NEWS_CONTENT}}` placeholder to analyze how current events might impact your specific holdings, producing one report per news site and portfolio named `news-<site>-<portfolio>-llm-generated.html` (e.g. `news-cnbc-yang-llm-generated.html`).
+Designed for rapid analysis of financial market news. It uses the `prompt_templates/news-report-template.txt` template and injects each of today's news files from `ollama_report_pipeline/fetch-news.sh` in place of its `{{NEWS_CONTENT}}` placeholder to analyze how current events might impact your specific holdings, producing one report per news site and portfolio named `news-<site>-<portfolio>-llm-generated.html` (e.g. `news-cnbc-yang-llm-generated.html`).
 
 ### 3. Realtime Continuous Monitoring
 **Script**: `ollama_report_pipeline/run-market-hours.sh`
