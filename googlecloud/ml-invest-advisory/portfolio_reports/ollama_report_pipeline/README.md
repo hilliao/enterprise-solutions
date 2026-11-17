@@ -57,17 +57,6 @@ to use other files. Exits with an error if no news file is found.
 Key env vars: `PORTFOLIO_DIR`, `LLM_PROMPT_TEMPLATE`, `USE_CASE`, `NEWS_FILES`,
 `OLLAMA_MODEL`, `OLLAMA_TIMEOUT_SECONDS`.
 
-### compare-models.sh
-Runs one prompt (e.g. a `daily-report-<portfolio>-llm-prompt.txt` written by
-`report-daily.sh`) through several Ollama models in turn, unloading each
-before the next, and writes every report plus a timing summary (wall clock,
-tokens/s, CPU/GPU split, context length) and a side-by-side `comparison.html`
-to a new timestamped directory under `<prompt dir>/model-comparison/`.
-```
-./compare-models.sh PROMPT_FILE [MODEL ...]   # default: gemma4:12b-it-qat qwen3.5:9b-q8_0
-```
-Key env vars: `OUTPUT_DIR`, `OLLAMA_TIMEOUT_SECONDS` (default 1800), `OLLAMA_THINK`.
-
 ### fetch-news.sh
 News aggregator: fetches news pages via headless Chrome and summarizes them with
 Ollama. `--site` takes comma-separated keys (or `all`), run one after another in

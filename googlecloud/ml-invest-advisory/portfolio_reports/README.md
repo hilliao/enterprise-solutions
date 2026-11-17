@@ -33,7 +33,7 @@ Set the following environment variables to customize the behavior:
 *   `GOOGLE_APPLICATION_CREDENTIALS`: Path to your Google Cloud service account key.
 *   `MARKET_COMMENTARY_FILE`: (For daily reports) Path to the text file with the Fundstrat daily technical strategy (this feeds the prompt's market commentary section); defaults to `$PORTFOLIO_DIR/news-fundstrat-daily-technical_YYYY-MM-DD.txt` for today.
 *   `NEWS_FILES`: (For news reports) Comma-separated news files; defaults to every `news-<SITE>_YYYY-MM-DD.txt` for today in `PORTFOLIO_DIR`, written by `ollama_report_pipeline/fetch-news.sh --site <SITE>`.
-*   `OLLAMA_MODEL`: Ollama model used for the reports (default `gemma4:12b-it-qat`). Use `ollama_report_pipeline/compare-models.sh` to compare candidate models on the same prompt.
+*   `OLLAMA_MODEL`: Ollama model used for the reports (default `gemma4:12b-it-qat`).
 
 ### Portfolio Format
 Each portfolio should be a `.json` file in the `PORTFOLIO_DIR`. Prefix Taiwan stocks with `TW:`:
