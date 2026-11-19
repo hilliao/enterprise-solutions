@@ -7,9 +7,17 @@ Two HTTP Cloud Functions (gen2, running on Cloud Run) that return real-time stoc
 | `get_us_ticker_quotes` | US | [Alpaca stock snapshots](https://alpaca.markets/sdks/python/market_data.html) `GET /v2/stocks/snapshots` | [alpaca-quotes.py](alpaca-quotes.py) |
 | `get_tw_ticker_quotes` | Taiwan | [SinoTrade Shioaji](https://sinotrade.github.io/) `api.snapshots()` | [sinotrade.py](sinotrade.py) |
 
-All entry points are in [main.py](main.py). The US quotes (Alpaca) are used by the portfolio reports in
-[portfolio_reports](../portfolio_reports) (`STOCK_QUOTES_CLOUD_RUN_URL`, see [build_portfolio_prompt.py](../portfolio_reports/build_portfolio_prompt.py)).
-Use the `get-us-ticker-quotes` URL as `STOCK_QUOTES_CLOUD_RUN_URL`.
+All entry points are in [main.py](main.py). Both functions are used by the portfolio reports in
+[portfolio_reports](../portfolio_reports) (see [build_portfolio_prompt.py](../portfolio_reports/build_portfolio_prompt.py)
+and the [top-level README](../README.md)):
+
+- Use the `get-us-ticker-quotes` URL as `STOCK_QUOTES_CLOUD_RUN_URL`.
+- Use the `get-tw-ticker-quotes` URL as `TW_STOCK_QUOTES_CLOUD_RUN_URL`, for portfolio tickers with the `TW:` prefix.
+- Set both in the `CONFIGURATION` section of `run-market-hours.sh`.
+- The caller's service account (`GOOGLE_APPLICATION_CREDENTIALS` there) needs `roles/run.invoker` on both functions.
+
+`build_portfolio_prompt.py` reads `price`, `previous-close` and `currency` from the response. Changing those fields
+or the `{symbol: quote}` body shape breaks the reports.
 
 ## Files
 

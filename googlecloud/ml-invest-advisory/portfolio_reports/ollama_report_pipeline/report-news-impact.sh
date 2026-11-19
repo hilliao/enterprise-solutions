@@ -54,8 +54,8 @@
 #
 # Callers:
 #   run-market-hours.sh runs report-daily.sh and then report-news-impact.sh on every
-#   loop iteration during the 08:00-18:00 ET window,
-#   then uploads $PORTFOLIO_DIR/*.html to GCS, one folder per portfolio:
+#   loop iteration during the 08:00-18:00 ET window. Each HTML report is uploaded to GCS, one folder per
+#   portfolio, as soon as it is written (REPORT_UPLOAD_COMMAND, i.e. upload-report.sh, run by write_html_report):
 #
 #     report-daily.sh && (report-news-impact.sh || true)
 #

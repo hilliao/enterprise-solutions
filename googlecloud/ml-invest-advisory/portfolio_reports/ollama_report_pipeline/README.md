@@ -8,6 +8,17 @@ Fundstrat research) into `news-<SITE>_YYYY-MM-DD.txt` files, `report-daily.sh` a
 Most scripts assume the ml-invest-advisory portfolio_reports layout (portfolio JSON
 files, prompt templates, `build_portfolio_prompt.py` in the parent folder).
 
+How it fits together (see the [top-level README](../../README.md) for the whole system):
+
+- **Inputs:** stock quotes from the [market_symbol_quotes](../../market_symbol_quotes) Cloud Functions, called by
+  `../build_portfolio_prompt.py`, and the portfolio `*.json` files in `PORTFOLIO_DIR`.
+- **News:** `fetch-news.sh` runs on its own, usually as `fetch-news.sh --site ... --poll`, on a machine with Chrome
+  and the Fundstrat profile. It writes the news files to `PORTFOLIO_DIR`. It also copies them to `REMOTE_HOST`, so
+  a second machine running `run-market-hours.sh` gets the same news. `run-market-hours.sh` doesn't call it.
+- **Output:** `run-market-hours.sh` uploads every HTML report to `GCS_BUCKET<portfolio>/` through
+  `upload-report.sh`. The [Report Viewer](../../report_viewer) lists that bucket and prefix, so its `GCS_BUCKET`
+  and `GCS_PREFIX` must name the same `gs://` folder.
+
 ## Scripts
 
 ### report-daily.sh
@@ -37,6 +48,8 @@ portfolio is the longest `PORTFOLIO_DIR/*.json` name the file name ends with.
 `run-market-hours.sh` sets it as `REPORT_UPLOAD_COMMAND`, so every report is
 uploaded the moment it is written instead of after the whole run; a failed upload
 only prints a warning. Needs `GCS_BUCKET`, `GCLOUD_CONFIG` and `PORTFOLIO_DIR`.
+A report whose name matches no portfolio is not uploaded (exit 65). That's why the report names must keep the
+`-<portfolio>-llm-generated.html` ending, which `report_viewer/report_catalog.py` also parses.
 ```
 GCS_BUCKET=gs://bucket/reports/ GCLOUD_CONFIG=default PORTFOLIO_DIR=~/workspace/portfolios \
   ./upload-report.sh ~/workspace/portfolios/daily-report-yang-llm-generated.html
@@ -137,7 +150,8 @@ exits 1. `--poll` only fetches 08:00-18:00 ET on trading days (1.5 hours before
 the NYSE open until 2 hours after the close, the same window as
 `run-market-hours.sh`) and otherwise sleeps until the window opens; a failed site is retried next
 cycle instead of stopping the loop. Key env vars: `PROFILE_DIR`,
-`OUTPUT_DIR`, `PORTFOLIO_DIR`, `REMOTE_HOST`, `REMOTE_PORT`, `AGGREGATE_URLS`, `FUNDSTRAT_MAX_CHARS`,
+`OUTPUT_DIR`, `PORTFOLIO_DIR`, `REMOTE_HOST`, `REMOTE_PORT` (default 23), `AGGREGATE_URLS`,
+`AGGREGATE_MAX_CHARS` (default 24,000 characters of headlines, split across the pages), `FUNDSTRAT_MAX_CHARS`,
 `OLLAMA_HOST` (default `8400f:11434`), `OLLAMA_MODEL` (default `gemma4:12b-it-qat` for every site), `OLLAMA_THINK`.
 
 The 600-line default assumes the Ollama server runs with
@@ -205,3 +219,14 @@ Before running, edit the `CONFIGURATION` section for
 `PYTHON_VENV` (activated by the script, so no `source <venv>/bin/activate` is
 needed first; empty uses the `python3` on `PATH`), `REPORT_SCRIPTS_DIR`, and the
 GCS bucket/`gcloud` configuration.
+
+`GCS_BUCKET` is a `gs://bucket/prefix/` URL that ends with `/`. The `GCLOUD_CONFIG` account needs write access to
+it. Viewers of the reports need read access (`roles/storage.objectViewer`) with their own Google accounts; see
+[report_viewer/README.md](../../report_viewer/README.md#access-control).
+
+## Tests
+
+```bash
+python -m pytest -v test_extract_fundstrat_posts.py   # from this folder; standard library only
+bash -n *.sh                                          # syntax check of the shell scripts (they have no tests)
+```
