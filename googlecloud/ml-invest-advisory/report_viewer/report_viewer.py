@@ -3,7 +3,7 @@
 Report Viewer (beta): a web UI that shows the HTML portfolio reports in Cloud Storage in tabs.
 
 Purpose:
-  The report pipeline (portfolio_reports/ollama_report_pipeline/run-market-hours.sh) uploads ~24 HTML reports to
+  The report pipeline (portfolio_reports/ollama_report_pipeline/run-market-hours.sh) uploads the HTML reports to
   gs://$GCS_BUCKET/$GCS_PREFIX<portfolio>/, one folder per portfolio. This server shows them in one page: a tab per portfolio, a sub-tab per report
   (see report_catalog.py), each with a link to its authenticated storage.cloud.google.com URL.
 
@@ -21,6 +21,7 @@ Security model:
 
 Routes:
   GET  /                            the tab UI (static/index.html)
+  GET  /favicon.svg                 the browser-tab icon (static/favicon.svg)
   GET  /api/reports                 JSON: signed-in user and the reports grouped into tabs
   GET  /reports/<portfolio>/<file>  one report's HTML
   GET  /auth/login                  starts Google sign-in
@@ -67,6 +68,9 @@ from google_sign_in import REDIRECT_PATH, GoogleSignIn, OAuthClient, SessionStor
 from report_catalog import group_reports, is_safe_report_path
 
 INDEX_HTML = Path(__file__).resolve().parent / 'static' / 'index.html'
+# The browser-tab icon. Public like the page; an SVG, so it gets a CSP that blocks any script in it.
+FAVICON_SVG = INDEX_HTML.with_name('favicon.svg')
+FAVICON_CSP = "default-src 'none'; style-src 'unsafe-inline'"
 SESSION_COOKIE = 'report_viewer_session'
 SIGN_IN_STATE_COOKIE = 'report_viewer_sign_in_state'
 
@@ -147,6 +151,8 @@ class ReportViewerHandler(BaseHTTPRequestHandler):
         if url.path in ('/', '/index.html'):
             page = INDEX_HTML.read_bytes()
             self._send(HTTPStatus.OK, 'text/html; charset=utf-8', page, {'Content-Security-Policy': index_csp(page)})
+        elif url.path == '/favicon.svg':
+            self._send(HTTPStatus.OK, 'image/svg+xml', FAVICON_SVG.read_bytes(), {'Content-Security-Policy': FAVICON_CSP})
         elif url.path == '/api/reports':
             self._get_report_list()
         elif url.path.startswith('/reports/'):

@@ -1,7 +1,7 @@
 #!/bin/bash
 #
 # Purpose:
-#   Generates a breaking-news impact report ("news" report) per portfolio and news site with
+#   Generates a financial market news impact report ("news" report) per portfolio and news site with
 #   a local Ollama LLM. For every *.json portfolio file in PORTFOLIO_DIR:
 #     1) Builds an LLM prompt from LLM_PROMPT_TEMPLATE via build_portfolio_prompt.py,
 #        which fetches current quotes from STOCK_QUOTES_CLOUD_RUN_URL and TW_STOCK_QUOTES_CLOUD_RUN_URL (once per portfolio).
@@ -54,8 +54,8 @@
 #
 # Callers:
 #   run-market-hours.sh runs report-daily.sh and then report-news-impact.sh on every
-#   loop iteration during the 08:00-18:00 ET window,
-#   then uploads $PORTFOLIO_DIR/*.html to GCS, one folder per portfolio:
+#   loop iteration during the 08:00-18:00 ET window. Each HTML report is uploaded to GCS, one folder per
+#   portfolio, as soon as it is written (REPORT_UPLOAD_COMMAND, i.e. upload-report.sh, run by write_html_report):
 #
 #     report-daily.sh && (report-news-impact.sh || true)
 #
@@ -161,6 +161,6 @@ for portfolio_file in "${PORTFOLIO_FILES[@]}"; do
     run_ollama "$prompt_file" "$report_md"
     append_prompt_to_report "$prompt_file" "$report_md"
     write_html_report "$report_md" "$report_html" \
-      "Breaking News Impact Report for $portfolio_name from $site at $(date +"%Y-%m-%d %H:%M:%S %Z")"
+      "Financial Market News Impact Report for $portfolio_name from $site at $(date +"%Y-%m-%d %H:%M:%S %Z")"
   done
 done

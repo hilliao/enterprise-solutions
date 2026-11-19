@@ -2,13 +2,17 @@
 
 A web UI that shows every HTML report uploaded by
 [`portfolio_reports/ollama_report_pipeline/run-market-hours.sh`](../portfolio_reports/ollama_report_pipeline/run-market-hours.sh)
-to `gs://hil-financial-services-smart-invest/reports/<portfolio>/` in tabs, so you can switch between ~24 reports
-in one browser tab instead of opening each `https://storage.cloud.google.com/...` URL separately.
+to `gs://hil-financial-services-smart-invest/reports/<portfolio>/` in tabs, so you can switch between the reports
+(7 per portfolio: the daily report and 6 news reports) in one browser tab instead of opening each
+`https://storage.cloud.google.com/...` URL separately. It is part of [ml-invest-advisory](../README.md); the
+[top-level README](../README.md) shows the whole system.
 
 - **Portfolio tabs** (top row): one per portfolio folder, e.g. `hil-michelle-portfolio-1`, `vicky`, `vicky-tw-portfolio`,
   `yang`, each with a count of its reports.
-- **Report tabs** (second row): the portfolio's daily report first, then one news report per news site
-  (CNBC, Fundstrat, Fundstrat daily technical, Fundstrat macro analysis, Global headlines, WSJ).
+- **Report tabs** (second row): the portfolio's daily report first, then one news report per `fetch-news.sh --site`
+  key, by site: Aggregate, CNBC, Fundstrat daily technical, Fundstrat flash insights, Fundstrat macro analysis, WSJ.
+- **Fits any screen**: above 600 px wide the tabs wrap onto more rows. At 600 px or narrower (phones) each row
+  scrolls sideways, with fade cues when more tabs are off-screen. The selected tab is kept in view on resize.
 - **Info bar**:
   - when the report was last uploaded (highlighted if older than 24 h), its size and file name
   - a **Reload** button
@@ -19,16 +23,31 @@ in one browser tab instead of opening each `https://storage.cloud.google.com/...
 - **Keyboard**: ←/→/Home/End switch tabs.
 - **Light and dark theme**: follows the browser/OS setting (see [Dark theme](#dark-theme)).
 
-## Product requirements
+## Where the reports come from
 
-[PRODUCT_REQUIREMENTS.md](PRODUCT_REQUIREMENTS.md) (also as [PRODUCT_REQUIREMENTS.html](PRODUCT_REQUIREMENTS.html))
-describes the existing features and the planned **Ask AI** export to Google Gemini and Meta AI. Edit the `.md`,
-then regenerate the HTML with pandoc. [docs-style.html](docs-style.html) holds the page style (light/dark, tables):
+The viewer only reads. It needs a working report pipeline that has uploaded reports:
 
-```bash
-pandoc -s -f gfm+yaml_metadata_block -t html5 --toc --toc-depth=1 --metadata toc-title=Contents \
-  --include-in-header docs-style.html -o PRODUCT_REQUIREMENTS.html PRODUCT_REQUIREMENTS.md
-```
+1. [`fetch-news.sh`](../portfolio_reports/ollama_report_pipeline/fetch-news.sh) writes the news files the news
+   reports are built from.
+2. [`run-market-hours.sh`](../portfolio_reports/ollama_report_pipeline/run-market-hours.sh) runs
+   [`report-daily.sh`](../portfolio_reports/ollama_report_pipeline/report-daily.sh) and
+   [`report-news-impact.sh`](../portfolio_reports/ollama_report_pipeline/report-news-impact.sh) in a loop during
+   market hours.
+3. Each HTML report is uploaded with
+   [`upload-report.sh`](../portfolio_reports/ollama_report_pipeline/upload-report.sh) (`gcloud storage cp
+   --configuration=$GCLOUD_CONFIG`) to `GCS_BUCKET<portfolio>/`.
+
+For the viewer to show them:
+
+- The pipeline's `GCS_BUCKET` (a `gs://bucket/prefix/` URL in the `CONFIGURATION` section of
+  `run-market-hours.sh`) must be the same folder as this viewer's `gs://$GCS_BUCKET/$GCS_PREFIX`.
+- The pipeline's `GCLOUD_CONFIG` account needs write access to the bucket.
+- Each viewer user's Google account needs read access (see [Access control](#access-control)).
+- The report names must stay `daily-report-<portfolio>-llm-generated.html` and
+  `news-<site>-<portfolio>-llm-generated.html` (see [Tab grouping](#tab-grouping)).
+
+If the pipeline hasn't run, the viewer signs in fine but shows no reports. Check the bucket with
+`gcloud storage ls gs://<bucket>/<prefix>*/`.
 
 ## Access control
 
@@ -60,6 +79,7 @@ restarts. Signing in again is usually one click, because Google remembers the co
 ```
 browser ──► report_viewer.py ──(the visitor's own access token)──► Cloud Storage JSON API
    │          /                             static/index.html, the tab UI (public: holds no report data)
+   │          /favicon.svg                  static/favicon.svg, the browser-tab icon (public)
    │          /api/reports                  reports grouped into tabs (report_catalog.py)   sign-in required
    │          /reports/<portfolio>/<file>   one report's HTML, shown in the tab's <iframe>   sign-in required
    │          /auth/login                   redirects to Google sign-in
@@ -74,6 +94,7 @@ browser ──► report_viewer.py ──(the visitor's own access token)──�
 | [cloud_storage.py](cloud_storage.py) | Lists and downloads the reports with the signed-in user's token        |
 | [report_catalog.py](report_catalog.py) | Groups report file names into portfolio and report tabs              |
 | [static/index.html](static/index.html) | The tab UI                                                           |
+| [static/favicon.svg](static/favicon.svg) | The browser-tab icon (a blue square with a rising bar chart)       |
 
 Why not `<iframe>` the `storage.cloud.google.com` URLs directly? Those responses send
 `x-frame-options: SAMEORIGIN`, and their login relies on third-party cookies inside an iframe, which browsers
@@ -165,6 +186,29 @@ the host; **Sign in with Google** at any other address then shows a page pointin
 
 Use `HOST=127.0.0.1` if only this machine (or an SSH tunnel or a local proxy) needs to reach it.
 
+### Docker
+
+[Dockerfile](Dockerfile) builds a standard-library-only image that runs as an unprivileged user and holds no
+secrets. Its header comment has the full build, run and test commands. In short:
+
+```bash
+docker build --pull -t us-central1-docker.pkg.dev/todo-ae9c2/googlecloud-fr/report-viewer:1.0.0 .
+docker run -d --name report-viewer --restart unless-stopped --read-only --cap-drop ALL \
+  --security-opt no-new-privileges -p 127.0.0.1:8081:8081 \
+  -v /etc/report-viewer/client_secret.json:/run/secrets/client_secret.json:ro \
+  us-central1-docker.pkg.dev/todo-ae9c2/googlecloud-fr/report-viewer:1.0.0
+```
+
+- **Port:** the image listens on `8081` (`PORT`), and `-p 127.0.0.1:` keeps it reachable from the host only.
+- **OAuth client:** mounted read-only at run time, never copied into the image.
+- **Public address:** a TLS reverse proxy on the host (e.g. nginx) serves the public `https://` address. The
+  production deployment is `https://services.googlecloud.fr/`.
+- **Pushing:** pushing to Artifact Registry uses the gcloud credential helper (`gcloud auth configure-docker
+  us-central1-docker.pkg.dev`). It uses the *active* gcloud configuration, so pick one with
+  `CLOUDSDK_ACTIVE_CONFIG_NAME=<name> docker push ...`.
+- **zlib upgrade:** the Dockerfile upgrades `zlib1g` for a security fix the base image lacks. Remove that line
+  once an image scan of plain `python:3.12-slim` no longer reports it.
+
 ## Dark theme
 
 The viewer and the reports follow the browser/OS light or dark setting (`prefers-color-scheme`). The reports' dark
@@ -216,7 +260,10 @@ If a new `--site` of `fetch-news.sh` needs special capitalization (like `CNBC`),
   is dropped). Expired sessions are purged.
 - **Sign-in address**: a forged `Host` or `X-Forwarded-*` header can't send a sign-in elsewhere: Google only
   redirects to authorized redirect URIs, the state cookie stays on the host the browser really used, and malformed
-  host values are rejected. Expose the viewer only through the proxy, so those headers come from it.
+  host values are rejected. Expose the viewer only through the proxy, so those headers come from it. The proxy
+  must also **set** `X-Forwarded-Host` itself (nginx: `proxy_set_header X-Forwarded-Host $host;`) rather than
+  pass on the client's. Otherwise a client can make the viewer build a redirect URI for any host. Google refuses it
+  unless that URI is authorized, but that leaves the OAuth client's redirect list as the only check.
 - **HTTPS**: over `https://`, every response also carries
   `Strict-Transport-Security: max-age=31536000`.
 - **Sessions**: they are in memory only, so restarting the server signs everyone out.
@@ -230,16 +277,24 @@ python3 -m unittest -v test_report_viewer.py     # or: python -m pytest -v test_
 
 Cloud Storage and Google's OAuth endpoints are faked. The tests cover:
 
-- the tab grouping
+- the tab grouping, and skipping unsafe or out-of-layout object names
 - 401 for visitors who aren't signed in, and for forged or expired sessions
-- Cloud Storage's 403 being passed through
+- Cloud Storage's 403 being passed through, and a rejected token ending the session
 - the user's own token being used for every Cloud Storage call
-- the sign-in flow: state binding, single-use state, required scope
-- sign-out
-- the port fallback
+- the sign-in flow: state binding, single-use state, required scope, the redirect URI kept per sign-in
+- sign-in at any address, reverse-proxy headers, malformed hosts, and `PUBLIC_BASE_URL` pinning
+- the security headers, the page and report CSPs, escaping of reflected input, HSTS and `Secure` cookies over HTTPS
+- sign-out (POST only, revokes the token)
+- slow and idle clients, the pending sign-in cap, and session purging
+- the OAuth client configuration and the port fallback
+
+The tab layout in `static/index.html` has no automated tests. Check it in a browser at desktop, tablet and phone
+widths.
 
 ## Possible next steps
 
-- Deploy to Cloud Run behind Identity-Aware Proxy, so a fixed HTTPS URL works from any device.
+- Per-client access: map each signed-in Google account to its own bucket and prefix (a JSON file mounted at run
+  time, deny by default), with Cloud Storage IAM granting each client read access to their bucket only.
+- Optionally deploy to Cloud Run behind Identity-Aware Proxy instead of the VM with nginx.
 - Auto-refresh the list during market hours (the pipeline re-uploads reports continuously).
 - Show a "new since last viewed" marker on tabs whose report was re-uploaded.

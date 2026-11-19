@@ -4,6 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Portfolio Reports</title>
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg?v=3">
   <style>
     :root {
       --bg: #f4f5f7;
@@ -34,6 +35,9 @@
     * { box-sizing: border-box; }
     [hidden] { display: none !important; } /* also for the elements styled display: flex */
     html, body { height: 100%; margin: 0; }
+    html { -webkit-text-size-adjust: 100%; } /* no font inflation in iPhone landscape */
+    /* Phones: 100dvh follows the browser toolbars as they show and hide, so the report never hides behind them. */
+    @supports (height: 100dvh) { body { height: 100dvh; } }
     body {
       display: flex;
       flex-direction: column;
@@ -69,18 +73,17 @@
       outline-offset: 1px;
     }
 
-    /* Tab rows scroll sideways on narrow screens instead of widening the page. */
+    /* Tab rows wrap onto more lines when the window is too narrow for one, so every tab stays visible and the rows
+       re-flow as the window is resized. Phones scroll them sideways instead (see the max-width: 600px block). */
+    .tab-row { background: var(--surface); border-bottom: 1px solid var(--border); }
     .tabs {
+      position: relative; /* the offsetParent of its tabs, for revealSelectedTab() */
       display: flex;
+      flex-wrap: wrap;
       gap: 4px;
-      overflow-x: auto;
-      scrollbar-width: none; /* still scrollable by swipe, trackpad, shift+wheel or the arrow keys */
       padding: 0 16px;
-      background: var(--surface);
     }
-    .tabs::-webkit-scrollbar { display: none; }
     .tabs [role="tab"] { flex: none; }
-    #portfolio-tabs { border-bottom: 1px solid var(--border); }
     #portfolio-tabs [role="tab"] {
       border: none;
       border-bottom: 3px solid transparent;
@@ -101,7 +104,7 @@
       font-size: 11px;
       font-weight: 500;
     }
-    #report-tabs { padding-top: 8px; padding-bottom: 8px; border-bottom: 1px solid var(--border); }
+    #report-tabs { gap: 6px; padding-top: 8px; padding-bottom: 8px; }
     #report-tabs [role="tab"] { border-radius: 999px; padding: 4px 12px; }
     #report-tabs [role="tab"][aria-selected="true"] {
       background: var(--accent-soft);
@@ -168,10 +171,46 @@
     }
     .sign-in .link-button:hover { color: var(--surface); opacity: 0.9; }
 
+    /* Phones (e.g. iPhone 13 at 390px, Galaxy S26 at ~412px): one row per tab list that scrolls sideways, as nine
+       wrapped report tabs would take a third of the screen. An edge fades out while more tabs lie beyond it
+       (.more-left / .more-right, set by updateOverflowCues()), and the mouse wheel scrolls the row too. */
     @media (max-width: 600px) {
+      header { gap: 8px; padding: 8px 12px; }
+      header h1 { font-size: 15px; }
       header .source, .user span { display: none; }
-      main { margin: 0 8px 8px; }
+      .tabs {
+        flex-wrap: nowrap;
+        overflow-x: auto;
+        overscroll-behavior-x: contain;
+        scroll-snap-type: x proximity;
+        scrollbar-width: none;
+        padding: 0 12px;
+      }
+      .tabs::-webkit-scrollbar { display: none; }
+      .tabs [role="tab"] { scroll-snap-align: start; scroll-margin: 0 40px; }
+      #report-tabs { padding: 8px 12px; }
+      .tabs.more-right {
+        -webkit-mask-image: linear-gradient(to left, transparent, #000 40px);
+        mask-image: linear-gradient(to left, transparent, #000 40px);
+      }
+      .tabs.more-left {
+        -webkit-mask-image: linear-gradient(to right, transparent, #000 40px);
+        mask-image: linear-gradient(to right, transparent, #000 40px);
+      }
+      .tabs.more-left.more-right {
+        -webkit-mask-image: linear-gradient(to right, transparent, #000 40px, #000 calc(100% - 40px), transparent);
+        mask-image: linear-gradient(to right, transparent, #000 40px, #000 calc(100% - 40px), transparent);
+      }
+      .meta { padding: 6px 12px; }
+      .meta .file { font-size: 11px; }
       .meta .actions { margin-left: 0; }
+      main { margin: 0 8px 8px; }
+    }
+    /* Touch screens (phones, iPad): larger tap targets. */
+    @media (pointer: coarse) {
+      button, .link-button { padding: 6px 12px; }
+      #portfolio-tabs [role="tab"] { padding: 12px 14px 9px; }
+      #report-tabs [role="tab"] { padding: 7px 14px; }
     }
   </style>
 </head>
@@ -191,8 +230,8 @@
     <p id="sign-in-text">Use a Google account that can read the reports in Cloud Storage.</p>
     <a class="link-button" id="sign-in-link" href="/auth/login">Sign in with Google</a>
   </section>
-  <nav class="tabs" id="portfolio-tabs" role="tablist" aria-label="Portfolios"></nav>
-  <nav class="tabs" id="report-tabs" role="tablist" aria-label="Reports"></nav>
+  <div class="tab-row" id="portfolio-row"><nav class="tabs" id="portfolio-tabs" role="tablist" aria-label="Portfolios"></nav></div>
+  <div class="tab-row" id="report-row"><nav class="tabs" id="report-tabs" role="tablist" aria-label="Reports"></nav></div>
   <div class="meta" id="meta" hidden>
     <span id="meta-updated"></span>
     <span id="meta-size"></span>
@@ -263,6 +302,39 @@
       });
     }
 
+    // A tab row that scrolls sideways (phones) fades out the edge beyond which more tabs lie.
+    function updateOverflowCues(tablist) {
+      const hidden = tablist.scrollWidth - tablist.clientWidth;
+      tablist.classList.toggle('more-left', hidden > 1 && tablist.scrollLeft > 1);
+      tablist.classList.toggle('more-right', hidden > 1 && tablist.scrollLeft < hidden - 1);
+    }
+
+    // Scrolls a sideways tab row so its selected tab is clear of the faded edges.
+    function revealSelectedTab(tablist) {
+      const tab = tablist.querySelector('[aria-selected="true"]');
+      if (!tab || tablist.scrollWidth <= tablist.clientWidth) return;
+      const margin = 40;
+      const left = tab.offsetLeft - margin;
+      const right = tab.offsetLeft + tab.offsetWidth + margin - tablist.clientWidth;
+      if (tablist.scrollLeft > left) tablist.scrollLeft = left;
+      else if (tablist.scrollLeft < right) tablist.scrollLeft = right;
+    }
+
+    function enableSidewaysScrolling(tablist) {
+      tablist.addEventListener('scroll', () => updateOverflowCues(tablist), { passive: true });
+      // A mouse wheel only scrolls up and down; turn that into sideways scrolling while the row overflows.
+      tablist.addEventListener('wheel', (event) => {
+        if (tablist.scrollWidth <= tablist.clientWidth || Math.abs(event.deltaX) >= Math.abs(event.deltaY)) return;
+        event.preventDefault();
+        tablist.scrollLeft += event.deltaY;
+      }, { passive: false });
+      // Resizing or rotating the window switches between wrapped and sideways rows.
+      new ResizeObserver(() => {
+        revealSelectedTab(tablist);
+        updateOverflowCues(tablist);
+      }).observe(tablist);
+    }
+
     function renderTabs() {
       const portfolioTabs = $('portfolio-tabs');
       portfolioTabs.replaceChildren(...state.groups.map((group) => {
@@ -275,7 +347,10 @@
       const reportTabs = $('report-tabs');
       reportTabs.replaceChildren(...reportsOf(state.portfolio).map((report) =>
         makeTab(report.label, report.file === state.file, () => selectReport(report.file))));
-      reportTabs.querySelector('[aria-selected="true"]')?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+      for (const tablist of [portfolioTabs, reportTabs]) {
+        revealSelectedTab(tablist);
+        updateOverflowCues(tablist);
+      }
     }
 
     function selectPortfolio(portfolio) {
@@ -359,7 +434,7 @@
 
     // Shows the report UI (signedIn) or the sign-in card with a title and text, and resets the reports when signed out.
     function showSignedIn(signedIn, email, title, text) {
-      for (const id of ['portfolio-tabs', 'report-tabs', 'viewer', 'refresh']) $(id).hidden = !signedIn;
+      for (const id of ['portfolio-row', 'report-row', 'viewer', 'refresh']) $(id).hidden = !signedIn;
       $('sign-in').hidden = signedIn;
       $('user').hidden = !email;
       $('user-email').textContent = email || '';
@@ -425,8 +500,10 @@
       const file = decodeURIComponent(location.hash.slice(1));
       if (file !== state.file && findReport(file)) selectReport(file);
     });
-    enableKeyboard($('portfolio-tabs'));
-    enableKeyboard($('report-tabs'));
+    for (const tablist of [$('portfolio-tabs'), $('report-tabs')]) {
+      enableKeyboard(tablist);
+      enableSidewaysScrolling(tablist);
+    }
     restoreHash();
     loadReports();
   </script>

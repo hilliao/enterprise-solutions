@@ -159,6 +159,15 @@ class ViewerHttpTest(unittest.TestCase):
         self.assertEqual(200, response.status)
         self.assertIn(b'<title>Portfolio Reports</title>', body)
         self.assertNotIn(b'Yang', body)
+        self.assertIn(b'<link rel="icon" type="image/svg+xml" href="/favicon.svg?v=3">', body)
+        self.assertEqual([], self.storage.tokens_used)
+
+    def test_favicon_is_public_svg_that_cant_run_scripts(self):
+        response, body = self.request('GET', '/favicon.svg')
+        self.assertEqual(200, response.status)
+        self.assertEqual('image/svg+xml', response.getheader('Content-Type'))
+        self.assertTrue(body.startswith(b'<svg '))
+        self.assertIn("default-src 'none'", response.getheader('Content-Security-Policy'))
         self.assertEqual([], self.storage.tokens_used)
 
     def test_report_list_requires_sign_in(self):

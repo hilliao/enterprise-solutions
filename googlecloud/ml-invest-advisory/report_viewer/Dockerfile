@@ -11,7 +11,7 @@
 #        http://localhost:8081/auth/callback
 #
 # 2. Build (from the report_viewer/ folder):
-#        docker build -t us-central1-docker.pkg.dev/todo-ae9c2/googlecloud-fr/report-viewer:beta .
+#        docker build -t us-central1-docker.pkg.dev/todo-ae9c2/googlecloud-fr/report-viewer:1.0.0 .
 #
 # 3. Run, mounting the OAuth client JSON from the Docker host's file system (on the server that runs the container,
 #    or on this machine). The file stays on the host and is bind-mounted read-only into the container at
@@ -30,7 +30,7 @@
 #          --read-only --cap-drop ALL --security-opt no-new-privileges \
 #          -p 127.0.0.1:8081:8081 \
 #          -v /etc/report-viewer/client_secret.json:/run/secrets/client_secret.json:ro \
-#          us-central1-docker.pkg.dev/todo-ae9c2/googlecloud-fr/report-viewer:beta
+#          us-central1-docker.pkg.dev/todo-ae9c2/googlecloud-fr/report-viewer:1.0.0
 #
 #    -p 127.0.0.1:8081:8081 keeps the port reachable from the host only; a TLS reverse proxy on the host (Caddy,
 #    nginx) forwards https://<your domain> to it. The proxy must pass the original Host header (or set
@@ -50,7 +50,7 @@
 # Optional settings, as extra `-e NAME=value` flags on docker run: GCS_BUCKET, GCS_PREFIX, PUBLIC_BASE_URL (see
 # report_viewer.py). PUBLIC_BASE_URL is unset by default; set it only to pin sign-in to that one address.
 # Run the unit tests inside the image with:
-#        docker run --rm --entrypoint python us-central1-docker.pkg.dev/todo-ae9c2/googlecloud-fr/report-viewer:beta -m unittest test_report_viewer.py
+#        docker run --rm --entrypoint python us-central1-docker.pkg.dev/todo-ae9c2/googlecloud-fr/report-viewer:1.0.0 -m unittest test_report_viewer.py
 # ----------------------------------------------------------------------------------------------------------------
 
 FROM python:3.12-slim
@@ -58,6 +58,11 @@ FROM python:3.12-slim
 # Unbuffered output, so the startup lines and the access log show up in `docker logs` immediately.
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1
+
+# Pick up Debian's zlib security fix (CVE-2026-85091), which the python:3.12-slim base doesn't have yet. Remove this
+# line once a rescan of the plain base image no longer reports zlib1g.
+RUN apt-get update && apt-get install -y --no-install-recommends --only-upgrade zlib1g \
+    && rm -rf /var/lib/apt/lists/*
 
 # Run as an unprivileged user.
 RUN useradd --system --uid 10001 --no-create-home viewer

@@ -5,5 +5,3 @@ client_secret*.json
 README.md
 Dockerfile
 .dockerignore
-PRODUCT_REQUIREMENTS.*
-docs-style.html
