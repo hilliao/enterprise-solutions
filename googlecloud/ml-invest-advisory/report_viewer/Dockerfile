@@ -11,7 +11,7 @@
 #        http://localhost:8081/auth/callback
 #
 # 2. Build (from the report_viewer/ folder):
-#        docker build -t us-central1-docker.pkg.dev/todo-ae9c2/googlecloud-fr/report-viewer:1.0.0 .
+#        docker build -t us-central1-docker.pkg.dev/todo-ae9c2/googlecloud-fr/report-viewer:1.0.1 .
 #
 # 3. Run, mounting the OAuth client JSON from the Docker host's file system (on the server that runs the container,
 #    or on this machine). The file stays on the host and is bind-mounted read-only into the container at
@@ -30,7 +30,7 @@
 #          --read-only --cap-drop ALL --security-opt no-new-privileges \
 #          -p 127.0.0.1:8081:8081 \
 #          -v /etc/report-viewer/client_secret.json:/run/secrets/client_secret.json:ro \
-#          us-central1-docker.pkg.dev/todo-ae9c2/googlecloud-fr/report-viewer:1.0.0
+#          us-central1-docker.pkg.dev/todo-ae9c2/googlecloud-fr/report-viewer:1.0.1
 #
 #    -p 127.0.0.1:8081:8081 keeps the port reachable from the host only; a TLS reverse proxy on the host (Caddy,
 #    nginx) forwards https://<your domain> to it. The proxy must pass the original Host header (or set
@@ -50,7 +50,7 @@
 # Optional settings, as extra `-e NAME=value` flags on docker run: GCS_BUCKET, GCS_PREFIX, PUBLIC_BASE_URL (see
 # report_viewer.py). PUBLIC_BASE_URL is unset by default; set it only to pin sign-in to that one address.
 # Run the unit tests inside the image with:
-#        docker run --rm --entrypoint python us-central1-docker.pkg.dev/todo-ae9c2/googlecloud-fr/report-viewer:1.0.0 -m unittest test_report_viewer.py
+#        docker run --rm --entrypoint python us-central1-docker.pkg.dev/todo-ae9c2/googlecloud-fr/report-viewer:1.0.1 -m unittest test_report_viewer.py
 # ----------------------------------------------------------------------------------------------------------------
 
 FROM python:3.12-slim

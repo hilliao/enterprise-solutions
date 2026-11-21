@@ -133,7 +133,8 @@ run_ollama() {
 # prompt can't end the block early. Printing a report leaves the appendix out (see HTML_REPORT_STYLE).
 append_prompt_to_report() {
   local prompt_file="$1" report_md="$2" longest fence
-  longest="$(grep -o '~\+' "$prompt_file" | awk '{ if (length($0) > max) max = length($0) } END { print max + 0 }')"
+  # grep exits 1 when the prompt has no tilde, which pipefail and set -e in the callers would turn into an abort.
+  longest="$({ grep -o '~\+' "$prompt_file" || true; } | awk '{ if (length($0) > max) max = length($0) } END { print max + 0 }')"
   fence="$(printf '~%.0s' $(seq 1 $(( longest >= 3 ? longest + 1 : 4 ))))"
   {
     echo
