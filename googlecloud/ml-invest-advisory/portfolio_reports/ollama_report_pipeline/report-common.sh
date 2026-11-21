@@ -14,17 +14,30 @@ PORTFOLIO_REPORTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 BUILD_PORTFOLIO_PROMPT_PY="$PORTFOLIO_REPORTS_DIR/build_portfolio_prompt.py"
 # Applied to every HTML report. pandoc includes it after its own light-theme CSS, so these rules override it. The
 # dark theme follows the viewer's browser/OS setting (prefers-color-scheme) on screen; printing stays black on white.
-# It recolors pandoc's text, links, rules, tables and the syntax-highlighted code (e.g. the JSON in the input prompt),
-# and the inline "color: brown" heading of append_prompt_to_report.
+# It also styles the notice under the title (pandoc's subtitle, see REPORT_NOTICE), the "On this page" jump menu
+# (pandoc's --toc, nav#TOC) and the collapsed Sources appendix of append_prompt_to_report (details.sources), and it
+# recolors pandoc's text, links, rules, tables and any syntax-highlighted code.
 HTML_REPORT_STYLE='<style>
 body { max-width: 80%; margin: 0 auto; } p, li, td, th { line-height: 1.5; }
+p.subtitle { font-size: 0.95em; font-style: normal; color: #57606a; }
+nav#TOC { border: 1px solid #d0d7de; border-radius: 6px; padding: 4px 16px 8px; margin: 16px 0 24px; }
+nav#TOC h2#toc-title { font-size: 1em; margin: 8px 0 4px; }
+nav#TOC a { color: #1a5fb4; }
+nav#TOC ul { margin: 2px 0; padding-left: 20px; } nav#TOC ul ul { padding-left: 0; } nav#TOC li { line-height: 1.6; }
+details.sources { border-top: 1px solid #d0d7de; margin-top: 40px; padding-top: 12px; }
+details.sources > summary { cursor: pointer; font-size: 1.3em; font-weight: 600; color: #9a3412; }
+details.sources pre { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 0.85em; }
+@media print { details.sources { display: none; } }
 @media screen and (prefers-color-scheme: dark) {
   html { color-scheme: dark; color: #e4e7ec; background-color: #1c2027; }
-  a, a:visited { color: #7fb0ff; }
+  a, a:visited, nav#TOC a { color: #7fb0ff; }
   blockquote { color: #9aa4b2; border-left-color: #3a404b; }
   hr { background-color: #3a404b; }
   table, thead, tbody, tr, th, td { border-color: #3a404b; }
-  span[style*="color: brown"] { color: #e8916f !important; }
+  p.subtitle { color: #9aa4b2; }
+  nav#TOC, details.sources { border-color: #3a404b; }
+  details.sources > summary { color: #e8916f; }
+  pre, code { background-color: #262b33; }
   pre > code.sourceCode > span > a:first-child::before { color: #6a737d; }
   pre.numberSource { border-left-color: #3a404b; }
   code span.dt { color: #f0a37e; }
@@ -42,6 +55,11 @@ body { max-width: 80%; margin: 0 auto; } p, li, td, th { line-height: 1.5; }
   code span.al, code span.er { color: #ff6b6b; }
 }
 </style>'
+
+# Shown under every HTML report's title (pandoc's subtitle), so readers know who wrote it and how far to trust it.
+report_notice() {
+  echo "AI-generated analysis by the ${OLLAMA_MODEL} model. Not investment advice. Check figures against the Sources at the end."
+}
 
 # Exits if OLLAMA_TIMEOUT_SECONDS isn't a positive integer.
 require_valid_ollama_timeout() {
@@ -108,11 +126,29 @@ run_ollama() {
   return "$exit_code"
 }
 
-# Appends PROMPT_FILE to REPORT_MD under an "Input Prompt for LLM" heading, so the report shows what the model saw.
+# Appends PROMPT_FILE to REPORT_MD as the report's Sources appendix, so readers can check what the model saw: a
+# <details> block, collapsed by default, headed "Input Prompt for LLM", with the prompt verbatim in a code block. It
+# stays verbatim because the prompt quotes the template's own Markdown headings, which would otherwise show up as
+# report sections and in the jump menu. The code fence is one tilde longer than any tilde run in the prompt, so the
+# prompt can't end the block early. Printing a report leaves the appendix out (see HTML_REPORT_STYLE).
 append_prompt_to_report() {
-  local prompt_file="$1" report_md="$2"
-  echo -e "\n# <span style=\"color: brown;\">Input Prompt for LLM</span>" >> "$report_md"
-  cat "$prompt_file" >> "$report_md"
+  local prompt_file="$1" report_md="$2" longest fence
+  longest="$(grep -o '~\+' "$prompt_file" | awk '{ if (length($0) > max) max = length($0) } END { print max + 0 }')"
+  fence="$(printf '~%.0s' $(seq 1 $(( longest >= 3 ? longest + 1 : 4 ))))"
+  {
+    echo
+    echo '<details class="sources" id="sources">'
+    echo '<summary>Sources: Input Prompt for LLM</summary>'
+    echo
+    echo 'The exact holdings data, news and instructions the model was given for this report.'
+    echo
+    echo "$fence text"
+    cat "$prompt_file"
+    echo
+    echo "$fence"
+    echo
+    echo '</details>'
+  } >> "$report_md"
 }
 
 # Converts REPORT_MD to the standalone HTML page REPORT_HTML titled TITLE, if pandoc is installed (see check_pandoc).
@@ -125,8 +161,12 @@ write_html_report() {
     return 0
   fi
   echo -e "\n--- Generating HTML report using pandoc at $report_html ---"
+  # --toc adds the "On this page" jump menu of the report's own headings; the Sources appendix has none (see
+  # append_prompt_to_report). The notice goes in as pandoc's subtitle, right under the title.
   pandoc -s -f gfm -t html5 -o "$report_html" "$report_md" \
-    --metadata title="$title" --include-in-header <(echo "$HTML_REPORT_STYLE")
+    --metadata title="$title" --metadata subtitle="$(report_notice)" \
+    --toc --toc-depth=2 --metadata toc-title="On this page" \
+    --include-in-header <(echo "$HTML_REPORT_STYLE")
   if [ -n "${REPORT_UPLOAD_COMMAND:-}" ] && ! "$REPORT_UPLOAD_COMMAND" "$report_html"; then
     echo "WARNING: uploading $report_html failed (see above); continuing." >&2
   fi

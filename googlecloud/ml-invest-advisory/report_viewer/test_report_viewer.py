@@ -237,9 +237,9 @@ class ViewerHttpTest(unittest.TestCase):
 
     # ---- Google sign-in --------------------------------------------------------------------------------------
 
-    def start_sign_in(self) -> tuple[str, str]:
-        """Returns (state from Google's consent URL, the state cookie header)."""
-        response, _ = self.request('GET', '/auth/login')
+    def start_sign_in(self, path: str = '/auth/login') -> tuple[str, str]:
+        """Returns (state from Google's consent URL, the sign-in's cookies as one Cookie header)."""
+        response, _ = self.request('GET', path)
         self.assertEqual(302, response.status)
         consent = urllib.parse.urlsplit(response.getheader('Location'))
         self.assertEqual('accounts.google.com', consent.netloc)
@@ -247,9 +247,10 @@ class ViewerHttpTest(unittest.TestCase):
         self.assertEqual([self.base_url + '/auth/callback'], params['redirect_uri'])
         self.assertIn('https://www.googleapis.com/auth/devstorage.read_only', params['scope'][0])
         self.assertEqual(['S256'], params['code_challenge_method'])
-        state_cookie = response.getheader('Set-Cookie').split(';')[0]
-        self.assertIn('HttpOnly', response.getheader('Set-Cookie'))
-        return params['state'][0], state_cookie
+        set_cookies = response.msg.get_all('Set-Cookie')
+        for cookie in set_cookies:
+            self.assertIn('HttpOnly', cookie)
+        return params['state'][0], '; '.join(cookie.split(';')[0] for cookie in set_cookies)
 
     def test_sign_in_creates_a_session_used_for_the_reports(self):
         state, state_cookie = self.start_sign_in()
@@ -269,6 +270,52 @@ class ViewerHttpTest(unittest.TestCase):
         self.assertEqual(200, response.status)
         self.assertEqual('hil@example.com', json.loads(body)['user'])
         self.assertEqual(['fresh-token'], self.storage.tokens_used)
+
+    def test_popup_sign_in_ends_on_a_page_that_signs_the_viewer_tabs_in(self):
+        state, cookies = self.start_sign_in('/auth/login?popup=1')
+        self.assertIn(f'{report_viewer.SIGN_IN_POPUP_COOKIE}={state}', cookies)
+        token = {'access_token': 'popup-token', 'id_token': id_token('hil@example.com'),
+                 'scope': 'openid email https://www.googleapis.com/auth/devstorage.read_only'}
+        with mock.patch.object(GoogleSignIn, '_exchange_code', return_value=token):
+            response, body = self.request('GET', f'/auth/callback?state={state}&code=c', cookie=cookies)
+        self.assertEqual(200, response.status)
+        self.assertIn(b'Signed in as hil@example.com', body)
+        self.assertIn(f"new BroadcastChannel('{report_viewer.SIGN_IN_CHANNEL}')".encode(), body)
+        self.assertIn(b'window.close()', body)
+        # The CSP allows exactly the page's own script.
+        csp = response.getheader('Content-Security-Policy')
+        self.assertIn(f'script-src {report_viewer.script_hashes(body)};', csp)
+        self.assertIn("default-src 'none'", csp)
+        set_cookies = response.msg.get_all('Set-Cookie')
+        session_cookie = next(c for c in set_cookies if c.startswith(report_viewer.SESSION_COOKIE + '=')).split(';')[0]
+        self.assertTrue(any(c.startswith(report_viewer.SIGN_IN_POPUP_COOKIE + '=;') and 'Max-Age=0' in c
+                            for c in set_cookies))
+        response, body = self.request('GET', '/api/reports', cookie=session_cookie)
+        self.assertEqual(200, response.status)
+        self.assertEqual(['popup-token'], self.storage.tokens_used)
+
+    def test_popup_flag_of_another_sign_in_doesnt_turn_this_one_into_a_popup(self):
+        state, cookies = self.start_sign_in()
+        cookies += f'; {report_viewer.SIGN_IN_POPUP_COOKIE}=some-other-state'
+        token = {'access_token': 't', 'id_token': id_token('a@example.com'),
+                 'scope': 'openid email https://www.googleapis.com/auth/devstorage.read_only'}
+        with mock.patch.object(GoogleSignIn, '_exchange_code', return_value=token):
+            response, _ = self.request('GET', f'/auth/callback?state={state}&code=c', cookie=cookies)
+        self.assertEqual(302, response.status)
+        self.assertEqual('/', response.getheader('Location'))
+
+    def test_cancelled_popup_sign_in_offers_another_popup_sign_in(self):
+        state, cookies = self.start_sign_in('/auth/login?popup=1')
+        response, body = self.request('GET', f'/auth/callback?state={state}&error=access_denied', cookie=cookies)
+        self.assertEqual(401, response.status)
+        self.assertIn(b'href="/auth/login?popup=1"', body)
+
+    def test_session_ended_page_in_the_report_frame_is_marked_for_the_viewer(self):
+        response, body = self.request('GET', f'/reports/{DAILY_YANG}')
+        self.assertEqual(401, response.status)
+        self.assertIn(f'<meta name="{report_viewer.SIGN_IN_REQUIRED_META}">'.encode(), body)
+        response, body = self.request('GET', f'/reports/yang/missing.html', cookie=self.signed_in_cookie())
+        self.assertNotIn(report_viewer.SIGN_IN_REQUIRED_META.encode(), body)
 
     def test_callback_without_the_browsers_state_cookie_is_rejected(self):
         state, _ = self.start_sign_in()

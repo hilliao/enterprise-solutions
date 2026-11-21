@@ -69,6 +69,20 @@ Sessions live in the server's memory. A session ends when its Google access toke
 token is requested or stored), when you click **Sign out** (which also revokes the token), or when the server
 restarts. Signing in again is usually one click, because Google remembers the consent.
 
+**Signing in keeps your place.**
+- **Popup:** **Sign in with Google** opens Google's sign-in in a small popup window (`/auth/login?popup=1`). The
+  viewer tab stays where it was.
+- **Finishing:** the popup's last page sets the session cookie, tells the viewer's tabs on the `BroadcastChannel`
+  `report-viewer-sign-in`, and closes itself. The tab then reloads the list and keeps the selected report.
+- **Why not `window.opener`:** Google's sign-in pages send `Cross-Origin-Opener-Policy`, which cuts the popup off
+  from the viewer tab.
+- **Session ends while you're viewing:** the next report the frame loads gets the server's "Sign in required"
+  page, marked with `<meta name="report-viewer-sign-in-required">`. The page then replaces the reports with a
+  "Your session has ended" card instead of a sign-in link inside the report.
+- **Fallbacks:** if the browser blocks the popup, the link signs in in the same tab and returns to the same report.
+  Phones open the popup as a new tab, so the viewer tab also rechecks the session whenever it is shown or focused
+  again.
+
 > Before this beta, the viewer read the bucket with the `gcloud` login of whoever started it, and the browser
 > never had to sign in. Anyone who could reach the port, a private window included, could read every report. That
 > design is gone: the server won't start without an OAuth client, and it never falls back to server-side
@@ -82,7 +96,7 @@ browser ──► report_viewer.py ──(the visitor's own access token)──�
    │          /favicon.svg                  static/favicon.svg, the browser-tab icon (public)
    │          /api/reports                  reports grouped into tabs (report_catalog.py)   sign-in required
    │          /reports/<portfolio>/<file>   one report's HTML, shown in the tab's <iframe>   sign-in required
-   │          /auth/login                   redirects to Google sign-in
+   │          /auth/login                   redirects to Google sign-in (?popup=1: in a popup window)
    └────────► /auth/callback                Google redirects back; the server creates the session (google_sign_in.py)
               /auth/logout                  POST: ends the session and revokes the token
 ```
@@ -239,6 +253,11 @@ If a new `--site` of `fetch-news.sh` needs special capitalization (like `CNBC`),
 - **Sign-in**: the authorization code flow with PKCE and a one-time `state` value bound to the browser by a
   short-lived cookie, which prevents login CSRF. Only the `openid`, `email` and `devstorage.read_only` scopes are
   requested.
+- **Popup sign-in**: the popup flag is a second short-lived cookie whose value is that sign-in's `state`, so it
+  can't turn another sign-in into a popup. The popup's last page runs one fixed inline script, allowed by its
+  SHA-256 hash in its own CSP (`default-src 'none'`). The message it broadcasts carries no data: each viewer tab
+  just asks the server again with its cookies, and only pages of the viewer's own origin can post on the
+  channel. A message can at most trigger that recheck.
 - **Cookies**: the session cookie is a random 256-bit ID, `HttpOnly` and `SameSite=Lax`, and `Secure` over
   `https://` (an `https://` `PUBLIC_BASE_URL`, or `X-Forwarded-Proto: https`). Access tokens never reach the
   browser. Sign-out is a `POST`, so other sites can't trigger it.
@@ -282,14 +301,17 @@ Cloud Storage and Google's OAuth endpoints are faked. The tests cover:
 - Cloud Storage's 403 being passed through, and a rejected token ending the session
 - the user's own token being used for every Cloud Storage call
 - the sign-in flow: state binding, single-use state, required scope, the redirect URI kept per sign-in
+- the popup sign-in: its callback page, the page's script hash in the CSP, the popup flag bound to one sign-in, and
+  the marker on the "sign-in required" page
 - sign-in at any address, reverse-proxy headers, malformed hosts, and `PUBLIC_BASE_URL` pinning
 - the security headers, the page and report CSPs, escaping of reflected input, HSTS and `Secure` cookies over HTTPS
 - sign-out (POST only, revokes the token)
 - slow and idle clients, the pending sign-in cap, and session purging
 - the OAuth client configuration and the port fallback
 
-The tab layout in `static/index.html` has no automated tests. Check it in a browser at desktop, tablet and phone
-widths.
+The page script in `static/index.html` (tab layout, popup sign-in) has no automated tests in this suite. Check the
+tab layout in a browser at desktop, tablet and phone widths. Check the popup sign-in against the real Google
+sign-in, including a session that ends while a report is open.
 
 ## Possible next steps
 

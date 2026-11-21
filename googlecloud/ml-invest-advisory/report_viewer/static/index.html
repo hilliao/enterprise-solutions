@@ -379,7 +379,10 @@
         // top navigation lets the "Sign in with Google" link of an expired-session page leave the frame.
         frame.sandbox = 'allow-same-origin allow-popups allow-popups-to-escape-sandbox ' +
                         'allow-top-navigation-by-user-activation';
-        frame.addEventListener('load', () => openExternalLinksInNewTab(frame));
+        frame.addEventListener('load', () => {
+          if (sessionEndedIn(frame)) showSessionEnded();
+          else openExternalLinksInNewTab(frame);
+        });
         frame.src = `/reports/${report.file.split('/').map(encodeURIComponent).join('/')}`;
         frames.set(report.file, frame);
         $('viewer').append(frame);
@@ -388,10 +391,18 @@
       document.title = `${state.portfolio} · ${report.label} — Portfolio Reports`;
     }
 
+    // True if the frame shows the server's "sign-in required" page (the session ended) instead of a report.
+    function sessionEndedIn(frame) {
+      try {
+        return Boolean(frame.contentDocument.querySelector('meta[name="report-viewer-sign-in-required"]'));
+      } catch (error) { return false; }
+    }
+
+    // Links to other sites open in a new browser tab; in-page (#) links and the viewer's own links stay as they are.
     function openExternalLinksInNewTab(frame) {
       try {
         for (const link of frame.contentDocument.querySelectorAll('a[href]')) {
-          if (!link.getAttribute('href').startsWith('#')) {
+          if (!link.getAttribute('href').startsWith('#') && link.origin !== location.origin) {
             link.target = '_blank';
             link.rel = 'noopener';
           }
@@ -433,7 +444,9 @@
     }
 
     // Shows the report UI (signedIn) or the sign-in card with a title and text, and resets the reports when signed out.
+    let signedInBefore = false; // this tab has shown reports, so a 401 now means the session ended
     function showSignedIn(signedIn, email, title, text) {
+      if (signedIn) signedInBefore = true;
       for (const id of ['portfolio-row', 'report-row', 'viewer', 'refresh']) $(id).hidden = !signedIn;
       $('sign-in').hidden = signedIn;
       $('user').hidden = !email;
@@ -454,8 +467,9 @@
         const response = await fetch('/api/reports', { cache: 'no-store', credentials: 'same-origin' });
         const body = await response.json();
         if (response.status === 401) {
-          showSignedIn(false, null, 'Sign in to view the reports',
-                       'Use a Google account that can read the reports in Cloud Storage.');
+          if (signedInBefore) showSessionEnded();
+          else showSignedIn(false, null, 'Sign in to view the reports',
+                            'Use a Google account that can read the reports in Cloud Storage.');
           return;
         }
         if (response.status === 403) {
@@ -490,7 +504,31 @@
       }
     }
 
-    $('sign-in-link').addEventListener('click', saveHash);
+    // Sign-in runs in a popup, so this tab keeps its place and signs in when the popup finishes: the popup's last
+    // page announces it on SIGN_IN_CHANNEL. If the browser blocks the popup, the link signs in in this tab instead.
+    // Phones open the popup as a tab; this tab then rechecks the session when it is shown again.
+    const SIGN_IN_CHANNEL = 'report-viewer-sign-in';
+    let signInChannel = null;
+    try {
+      signInChannel = new BroadcastChannel(SIGN_IN_CHANNEL);
+      signInChannel.addEventListener('message', () => { if (!$('sign-in').hidden) loadReports(); });
+    } catch (error) { /* no BroadcastChannel: the focus recheck below still signs this tab in */ }
+
+    function showSessionEnded() {
+      showSignedIn(false, null, 'Your session has ended',
+                   'Sign in again to continue where you left off. Sign-in opens in a small window.');
+    }
+    function recheckWhenShown() {
+      if (!$('sign-in').hidden && document.visibilityState === 'visible') loadReports();
+    }
+
+    $('sign-in-link').addEventListener('click', (event) => {
+      saveHash();
+      const popup = window.open('/auth/login?popup=1', 'report-viewer-sign-in', 'popup,width=520,height=680');
+      if (popup) event.preventDefault();
+    });
+    window.addEventListener('focus', recheckWhenShown);
+    document.addEventListener('visibilitychange', recheckWhenShown);
     $('refresh').addEventListener('click', loadReports);
     $('reload').addEventListener('click', () => {
       const frame = frames.get(state.file);

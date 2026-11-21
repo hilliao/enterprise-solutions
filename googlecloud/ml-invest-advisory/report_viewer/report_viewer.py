@@ -24,7 +24,8 @@ Routes:
   GET  /favicon.svg                 the browser-tab icon (static/favicon.svg)
   GET  /api/reports                 JSON: signed-in user and the reports grouped into tabs
   GET  /reports/<portfolio>/<file>  one report's HTML
-  GET  /auth/login                  starts Google sign-in
+  GET  /auth/login                  starts Google sign-in; ?popup=1 for a popup window, whose callback page tells
+                                    the viewer's tabs (BroadcastChannel) and closes instead of redirecting
   GET  /auth/callback               Google's redirect back (the OAuth client's authorized redirect URI)
   POST /auth/logout                 ends the session and revokes its token
 
@@ -73,6 +74,15 @@ FAVICON_SVG = INDEX_HTML.with_name('favicon.svg')
 FAVICON_CSP = "default-src 'none'; style-src 'unsafe-inline'"
 SESSION_COOKIE = 'report_viewer_session'
 SIGN_IN_STATE_COOKIE = 'report_viewer_sign_in_state'
+# Set by /auth/login?popup=1 to that sign-in's state, so its callback answers with SIGNED_IN_POPUP_PAGE instead of
+# a redirect. Holding the state ties the flag to one sign-in, not to every sign-in of the browser.
+SIGN_IN_POPUP_COOKIE = 'report_viewer_sign_in_popup'
+# A popup sign-in tells the viewer's tabs on this BroadcastChannel that the browser now has a session. Google's sign-in
+# pages send Cross-Origin-Opener-Policy, which cuts the popup off from window.opener, so postMessage isn't an option.
+SIGN_IN_CHANNEL = 'report-viewer-sign-in'
+# The pages the viewer's iframe shows when the session has ended carry this <meta> name; the page then shows its own
+# sign-in card instead of a sign-in link inside the report frame.
+SIGN_IN_REQUIRED_META = 'report-viewer-sign-in-required'
 
 # Browser hardening for every response; the page and the reports add their own Content-Security-Policy.
 COMMON_HEADERS = {
@@ -100,11 +110,26 @@ REQUEST_TIMEOUT_SECONDS = 30
 _SCRIPT = re.compile(rb'<script>(.*?)</script>', re.DOTALL)
 
 
-def index_csp(page: bytes) -> str:
-    """INDEX_CSP_TEMPLATE with the SHA-256 hash of every inline <script> in page."""
+def script_hashes(page: bytes) -> str:
+    """The CSP source list of the SHA-256 hashes of every inline <script> in page, or 'none' if it has none."""
     hashes = [f"'sha256-{base64.b64encode(hashlib.sha256(script).digest()).decode()}'"
               for script in _SCRIPT.findall(page)]
-    return INDEX_CSP_TEMPLATE.format(script_hashes=' '.join(hashes) or "'none'")
+    return ' '.join(hashes) or "'none'"
+
+
+def index_csp(page: bytes) -> str:
+    """INDEX_CSP_TEMPLATE with the SHA-256 hash of every inline <script> in page."""
+    return INDEX_CSP_TEMPLATE.format(script_hashes=script_hashes(page))
+
+
+# The script of the page a popup sign-in ends on: it tells the viewer's tabs (SIGN_IN_CHANNEL) and closes the popup.
+# It is fixed text, so the CSP can allow it by hash; the page's only variable part, the email, is escaped HTML.
+SIGNED_IN_POPUP_SCRIPT = (
+    "<script>try { new BroadcastChannel('" + SIGN_IN_CHANNEL + "').postMessage('signed-in'); } "
+    "catch (error) { /* no BroadcastChannel: the viewer rechecks when its tab regains focus */ }\n"
+    "window.close();</script>")
+SIGNED_IN_POPUP_CSP = (f"default-src 'none'; script-src {script_hashes(SIGNED_IN_POPUP_SCRIPT.encode())}; "
+                       "style-src 'unsafe-inline'; form-action 'none'; frame-ancestors 'none'; base-uri 'none'")
 
 
 @dataclass(frozen=True)
@@ -158,7 +183,7 @@ class ReportViewerHandler(BaseHTTPRequestHandler):
         elif url.path.startswith('/reports/'):
             self._get_report(urllib.parse.unquote(url.path.removeprefix('/reports/')))
         elif url.path == '/auth/login':
-            self._start_sign_in()
+            self._start_sign_in(popup=urllib.parse.parse_qs(url.query).get('popup') == ['1'])
         elif url.path == REDIRECT_PATH:
             self._finish_sign_in(urllib.parse.parse_qs(url.query))
         else:
@@ -247,7 +272,8 @@ class ReportViewerHandler(BaseHTTPRequestHandler):
     def _is_https(self) -> bool:
         return (self._base_url() or '').startswith('https://')
 
-    def _start_sign_in(self):
+    def _start_sign_in(self, popup: bool = False):
+        """popup: the sign-in runs in a popup window (/auth/login?popup=1); see SIGN_IN_POPUP_COOKIE."""
         base_url = self._base_url()
         if base_url is None:
             self._send_message_page(HTTPStatus.BAD_REQUEST, 'Sign-in failed', 'The request has no valid Host header.')
@@ -261,27 +287,51 @@ class ReportViewerHandler(BaseHTTPRequestHandler):
                 'PUBLIC_BASE_URL to allow any address.', link=(base_url + '/', 'Open the viewer'))
             return
         consent_url, state = self.app.sign_in.start(redirect_uri=base_url + REDIRECT_PATH)
-        self._redirect(consent_url, cookies=[self._cookie_header(SIGN_IN_STATE_COOKIE, state, path='/auth',
-                                                                 max_age=10 * 60)])
+        cookies = [self._cookie_header(SIGN_IN_STATE_COOKIE, state, path='/auth', max_age=10 * 60)]
+        if popup:
+            cookies.append(self._cookie_header(SIGN_IN_POPUP_COOKIE, state, path='/auth', max_age=10 * 60))
+        self._redirect(consent_url, cookies=cookies)
 
     def _finish_sign_in(self, query: dict[str, list[str]]):
-        clear_state = self._cookie_header(SIGN_IN_STATE_COOKIE, '', path='/auth', max_age=0)
+        query_state = query.get('state', [''])[0]
+        popup = bool(query_state) and self._cookie(SIGN_IN_POPUP_COOKIE) == query_state
+        clear_state = [self._cookie_header(SIGN_IN_STATE_COOKIE, '', path='/auth', max_age=0),
+                       self._cookie_header(SIGN_IN_POPUP_COOKIE, '', path='/auth', max_age=0)]
+        # In a popup, "Sign in with Google" on an error page starts another popup sign-in in the same window.
+        retry_link = ('/auth/login?popup=1' if popup else '/auth/login', 'Sign in with Google')
         if 'error' in query:  # e.g. access_denied when the user cancels
             self._send_message_page(HTTPStatus.UNAUTHORIZED, 'Sign-in cancelled',
-                                    f'Google returned: {query["error"][0]}', sign_in_link=True, cookies=[clear_state])
+                                    f'Google returned: {query["error"][0]}', link=retry_link, cookies=clear_state)
             return
         try:
-            user = self.app.sign_in.finish(query_state=query.get('state', [''])[0],
+            user = self.app.sign_in.finish(query_state=query_state,
                                            cookie_state=self._cookie(SIGN_IN_STATE_COOKIE),
                                            code=query.get('code', [''])[0])
         except SignInError as error:
-            self._send_message_page(HTTPStatus.BAD_REQUEST, 'Sign-in failed', str(error), sign_in_link=True,
-                                    cookies=[clear_state])
+            self._send_message_page(HTTPStatus.BAD_REQUEST, 'Sign-in failed', str(error), link=retry_link,
+                                    cookies=clear_state)
             return
         self.app.sessions.delete(self._cookie(SESSION_COOKIE))  # never reuse a session ID across sign-ins
         session_id = self.app.sessions.create(user)
         self.log_message('signed in: %s', user.email)
-        self._redirect('/', cookies=[clear_state, self._cookie_header(SESSION_COOKIE, session_id)])
+        cookies = [*clear_state, self._cookie_header(SESSION_COOKIE, session_id)]
+        if popup:
+            self._send_signed_in_popup_page(user.email, cookies)
+        else:
+            self._redirect('/', cookies=cookies)
+
+    def _send_signed_in_popup_page(self, email: str, cookies: list[str]):
+        """The page a popup sign-in ends on: it sets the session cookie, tells the viewer's tabs and closes itself."""
+        body = (f'<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><title>Signed in</title>'
+                '<meta name="viewport" content="width=device-width, initial-scale=1"><style>'
+                'body{font:15px/1.5 system-ui,sans-serif;margin:48px auto;max-width:36em;padding:0 16px;'
+                'color:#1d2330;background:#fff}a{color:#1a5fb4}'
+                '@media (prefers-color-scheme:dark){body{color:#e4e7ec;background:#1c2027}a{color:#7fb0ff}}'
+                f'</style></head><body><h1>Signed in</h1><p>Signed in as {escape(email)}. This window closes by '
+                'itself; if it stays open, close it and go back to the viewer.</p>'
+                f'<p><a href="/">Open the viewer in this window instead</a></p>{SIGNED_IN_POPUP_SCRIPT}</body></html>')
+        self._send(HTTPStatus.OK, 'text/html; charset=utf-8', body.encode(),
+                   {'Content-Security-Policy': SIGNED_IN_POPUP_CSP}, cookies)
 
     def _sign_out(self):
         # SameSite=Lax keeps the session cookie off cross-site POSTs, so other sites can't sign the user out.
@@ -327,7 +377,9 @@ class ReportViewerHandler(BaseHTTPRequestHandler):
         if sign_in_link:
             link = ('/auth/login', 'Sign in with Google')
         link_html = f'<p><a href="{escape(link[0])}" target="_top">{escape(link[1])}</a></p>' if link else ''
-        body = (f'<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><title>{escape(title)}</title>'
+        # Lets the viewer page tell a frame whose session ended from a report, and show its own sign-in card.
+        marker = f'<meta name="{SIGN_IN_REQUIRED_META}">' if status == HTTPStatus.UNAUTHORIZED else ''
+        body = (f'<!DOCTYPE html><html lang="en"><head><meta charset="utf-8">{marker}<title>{escape(title)}</title>'
                 '<meta name="viewport" content="width=device-width, initial-scale=1"><style>'
                 'body{font:15px/1.5 system-ui,sans-serif;margin:48px auto;max-width:36em;padding:0 16px;'
                 'color:#1d2330;background:#fff}a{color:#1a5fb4}'

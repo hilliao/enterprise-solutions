@@ -41,6 +41,18 @@ timeout and retry, appending the input prompt to the report, and the pandoc
 HTML conversion, which also runs `REPORT_UPLOAD_COMMAND` on each new HTML report
 if it is set). Sourced by those scripts; not run on its own.
 
+Every HTML report it writes has, in order:
+- **Notice:** under the title, `report_notice`: "AI-generated analysis by the `<OLLAMA_MODEL>` model. Not
+  investment advice. Check figures against the Sources at the end."
+- **Jump menu:** an "On this page" menu of the report's own headings (pandoc `--toc`).
+- **Analysis:** the model's report.
+- **Sources appendix:** a collapsed "Sources: Input Prompt for LLM" section (`<details>`) with the exact prompt,
+  shown verbatim. It is verbatim because the prompt quotes the template's Markdown headings, which would
+  otherwise appear as report sections and in the jump menu. Printing a report leaves the appendix out.
+
+`HTML_REPORT_STYLE` holds the CSS, including the dark theme. Reports generated before these changes keep their old
+layout until the pipeline regenerates them.
+
 ### upload-report.sh
 Uploads one HTML report to its portfolio's folder, `GCS_BUCKET<portfolio>/`
 (e.g. `gs://bucket/reports/yang/daily-report-yang-llm-generated.html`). The
